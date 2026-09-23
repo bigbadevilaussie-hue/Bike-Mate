@@ -1,0 +1,4 @@
+Config.local.h
+build/
+*.elf
+*.map

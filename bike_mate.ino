@@ -564,8 +564,9 @@ void setup() {
     display.clearDisplay(); display.display();
   }
   readSensors();
-  tprint("[ADC] raw=%d mV=%d battery=%.2fV",
-         latestRawVoltage, latestMilliVolts, latestBatteryVoltage);
+  tprint("[ADC] raw=%d battery=%.2fV ntc=%d temp=%.1fC",
+         latestRawVoltage, latestBatteryVoltage,
+         latestNtcRaw, latestTemperatureC);
   bleInit();
   pServer->getAdvertising()->start();
   tprint_verbose("BLE advertising started");
@@ -593,7 +594,6 @@ void loop() {
     totalSeconds++;
   }
 
-  readSensors();
   updateStateTransitions(now);
   digitalWrite(ACC_LED_PIN, accState ? HIGH : LOW);
   updateBeeps(now);

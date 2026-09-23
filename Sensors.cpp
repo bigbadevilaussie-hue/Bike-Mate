@@ -17,7 +17,7 @@ int latestNtcRaw = 0;
 #define BATTERY_SLOPE  0.008058f
 
 #define NTC_NOMINAL    10000.0f
-#define NTC_B          3950.0f
+#define NTC_B          4600.0f
 #define NTC_SERIES     10000.0f
 
 static int medianRawVoltage() {
@@ -55,12 +55,15 @@ static float readNTC() {
   float tK = 1.0f / (1.0f / (25.0f + 273.15f) +
                      log(rNtc / NTC_NOMINAL) / NTC_B);
   
-  float tempC = tK - 273.15f;
-  return tempC - 5.0f; // Calibrated offset to match 22°C ambient
+  return tK - 273.15f;
 }
 
 void readSensors() {
   int raw = medianRawVoltage();
+  if (raw < 100) {
+    latestTemperatureC = readNTC();
+    return;
+  }
   latestRawVoltage = raw;
   latestMilliVolts = (int)(raw * 0.728f);
   latestBatteryVoltage = raw * BATTERY_SLOPE;

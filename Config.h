@@ -12,7 +12,7 @@
 // BIKE-MATE — configuration
 // V3.64: BENCH_MODE 1, UPLOAD_ENABLED 1, new Apps Script deployment
 
-#define BIKE_MATE_VERSION "4.16"
+#define BIKE_MATE_VERSION "4.20"
 #define BENCH_MODE 1
 
 // ---- Debug verbosity ----

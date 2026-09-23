@@ -389,6 +389,10 @@ void doStateWork(unsigned long now) {
 
   wakeLoggerTick();
 
+  tprint("[SENSOR] V=%.2f raw=%d ntc=%d temp=%.1fC",
+         latestBatteryVoltage, latestRawVoltage,
+         latestNtcRaw, latestTemperatureC);
+
   tprint_verbose("[TICK] V=%.2f -> %s | log=%d rows=%d conn=%d acc=%d led=%d pre=%.2f ota=%d",
                  V, currentStateString(),
                  isLogging ? 1 : 0, currentRowCount,
@@ -594,6 +598,7 @@ void loop() {
     totalSeconds++;
   }
 
+  readSensors();
   updateStateTransitions(now);
   digitalWrite(ACC_LED_PIN, accState ? HIGH : LOW);
   updateBeeps(now);

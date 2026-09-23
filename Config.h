@@ -12,7 +12,7 @@
 // BIKE-MATE — configuration
 // V3.64: BENCH_MODE 1, UPLOAD_ENABLED 1, new Apps Script deployment
 
-#define BIKE_MATE_VERSION "4.12"
+#define BIKE_MATE_VERSION "4.16"
 #define BENCH_MODE 1
 
 // ---- Debug verbosity ----
@@ -24,7 +24,7 @@
 #define OLED_ADDR 0x3C
 
 // ---- Pins ----
-#define SDA_PIN 8
+#define SDA_PIN 6
 #define SCL_PIN 9
 #define VOLTAGE_PIN 0
 #define THERMISTOR_PIN 3

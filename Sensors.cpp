@@ -55,7 +55,8 @@ static float readNTC() {
   float tK = 1.0f / (1.0f / (25.0f + 273.15f) +
                      log(rNtc / NTC_NOMINAL) / NTC_B);
   
-  return tK - 273.15f;
+  float tempC = tK - 273.15f;
+  return tempC - 2.3f; // Applied breadboard self-heating calibration offset
 }
 
 void readSensors() {

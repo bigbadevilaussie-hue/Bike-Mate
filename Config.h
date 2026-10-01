@@ -12,7 +12,7 @@
 // BIKE-MATE — configuration
 // V3.64: BENCH_MODE 1, UPLOAD_ENABLED 1, new Apps Script deployment
 
-#define BIKE_MATE_VERSION "4.31"
+#define BIKE_MATE_VERSION "4.31.1"
 #define BENCH_MODE 1
 
 // ---- Debug verbosity ----
@@ -39,7 +39,7 @@
 #define GPS_STUB_SATS   8
 
 // ---- BLE ----
-#define DEVICE_NAME "Bike-Mate"
+#define DEVICE_NAME "Bike-Mate-2"
 #define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define DATA_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 #define TIME_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a9"

@@ -18,7 +18,7 @@ from tkinter import messagebox
 from bleak import BleakScanner, BleakClient
 
 GUI_VERSION = "3.12"
-DEVICE_NAME = "Bike-Mate"
+DEVICE_NAME = "Bike-Mate-2"
 DATA_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 TIME_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9"
 STREAM_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26ab"

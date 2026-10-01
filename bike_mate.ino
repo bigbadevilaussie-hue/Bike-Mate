@@ -28,6 +28,7 @@
 #include "OtaManager.h"
 #include "DriveUpload.h"
 #include "WifiManager.h"
+#include "WebServer.h"
 
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
 #error "Bike-Mate requires Arduino ESP32 core 2.x (2.0.17)"
@@ -421,6 +422,52 @@ void doStateWork(unsigned long now) {
       (millis() - otaStartMillis) > OTA_TIMEOUT_MS) {
     tprint("[OTA] timeout, clearing flag");
     otaRequest = false;
+  }
+
+  // ---- Settings over HTTP ----
+  if (settingsModeRequested) {
+    tprint("[SETTINGS] ====== ENTERING SETTINGS MODE ======");
+    settingsModeRequested = false;
+
+    wifiActive = true;
+    wakeLoggerPause();
+
+    bleStop();
+    if (!wifiBringUp()) {
+      tprint("[SETTINGS] WiFi failed");
+    } else {
+      webServerStart();
+      uint32_t t0 = millis();
+      bool timedOut = false;
+      while (!webServerDone() && (millis() - t0 < 60000UL)) {
+        webServerLoop();
+        delay(1);
+      }
+      if (!webServerDone()) {
+        timedOut = true;
+        tprint("[SETTINGS] server timeout");
+      }
+      webServerStop();
+      if (timedOut) {
+        for (int i = 0; i < 3; i++) {
+          buzzerOn(); delay(100);
+          buzzerOff(); delay(100);
+        }
+      } else {
+        buzzerOn(); delay(80); buzzerOff();
+      }
+    }
+    wifiBringDown();
+    bleStart();
+
+    wakeLoggerResume();
+    wifiActive = false;
+
+    display.clearDisplay();
+    display.display();
+    display.ssd1306_command(SSD1306_DISPLAYOFF);
+
+    tprint("[SETTINGS] ====== EXITING SETTINGS MODE ======");
   }
 
   // ---- Drive upload ----

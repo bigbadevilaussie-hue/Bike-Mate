@@ -16,6 +16,7 @@ extern BLECharacteristic* pStreamChar;
 extern BLECharacteristic* pRequestChar;
 extern BLECharacteristic* pOtaChar;
 extern BLECharacteristic* pSettingsChar;
+extern volatile bool settingsModeRequested;
 
 extern bool bleInited;
 extern volatile bool pushRequested;

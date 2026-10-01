@@ -28,9 +28,9 @@ extern char wifiMessage[24];
 Adafruit_SSD1306 display(SCREEN_W, SCREEN_H, &Wire, -1);
 char lastOLEDState[48] = "";
 
-// ---- GPS stubs ----
-static bool    gpsHasFix() { return true; }
-static uint8_t gpsSats()   { return 8; }
+// ---- GPS — use the real functions from bike_mate.ino ----
+extern bool gpsHasFix();
+extern uint8_t gpsSats();
 
 // ---- glyphs ----
 static void drawRecDot(int16_t x, int16_t y, bool on) {

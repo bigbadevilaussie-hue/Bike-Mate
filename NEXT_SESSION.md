@@ -62,8 +62,8 @@ Cranking current for the 1050 triple: ~150–200A inrush.
 
 ## What is actually installed and running
 
-**Firmware:** V4.25 (tagged v4.25), running on the bench
-**GUI:** v3.12
+**Firmware:** V4.36 (tagged v4.36), running on the bench
+**GUI:** v3.15
 **Repo:** https://github.com/bigbadevilaussie-hue/Bike-Mate
 **Local:** ~/Documents/Arduino/bike_mate/
 
@@ -142,7 +142,7 @@ pull-downs. OLED module's pull-ups hold it high at boot.
 
 ## Firmware state
 
-**Current version:** V4.25
+**Current version:** V4.36
 **Build partition:** PartitionScheme=min_spiffs (1.9MB APP / 190KB SPIFFS)
 Binary is ~1.66MB, will NOT fit in default partition. IDE stores
 partition per board type — switching between projects loses the setting.
@@ -193,7 +193,7 @@ Rule: if the docs and the code disagree, the code wins. Fix the docs.
 
 ## What the last session ended on
 
-- V4.25 committed, tagged, running on bench
+- V4.36 committed, tagged, running on bench
 - Settings dialog blocked by macOS BLE cache
 - Partial-apply bug found by Le Mistral, not yet fixed
 - Sprint 1 safety items skipped three versions in a row

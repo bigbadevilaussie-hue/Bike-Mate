@@ -268,6 +268,18 @@ void updateStateTransitions(unsigned long now) {
     lowBattBeepTimer = now;
     tprint("[STATE] PANIC enter %.2f", V);
     wakeLoggerForceWrite();
+
+    // V4.35: send one panic email on entry. The atRest gate below
+    // excludes PANIC, so without this the worst-case battery state
+    // never triggers an alert.
+    if (!lowBattMailLatched) {
+      if (sendLowBatteryAlert(V, V_PANIC_ENTER)) {
+        lowBattMailLatched = true;
+        tprint("[MAIL] PANIC alert sent %.2f", V);
+      } else {
+        tprint("[MAIL] PANIC send failed");
+      }
+    }
     if (engineWasRunning || accState || isLogging) {
       engineWasRunning = false;
       accState = false;

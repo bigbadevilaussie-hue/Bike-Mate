@@ -1,11 +1,11 @@
 # Bike-Mate — Bench Setup
 
-Physical snapshot of the breadboard at firmware V4.21.
+Physical snapshot of the breadboard at firmware V4.36.
 Update this file whenever the wiring changes. If it drifts from reality,
 reality wins — fix this file.
 
 Snapshot date: 2026-10-01
-Firmware on bench: V4.21
+Firmware on bench: V4.36
 
 ---
 
@@ -47,7 +47,7 @@ Two independent power sources:
 
 ---
 
-## TRACED CIRCUITS (V4.21 bench)
+## TRACED CIRCUITS (V4.36 bench)
 
 ### Section 1 — Voltage divider (GPIO 0)
 
@@ -180,9 +180,10 @@ Board target:
 
 ## FIRMWARE STATE
 
-- `BIKE_MATE_VERSION "4.21"`
+- `BIKE_MATE_VERSION "4.36"`
 - `BENCH_MODE 1` (30s wake) — do not deploy
 - `GPS_STUB_ENABLED 1` (fake coordinates)
+- NTC: reverted to V4.34 constants, reads within ~1.5C of room temp
 - Deep sleep tested and stable
 - BLE + GUI + time sync + ride pull working
 

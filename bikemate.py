@@ -17,7 +17,7 @@ from datetime import datetime
 from tkinter import messagebox
 from bleak import BleakScanner, BleakClient
 
-GUI_VERSION = "3.14"
+GUI_VERSION = "3.15"
 DEVICE_NAME = "Bike-Mate-2"
 DATA_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 TIME_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9"
@@ -31,7 +31,7 @@ UPLOAD_URL = "https://script.google.com/macros/s/AKfycbz3xknkHcub61nntHvPqYrTFEm
 
 OTA_DIR = os.path.expanduser("~/bike-mate-ota")
 OTA_PORT = 8000
-OTA_HOSTNAME = "192.168.8.195"
+OTA_HOSTNAME = "192.168.8.187"
 OTA_TIMEOUT_SEC = 40
 OTA_WAIT_SEC = 900
 BUILD_DIR = os.path.expanduser("~/Documents/Arduino/bike_mate/build/esp32.esp32.esp32c3")

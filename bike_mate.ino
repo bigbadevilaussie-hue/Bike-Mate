@@ -372,10 +372,10 @@ void updateStateTransitions(unsigned long now) {
 
 #if UPLOAD_ENABLED && BENCH_MODE
     uploadCycleCounter++;
-    if (uploadCycleCounter >= 2) {
+    if (uploadCycleCounter >= 1) {
       uploadCycleCounter = 0;
       uploadRequested = true;
-      tprint("[UPLOAD] bench trigger set (2 armings)");
+      tprint("[UPLOAD] bench trigger set (1 arming)");
     }
 #endif
   }

@@ -26,7 +26,7 @@ BLECharacteristic* pStreamChar = nullptr;
 BLECharacteristic* pRequestChar = nullptr;
 BLECharacteristic* pOtaChar = nullptr;
 BLECharacteristic* pSettingsChar = nullptr;
-volatile bool settingsModeRequested = false;
+volatile bool maintenanceModeRequested = false;
 
 bool bleInited = false;
 
@@ -329,11 +329,11 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
     std::string v = c->getValue();
 
     if (v.length() == 1 && (uint8_t)v[0] == 0x02) {
-      settingsModeRequested = true;
+      maintenanceModeRequested = true;
       uint8_t ack = 0x01;
       pOtaChar->setValue(&ack, 1);
       pOtaChar->notify();
-      tprint("[SETTINGS] mode requested via BLE");
+      tprint("[MAINT] mode requested via BLE");
       return;
     }
 

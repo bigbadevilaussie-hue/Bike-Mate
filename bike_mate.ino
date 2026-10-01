@@ -425,16 +425,19 @@ void doStateWork(unsigned long now) {
   }
 
   // ---- Settings over HTTP ----
-  if (settingsModeRequested) {
-    tprint("[SETTINGS] ====== ENTERING SETTINGS MODE ======");
-    settingsModeRequested = false;
+  if (maintenanceModeRequested) {
+    tprint("[MAINT] ====== ENTERING MAINTENANCE MODE ======");
+    maintenanceModeRequested = false;
 
+    if (engineWasRunning || accState || isLogging) {
+      tprint("[MAINT] reject: bike is running");
+    } else {
     wifiActive = true;
     wakeLoggerPause();
 
     bleStop();
     if (!wifiBringUp()) {
-      tprint("[SETTINGS] WiFi failed");
+      tprint("[MAINT] WiFi failed");
     } else {
       webServerStart();
       uint32_t t0 = millis();
@@ -467,7 +470,8 @@ void doStateWork(unsigned long now) {
     display.display();
     display.ssd1306_command(SSD1306_DISPLAYOFF);
 
-    tprint("[SETTINGS] ====== EXITING SETTINGS MODE ======");
+    tprint("[MAINT] ====== EXITING MAINTENANCE MODE ======");
+    }
   }
 
   // ---- Drive upload ----

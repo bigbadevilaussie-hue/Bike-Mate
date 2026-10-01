@@ -12,8 +12,8 @@
 // BIKE-MATE — configuration
 // V3.64: BENCH_MODE 1, UPLOAD_ENABLED 1, new Apps Script deployment
 
-#define BIKE_MATE_VERSION "4.25"
-#define BENCH_MODE 1
+#define BIKE_MATE_VERSION "4.26"
+#define BENCH_MODE 0
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 0
@@ -133,7 +133,7 @@ struct WakeSample {
 #define SPLASH_MS 3000
 
 // ---- Voltage thresholds ----
-#define V_PANIC_ENTER 12.0
+#define V_PANIC_ENTER 12.2
 #define V_PANIC_EXIT 12.4
 
 #define V_RESTING_MIN 12.4

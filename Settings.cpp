@@ -75,22 +75,31 @@ static bool extractFloat(const char* json, const char* key, float* out) {
 
 bool settingsApplyJson(const char* json) {
   float v;
+  uint16_t newEnter = config.runningEnter_mv;
+  uint16_t newExit  = config.runningExit_mv;
+  uint16_t newUnder = config.underRun_mv;
+
   if (extractFloat(json, "\"running_enter\"", &v)) {
-    if (v < 11.0f || v > 15.0f) return false;
-    config.runningEnter_mv = (uint16_t)(v * 1000.0f + 0.5f);
+    if (v < 11.0f || v > 15.0f) { tprint("[SETTINGS] range: enter"); return false; }
+    newEnter = (uint16_t)(v * 1000.0f + 0.5f);
   }
   if (extractFloat(json, "\"running_exit\"", &v)) {
-    if (v < 10.0f || v > 14.0f) return false;
-    config.runningExit_mv = (uint16_t)(v * 1000.0f + 0.5f);
+    if (v < 10.0f || v > 14.0f) { tprint("[SETTINGS] range: exit"); return false; }
+    newExit = (uint16_t)(v * 1000.0f + 0.5f);
   }
   if (extractFloat(json, "\"under_run\"", &v)) {
-    if (v < 11.0f || v > 15.0f) return false;
-    config.underRun_mv = (uint16_t)(v * 1000.0f + 0.5f);
+    if (v < 11.0f || v > 15.0f) { tprint("[SETTINGS] range: under"); return false; }
+    newUnder = (uint16_t)(v * 1000.0f + 0.5f);
   }
-  if (config.runningExit_mv >= config.runningEnter_mv) {
+
+  if (newExit >= newEnter) {
     tprint("[SETTINGS] reject: exit >= enter");
     return false;
   }
+
+  config.runningEnter_mv = newEnter;
+  config.runningExit_mv  = newExit;
+  config.underRun_mv     = newUnder;
   settingsSave();
   return true;
 }

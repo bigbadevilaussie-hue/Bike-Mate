@@ -62,6 +62,8 @@ static float readNTC() {
 void readSensors() {
   int raw = medianRawVoltage();
   if (raw < 100) {
+    latestBatteryVoltage = 0.0;
+    latestRawVoltage = 0;
     latestTemperatureC = readNTC();
     return;
   }

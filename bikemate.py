@@ -17,7 +17,7 @@ from datetime import datetime
 from tkinter import messagebox
 from bleak import BleakScanner, BleakClient
 
-GUI_VERSION = "3.11"
+GUI_VERSION = "3.12"
 DEVICE_NAME = "Bike-Mate"
 DATA_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 TIME_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9"
@@ -843,10 +843,16 @@ class App:
         self.worker.send_ota_command(payload, on_result)
 
     def open_settings(self):
-        if not (self.worker and self.worker.client and self.worker.client.is_connected):
-            messagebox.showerror("Settings", "Not connected to device.")
-            return
         def _read():
+            t0 = time.time()
+            while time.time() - t0 < 60:
+                if self.worker.client and self.worker.client.is_connected:
+                    break
+                time.sleep(0.5)
+            if not (self.worker.client and self.worker.client.is_connected):
+                self.root.after(0, lambda: messagebox.showerror(
+                    "Settings", "Device didn't wake within 60s. Try again."))
+                return
             try:
                 fut = asyncio.run_coroutine_threadsafe(
                     self.worker.client.read_gatt_char(SETTINGS_UUID),
@@ -854,8 +860,9 @@ class App:
                 raw = fut.result(timeout=5)
                 js = json.loads(raw.decode())
                 self.root.after(0, lambda: self._show_settings_dialog(js))
-            except Exception as e:
-                self.root.after(0, lambda: messagebox.showerror("Settings", f"Read failed:\n{e}"))
+            except Exception as exc:
+                msg = f"Read failed:\n{exc}"
+                self.root.after(0, lambda m=msg: messagebox.showerror("Settings", m))
         threading.Thread(target=_read, daemon=True).start()
 
     def _show_settings_dialog(self, current):
@@ -899,8 +906,9 @@ class App:
                     set_status("Settings applied")
                     self.root.after(0, lambda: messagebox.showinfo("Settings", "Applied. Saved to NVS."))
                     self.root.after(0, dlg.destroy)
-                except Exception as e:
-                    self.root.after(0, lambda: messagebox.showerror("Settings", f"Write failed:\n{e}"))
+                except Exception as exc:
+                    msg = f"Write failed:\n{exc}"
+                    self.root.after(0, lambda m=msg: messagebox.showerror("Settings", m))
             threading.Thread(target=_write, daemon=True).start()
         tk.Button(btn_row, text="Cancel", command=dlg.destroy, width=10,
                   font=("Helvetica", 11)).pack(side="left", padx=8)

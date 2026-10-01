@@ -90,8 +90,16 @@ bool sendMail(const String& subject, const String& body) {
 
   // Failure backoff
   if (_mailFailCount >= MAIL_FAIL_BACKOFF) {
-    tprint("[MAIL] backoff active (fails=%d)", _mailFailCount);
-    return false;
+    uint32_t now2 = currentEpoch();
+    uint32_t last = mailLastSentEpoch();
+    if (now2 > 0 && last > 0 &&
+        (now2 - last) / 86400 >= MAIL_FALLBACK_DAYS) {
+      tprint("[MAIL] backoff expired, resetting");
+      _mailFailCount = 0;
+    } else {
+      tprint("[MAIL] backoff active (fails=%d)", _mailFailCount);
+      return false;
+    }
   }
 
   if (!wifiBringUp()) {

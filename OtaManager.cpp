@@ -10,6 +10,7 @@
 
 #include <HTTPClient.h>
 #include <Update.h>
+#include <esp_ota_ops.h>
 #include <Preferences.h>
 
 extern void tprint(const char* fmt, ...);
@@ -143,6 +144,17 @@ bool otaPerformUpdate(const char* url, uint32_t expectedSize, const char* expect
     if (!actualMd5.equalsIgnoreCase(expectedMd5)) {
       tprint("[OTA] MD5 MISMATCH: expected %s got %s",
              expectedMd5, actualMd5.c_str());
+
+      // V4.34: Update.end(true) already set the boot partition to
+      // the new (corrupt) image. Revert it to the currently running
+      // partition so the next reboot boots the good firmware.
+      const esp_partition_t* running = esp_ota_get_running_partition();
+      if (running) {
+        esp_err_t err = esp_ota_set_boot_partition(running);
+        tprint("[OTA] boot partition reverted to %s (%d)",
+               running->label, (int)err);
+      }
+
       wifiBringDown();
       return false;
     }

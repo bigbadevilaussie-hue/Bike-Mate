@@ -497,9 +497,14 @@ bool driveUploadPerform() {
   // V3.58: clear newest_epoch after upload. Any completed ride
   // eligible for upload has now been uploaded (and deleted on 302).
   // Clearing this stops push chasing a deleted file on the next wake.
-  prefs.begin("rides", false);
-  prefs.putUInt("newest_epoch", 0);
-  prefs.end();
+  if (rideFails == 0) {
+    prefs.begin("rides", false);
+    prefs.putUInt("newest_epoch", 0);
+    prefs.end();
+    tprint("[UPLOAD] newest_epoch cleared");
+  } else {
+    tprint("[UPLOAD] ride upload failed, keeping newest_epoch");
+  }
 
   uint32_t ep = currentEpoch();
 

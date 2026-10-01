@@ -337,6 +337,35 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
       return;
     }
 
+    // Settings read: single byte 0x01 -> notify JSON on same characteristic
+    if (v.length() == 1 && (uint8_t)v[0] == 0x01) {
+      char sbuf[192];
+      settingsToJson(sbuf, sizeof(sbuf));
+      pOtaChar->setValue((uint8_t*)sbuf, strlen(sbuf));
+      pOtaChar->notify();
+      tprint("[SETTINGS] read served: %s", sbuf);
+      return;
+    }
+
+    // Settings apply: multi-byte payload containing "voltage"
+    if (v.length() > 1) {
+      String sv = String(v.c_str());
+      if (sv.indexOf("\"voltage\"") >= 0) {
+        if (settingsApplyJson(sv.c_str())) {
+          uint8_t ok = 0x01;
+          pOtaChar->setValue(&ok, 1);
+          pOtaChar->notify();
+          tprint("[SETTINGS] apply OK");
+        } else {
+          uint8_t err = 0xFF;
+          pOtaChar->setValue(&err, 1);
+          pOtaChar->notify();
+          tprint("[SETTINGS] apply FAIL");
+        }
+        return;
+      }
+    }
+
     if (v.length() < 8) {
       uint8_t nack = 0xFF;
 

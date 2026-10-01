@@ -24,7 +24,7 @@ TIME_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9"
 STREAM_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26ab"
 REQUEST_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26ad"
 OTA_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26ae"
-SETTINGS_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26b0"
+SETTINGS_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26ae"  # reuse OTA char to bypass macOS cache
 
 DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/1I48SYu8vTC4CDTFLUhZh53siI8ULbQ8W"
 UPLOAD_URL = "https://script.google.com/macros/s/AKfycbz3xknkHcub61nntHvPqYrTFEmhKqHn_S1GhoUya0kAzrf-N89lIP6JA9tmpzSJV6mL/exec"

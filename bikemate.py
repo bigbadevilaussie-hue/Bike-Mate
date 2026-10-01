@@ -24,6 +24,7 @@ TIME_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9"
 STREAM_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26ab"
 REQUEST_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26ad"
 OTA_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26ae"
+SETTINGS_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26b0"
 
 DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/1I48SYu8vTC4CDTFLUhZh53siI8ULbQ8W"
 UPLOAD_URL = "https://script.google.com/macros/s/AKfycbz3xknkHcub61nntHvPqYrTFEmhKqHn_S1GhoUya0kAzrf-N89lIP6JA9tmpzSJV6mL/exec"
@@ -653,6 +654,8 @@ class App:
         am.add_command(label="💾  Open Local Drive", command=self.open_local_drive)
         am.add_command(label="⬇️  Sync from Drive", command=self.menu_sync)
         am.add_separator()
+        am.add_command(label="⚙️  Settings", command=self.open_settings)
+        am.add_separator()
         am.add_command(label="📤 Update Firmware", command=self.menu_ota)
         am.add_separator()
         am.add_command(label="📊 Open Reports", command=self.open_reports)
@@ -838,6 +841,71 @@ class App:
                     f"Staged file removed."))
 
         self.worker.send_ota_command(payload, on_result)
+
+    def open_settings(self):
+        if not (self.worker and self.worker.client and self.worker.client.is_connected):
+            messagebox.showerror("Settings", "Not connected to device.")
+            return
+        def _read():
+            try:
+                fut = asyncio.run_coroutine_threadsafe(
+                    self.worker.client.read_gatt_char(SETTINGS_UUID),
+                    self.worker.loop)
+                raw = fut.result(timeout=5)
+                js = json.loads(raw.decode())
+                self.root.after(0, lambda: self._show_settings_dialog(js))
+            except Exception as e:
+                self.root.after(0, lambda: messagebox.showerror("Settings", f"Read failed:\n{e}"))
+        threading.Thread(target=_read, daemon=True).start()
+
+    def _show_settings_dialog(self, current):
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Bike-Mate Settings")
+        dlg.configure(bg=BG)
+        dlg.resizable(False, False)
+        tk.Label(dlg, text="🔋 VOLTAGE", bg=BG, fg=BLUE,
+                 font=("Helvetica", 12, "bold")).pack(pady=(16, 6), padx=20, anchor="w")
+        fields = {}
+        def add_row(label, key, value, unit):
+            row = tk.Frame(dlg, bg=BG); row.pack(fill="x", padx=20, pady=4)
+            tk.Label(row, text=label, bg=BG, fg=FG, width=20, anchor="w",
+                     font=("Helvetica", 11)).pack(side="left")
+            e = tk.Entry(row, width=10, font=("Helvetica", 11))
+            e.insert(0, f"{value:.2f}"); e.pack(side="left")
+            tk.Label(row, text=unit, bg=BG, fg=MUTED, width=4, anchor="w",
+                     font=("Helvetica", 11)).pack(side="left")
+            fields[key] = e
+        v = current.get("voltage", {})
+        add_row("Running enter", "running_enter", v.get("running_enter", 13.8), "V")
+        add_row("Running exit",  "running_exit",  v.get("running_exit",  13.0), "V")
+        add_row("Under-run",     "under_run",     v.get("under_run",     13.8), "V")
+        btn_row = tk.Frame(dlg, bg=BG); btn_row.pack(pady=20)
+        def apply():
+            try:
+                payload = {"voltage": {
+                    "running_enter": float(fields["running_enter"].get()),
+                    "running_exit":  float(fields["running_exit"].get()),
+                    "under_run":     float(fields["under_run"].get()),
+                }}
+            except ValueError:
+                messagebox.showerror("Settings", "Invalid number"); return
+            js = json.dumps(payload, separators=(",", ":"))
+            def _write():
+                try:
+                    fut = asyncio.run_coroutine_threadsafe(
+                        self.worker.client.write_gatt_char(SETTINGS_UUID, js.encode()),
+                        self.worker.loop)
+                    fut.result(timeout=5)
+                    set_status("Settings applied")
+                    self.root.after(0, lambda: messagebox.showinfo("Settings", "Applied. Saved to NVS."))
+                    self.root.after(0, dlg.destroy)
+                except Exception as e:
+                    self.root.after(0, lambda: messagebox.showerror("Settings", f"Write failed:\n{e}"))
+            threading.Thread(target=_write, daemon=True).start()
+        tk.Button(btn_row, text="Cancel", command=dlg.destroy, width=10,
+                  font=("Helvetica", 11)).pack(side="left", padx=8)
+        tk.Button(btn_row, text="Apply", command=apply, width=10,
+                  font=("Helvetica", 11), bg=BLUE, fg=BG).pack(side="left", padx=8)
 
     def tick(self):
         d = latest_data

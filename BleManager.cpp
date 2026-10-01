@@ -2,6 +2,7 @@
 #include "Config.h"
 #include "RideLogger.h"
 #include "RideStorage.h"
+#include "Settings.h"
 
 #include <Preferences.h>
 #include <LittleFS.h>
@@ -24,6 +25,7 @@ BLECharacteristic* pTimeChar = nullptr;
 BLECharacteristic* pStreamChar = nullptr;
 BLECharacteristic* pRequestChar = nullptr;
 BLECharacteristic* pOtaChar = nullptr;
+BLECharacteristic* pSettingsChar = nullptr;
 
 bool bleInited = false;
 
@@ -464,6 +466,26 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
   }
 };
 
+class SettingsCallbacks : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic* c) override {
+    std::string v = c->getValue();
+    if (v.length() == 0) return;
+    String payload = String(v.c_str());
+    tprint("[SETTINGS] RX: %s", payload.c_str());
+    if (settingsApplyJson(payload.c_str())) {
+      uint8_t ok = 0x01;
+      pSettingsChar->setValue(&ok, 1);
+      pSettingsChar->notify();
+      tprint("[SETTINGS] apply OK");
+    } else {
+      uint8_t err = 0xFF;
+      pSettingsChar->setValue(&err, 1);
+      pSettingsChar->notify();
+      tprint("[SETTINGS] apply FAIL");
+    }
+  }
+};
+
 void bleInit() {
   if (bleInited) return;
 
@@ -521,6 +543,19 @@ void bleInit() {
 
   pOtaChar->setCallbacks(
       new OtaCallbacks());
+
+  pSettingsChar = svc->createCharacteristic(
+      SETTINGS_UUID,
+      BLECharacteristic::PROPERTY_READ |
+      BLECharacteristic::PROPERTY_WRITE |
+      BLECharacteristic::PROPERTY_NOTIFY);
+  pSettingsChar->addDescriptor(new BLE2902());
+  pSettingsChar->setCallbacks(new SettingsCallbacks());
+  {
+    char sbuf[192];
+    settingsToJson(sbuf, sizeof(sbuf));
+    pSettingsChar->setValue((uint8_t*)sbuf, strlen(sbuf));
+  }
 
   svc->start();
 

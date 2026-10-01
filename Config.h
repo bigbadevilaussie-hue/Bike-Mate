@@ -12,7 +12,7 @@
 // BIKE-MATE — configuration
 // V3.64: BENCH_MODE 1, UPLOAD_ENABLED 1, new Apps Script deployment
 
-#define BIKE_MATE_VERSION "4.22"
+#define BIKE_MATE_VERSION "4.23"
 #define BENCH_MODE 1
 
 // ---- Debug verbosity ----
@@ -46,6 +46,7 @@
 #define STREAM_UUID "beb5483e-36e1-4688-b7f5-ea07361b26ab"
 #define REQUEST_UUID "beb5483e-36e1-4688-b7f5-ea07361b26ad"
 #define OTA_UUID "beb5483e-36e1-4688-b7f5-ea07361b26ae"
+#define SETTINGS_UUID "beb5483e-36e1-4688-b7f5-ea07361b26b0"
 
 // ---- Logging ----
 #define LOG_INTERVAL_SEC 5
@@ -120,7 +121,6 @@ struct WakeSample {
 #define FLAG_PANIC 0x40
 #define FLAG_GPS_FIX 0x80
 
-#define TH_UNDER_RUN 13.8
 #define TH_OVER_VOLT 14.8
 #define TH_FREEZING 0.0
 #define TH_HOT_AMBIENT 40.0
@@ -133,8 +133,6 @@ struct WakeSample {
 #define SPLASH_MS 3000
 
 // ---- Voltage thresholds ----
-#define V_RUNNING_ENTER 13.8
-#define V_RUNNING_EXIT 13.0
 #define V_PANIC_ENTER 12.0
 #define V_PANIC_EXIT 12.4
 

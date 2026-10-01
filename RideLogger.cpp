@@ -5,6 +5,7 @@
 #include "RideLogger.h"
 #include "RideStorage.h"
 #include "Sensors.h"
+#include "Settings.h"
 
 #include <Preferences.h>
 #include <Arduino.h>
@@ -92,7 +93,7 @@ void writeRideRow() {
   rideSumV += v100;
   if (t < rideMinT) rideMinT = t;
   if (t > rideMaxT) rideMaxT = t;
-  if (latestBatteryVoltage < TH_UNDER_RUN) rideUnderSecs += LOG_INTERVAL_SEC;
+  if (latestBatteryVoltage < (config.underRun_mv / 1000.0f)) rideUnderSecs += LOG_INTERVAL_SEC;
   if (latestBatteryVoltage > TH_OVER_VOLT) rideOverSecs += LOG_INTERVAL_SEC;
 
   currentRowCount++;

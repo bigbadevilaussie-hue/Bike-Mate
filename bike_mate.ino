@@ -16,6 +16,7 @@
 #include <LittleFS.h>
 
 #include "Config.h"
+#include "Settings.h"
 #include "Sensors.h"
 #include "Buzzer.h"
 #include "RideLogger.h"
@@ -307,7 +308,7 @@ void updateStateTransitions(unsigned long now) {
     tprint("[MAIL] latch cleared (recovered %.2f)", V);
   }
 
-  if (V >= V_RUNNING_ENTER) {
+  if (V >= (config.runningEnter_mv / 1000.0f)) {
     parkedTimerActive = false;
     if (!engineWasRunning && !isCountingDown) {
       engineWasRunning = true;
@@ -321,12 +322,12 @@ void updateStateTransitions(unsigned long now) {
     }
   }
 
-  if (V < V_RUNNING_EXIT && engineWasRunning && !isCountingDown) {
+  if (V < (config.runningExit_mv / 1000.0f) && engineWasRunning && !isCountingDown) {
     if (!parkedTimerActive) {
       parkedTimerActive = true;
       parkedTimerStart = now;
     }
-  } else if (V >= V_RUNNING_EXIT) {
+  } else if (V >= (config.runningExit_mv / 1000.0f)) {
     parkedTimerActive = false;
   }
 
@@ -485,6 +486,7 @@ void setup() {
   tprint("=================================================");
   tprint("[WAKE] cause=%d (%s)", (int)cause, causeStr);
   setenv("TZ", "AEST-10", 1); tzset();
+  settingsLoad();
   cycleCount++;
   tprint("[BOOT] cycleCount = %lu", cycleCount);
   bool coldBoot = (cause == ESP_SLEEP_WAKEUP_UNDEFINED);

@@ -844,36 +844,82 @@ class App:
 
     def open_settings(self):
         def _read():
+            print("[SET-DBG] open_settings triggered")
             t0 = time.time()
             while time.time() - t0 < 60:
                 if self.worker.client and self.worker.client.is_connected:
                     break
                 time.sleep(0.5)
+            print(f"[SET-DBG] client connected: {bool(self.worker.client and self.worker.client.is_connected)}")
             if not (self.worker.client and self.worker.client.is_connected):
                 self.root.after(0, lambda: messagebox.showerror(
                     "Settings", "Device didn't wake within 60s. Try again."))
                 return
+
             async def _do():
+                print(f"[SET-DBG] running _do, uuid={SETTINGS_UUID}")
+                c = self.worker.client
+                print(f"[SET-DBG] is_connected: {c.is_connected}")
+                print(f"[SET-DBG] services attr: {hasattr(c, 'services')}")
+                try:
+                    svcs = list(c.services)
+                    print(f"[SET-DBG] service count: {len(svcs)}")
+                    for svc in svcs:
+                        print(f"[SET-DBG]   service: {svc.uuid}")
+                        for ch in svc.characteristics:
+                            print(f"[SET-DBG]     char: {ch.uuid} props={ch.properties}")
+                except Exception as ex:
+                    print(f"[SET-DBG] services enumeration failed: {ex}")
+
                 got = asyncio.Event()
                 buf = {"data": None}
                 def on_notify(sender, data):
+                    print(f"[SET-DBG] notify received, {len(bytes(data))} bytes")
                     buf["data"] = bytes(data)
                     got.set()
-                await self.worker.client.start_notify(SETTINGS_UUID, on_notify)
-                await asyncio.sleep(0.3)
-                await self.worker.client.write_gatt_char(SETTINGS_UUID, bytes([0x01]))
-                await asyncio.wait_for(got.wait(), timeout=8)
+
                 try:
-                    await self.worker.client.stop_notify(SETTINGS_UUID)
+                    print(f"[SET-DBG] start_notify on {SETTINGS_UUID}")
+                    await c.start_notify(SETTINGS_UUID, on_notify)
+                    print("[SET-DBG] start_notify OK")
+                except Exception as ex:
+                    print(f"[SET-DBG] start_notify FAILED: {ex}")
+                    raise
+
+                await asyncio.sleep(0.3)
+                try:
+                    print("[SET-DBG] writing 0x01")
+                    await c.write_gatt_char(SETTINGS_UUID, bytes([0x01]))
+                    print("[SET-DBG] write OK")
+                except Exception as ex:
+                    print(f"[SET-DBG] write FAILED: {ex}")
+                    raise
+
+                try:
+                    await asyncio.wait_for(got.wait(), timeout=8)
+                    print(f"[SET-DBG] got notify: {buf['data'][:80]}")
+                except asyncio.TimeoutError:
+                    print("[SET-DBG] notify TIMEOUT after 8s")
+
+                try:
+                    await c.stop_notify(SETTINGS_UUID)
                 except Exception:
                     pass
                 return buf["data"]
+
             try:
                 fut = asyncio.run_coroutine_threadsafe(_do(), self.worker.loop)
                 raw = fut.result(timeout=12)
+                print(f"[SET-DBG] raw result: {raw}")
+                if raw is None:
+                    self.root.after(0, lambda: messagebox.showerror(
+                        "Settings", "No data returned (timeout)"))
+                    return
                 js = json.loads(raw.decode())
+                print(f"[SET-DBG] parsed: {js}")
                 self.root.after(0, lambda: self._show_settings_dialog(js))
             except Exception as exc:
+                print(f"[SET-DBG] outer exception: {exc}")
                 msg = f"Read failed:\n{exc}"
                 self.root.after(0, lambda m=msg: messagebox.showerror("Settings", m))
         threading.Thread(target=_read, daemon=True).start()

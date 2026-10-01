@@ -966,14 +966,42 @@ class App:
                 messagebox.showerror("Settings", "Invalid number"); return
             js = json.dumps(payload, separators=(",", ":"))
             def _write():
+                async def _do():
+                    c = self.worker.client
+                    ack_event = asyncio.Event()
+                    ack = {"code": None}
+                    def on_ack(sender, data):
+                        b = bytes(data)
+                        if len(b) >= 1:
+                            ack["code"] = b[0]
+                            ack_event.set()
+                    await c.start_notify(SETTINGS_UUID, on_ack)
+                    await asyncio.sleep(0.2)
+                    await c.write_gatt_char(SETTINGS_UUID, js.encode())
+                    try:
+                        await asyncio.wait_for(ack_event.wait(), timeout=5)
+                    except asyncio.TimeoutError:
+                        try:
+                            await c.stop_notify(SETTINGS_UUID)
+                        except Exception:
+                            pass
+                        return ("timeout", None)
+                    try:
+                        await c.stop_notify(SETTINGS_UUID)
+                    except Exception:
+                        pass
+                    return ("ok" if ack["code"] == 0x01 else "fail", ack["code"])
                 try:
-                    fut = asyncio.run_coroutine_threadsafe(
-                        self.worker.client.write_gatt_char(SETTINGS_UUID, js.encode()),
-                        self.worker.loop)
-                    fut.result(timeout=5)
-                    set_status("Settings applied")
-                    self.root.after(0, lambda: messagebox.showinfo("Settings", "Applied. Saved to NVS."))
-                    self.root.after(0, dlg.destroy)
+                    fut = asyncio.run_coroutine_threadsafe(_do(), self.worker.loop)
+                    status, code = fut.result(timeout=10)
+                    if status == "ok":
+                        set_status("Settings applied (ACK)")
+                        self.root.after(0, lambda: messagebox.showinfo("Settings", "Applied. Device confirmed (ACK)."))
+                        self.root.after(0, dlg.destroy)
+                    elif status == "fail":
+                        self.root.after(0, lambda: messagebox.showerror("Settings", "Device rejected settings (0x%02X). Check ranges — Exit must be < Enter." % code))
+                    else:
+                        self.root.after(0, lambda: messagebox.showerror("Settings", "No ACK from device (timeout)."))
                 except Exception as exc:
                     msg = f"Write failed:\n{exc}"
                     self.root.after(0, lambda m=msg: messagebox.showerror("Settings", m))

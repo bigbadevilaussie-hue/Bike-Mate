@@ -5,6 +5,8 @@
 // V3.17: force-rotate for bench mode.
 // V3.02: date filenames, pause/resume, upload event logging.
 
+#define DEST_FS_USES_LITTLEFS
+#include <ESP32-targz.h>
 #include "WakeLogger.h"
 #include "Config.h"
 #include "RideLogger.h"
@@ -219,6 +221,34 @@ bool wakeLoggerForceRotate(uint32_t triggerEpoch) {
     return false;
   }
   tprint("[WAKE] sealed as %s", sealed);
+
+  // V4.37: gzip the sealed file alongside the original.
+  // Keeps both — original survives if compression or upload fails.
+  // Remove the original after gzip if LittleFS storage gets tight.
+  File srcF = LittleFS.open(sealed, "r");
+  size_t srcSize = srcF ? srcF.size() : 0;
+  if (srcF) srcF.close();
+  tprint("[WAKE] gzip check: src=%u", (unsigned)srcSize);
+  if (srcSize > 1024) {
+    char gzPath[80];
+    snprintf(gzPath, sizeof(gzPath), "%s.gz", sealed);
+    File srcGz = LittleFS.open(sealed, "r");
+    File dstGz = LittleFS.open(gzPath, "w");
+    size_t gzBytes = 0;
+    if (srcGz && dstGz) {
+      gzBytes = LZPacker::compress(&srcGz, srcGz.size(), &dstGz);
+    }
+    if (srcGz) srcGz.close();
+    if (dstGz) dstGz.close();
+    tprint("[WAKE] gzip result: %u", (unsigned)gzBytes);
+    if (gzBytes > 0) {
+      tprint("[WAKE] gzipped %s", gzPath);
+    } else {
+      tprint("[WAKE] gzip failed (returned 0)");
+    }
+  } else {
+    tprint("[WAKE] too small to gzip (%u bytes)", (unsigned)srcSize);
+  }
 
   // Clear current, open fresh
   _currentPath[0] = 0;

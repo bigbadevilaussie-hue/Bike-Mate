@@ -538,6 +538,27 @@ void setup() {
     else        tprint("[OTA] confirmation email FAILED");
   }
 
+  {
+    File root = LittleFS.open("/");
+    if (root && root.isDirectory()) {
+      File e = root.openNextFile();
+      while (e) {
+        String n = String(e.name());
+        if (n.endsWith(".sealed")) {
+          String path = n.startsWith("/") ? n : "/" + n;
+          e.close();
+          LittleFS.remove(path);
+          tprint("[TEMP] deleted pending %s", path.c_str());
+          e = root.openNextFile();
+          continue;
+        }
+        e.close();
+        e = root.openNextFile();
+      }
+      root.close();
+    }
+  }
+
   if (!wakeLoggerInit()) {
     tprint_verbose("[BOOT] WakeLogger init deferred (no epoch yet)");
   }

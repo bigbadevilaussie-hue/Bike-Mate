@@ -165,9 +165,13 @@ void pushNewSlots(uint32_t guiHighestEpoch) {
   File f = LittleFS.open(path, "r");
 
   if (!f) {
-    tprint("[PUSH] file not found %s", path);
+    tprint("[PUSH] file not found %s (clearing newest_epoch)", path);
 
-    r = 0x02;
+    prefs.begin("rides", false);
+    prefs.putUInt("newest_epoch", 0);
+    prefs.end();
+
+    r = 0x00;
 
     if (pRequestChar) {
       pRequestChar->setValue(&r, 1);

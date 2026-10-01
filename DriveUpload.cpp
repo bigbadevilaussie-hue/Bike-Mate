@@ -82,17 +82,41 @@ static bool postFile(const char* localPath, const char* uploadName) {
     return true;
   }
 
-  String content;
-  content.reserve(fileSize + 16);
+  bool isGz = (String(uploadName).endsWith(".gz"));
 
-  while (f.available()) {
-    content += (char)f.read();
+  String body;
+  body.reserve(fileSize * 2 + 128);
+  body = "filename=";
+  body += urlEncode(String(uploadName));
+  body += isGz ? "&gz=1&data=" : "&data=";
+
+  if (isGz) {
+    static const char b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    int val = 0, bits = -6;
+    while (f.available()) {
+      val = (val << 8) + (uint8_t)f.read();
+      bits += 8;
+      while (bits >= 0) {
+        body += b64[(val >> bits) & 0x3F];
+        bits -= 6;
+      }
+    }
+    if (bits > -6) body += b64[((val << 8) >> (bits + 8)) & 0x3F];
+    while (body.length() % 4) body += '=';
+  } else {
+    while (f.available()) {
+      char c = (char)f.read();
+      if (isalnum((unsigned char)c) || c == '-' || c == '_' || c == '.' || c == '~') {
+        body += c;
+      } else {
+        char enc[4];
+        snprintf(enc, sizeof(enc), "%%%02X", (unsigned char)c);
+        body += enc;
+      }
+    }
   }
 
   f.close();
-
-  String body = "filename=" + urlEncode(String(uploadName)) +
-                "&data=" + urlEncode(content);
 
   tprint("[UPLOAD] POST %s size=%u body=%u",
          uploadName,
@@ -107,7 +131,17 @@ static bool postFile(const char* localPath, const char* uploadName) {
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
   http.addHeader("Content-Length", String(body.length()));
 
-  int code = http.POST((uint8_t*)body.c_str(), body.length());
+  int code = -1;
+  for (int attempt = 1; attempt <= 3; attempt++) {
+    code = http.POST((uint8_t*)body.c_str(), body.length());
+    if (code > 0) break;
+    tprint("[UPLOAD] %s attempt %d failed (http=%d), retrying", uploadName, attempt, code);
+    http.end();
+    delay(1000);
+    http.begin(UPLOAD_URL);
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+    http.addHeader("Content-Length", String(body.length()));
+  }
   bool ok = false;
 
   if (code == 302) {

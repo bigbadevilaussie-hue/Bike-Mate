@@ -12,6 +12,8 @@
 // Filename includes seconds so two rides started in the same minute
 // cannot overwrite each other.
 
+#define DEST_FS_USES_LITTLEFS
+#include <ESP32-targz.h>
 #include "RideStorage.h"
 
 #include "Config.h"
@@ -174,6 +176,33 @@ void rideStorageClose() {
         "[RIDE] closed %s",
         _currentFile
     );
+
+    if (_currentFile[0] != 0) {
+      File srcF = LittleFS.open(_currentFile, "r");
+      size_t srcSize = srcF ? srcF.size() : 0;
+      if (srcF) srcF.close();
+      tprint("[RIDE] gzip check: src=%u", (unsigned)srcSize);
+      if (srcSize > 1024) {
+        char gzPath[64];
+        snprintf(gzPath, sizeof(gzPath), "%s.gz", _currentFile);
+        File srcGz = LittleFS.open(_currentFile, "r");
+        File dstGz = LittleFS.open(gzPath, "w");
+        size_t gzBytes = 0;
+        if (srcGz && dstGz) {
+          gzBytes = LZPacker::compress(&srcGz, srcGz.size(), &dstGz);
+        }
+        if (srcGz) srcGz.close();
+        if (dstGz) dstGz.close();
+        tprint("[RIDE] gzip result: %u", (unsigned)gzBytes);
+        if (gzBytes > 0) {
+          tprint("[RIDE] gzipped %s", gzPath);
+        } else {
+          tprint("[RIDE] gzip failed (returned 0)");
+        }
+      } else {
+        tprint("[RIDE] too small to gzip (%u bytes)", (unsigned)srcSize);
+      }
+    }
   }
 
   _currentFile[0] = 0;

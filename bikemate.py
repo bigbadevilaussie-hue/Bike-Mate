@@ -853,11 +853,24 @@ class App:
                 self.root.after(0, lambda: messagebox.showerror(
                     "Settings", "Device didn't wake within 60s. Try again."))
                 return
+            async def _do():
+                got = asyncio.Event()
+                buf = {"data": None}
+                def on_notify(sender, data):
+                    buf["data"] = bytes(data)
+                    got.set()
+                await self.worker.client.start_notify(SETTINGS_UUID, on_notify)
+                await asyncio.sleep(0.3)
+                await self.worker.client.write_gatt_char(SETTINGS_UUID, bytes([0x01]))
+                await asyncio.wait_for(got.wait(), timeout=8)
+                try:
+                    await self.worker.client.stop_notify(SETTINGS_UUID)
+                except Exception:
+                    pass
+                return buf["data"]
             try:
-                fut = asyncio.run_coroutine_threadsafe(
-                    self.worker.client.read_gatt_char(SETTINGS_UUID),
-                    self.worker.loop)
-                raw = fut.result(timeout=5)
+                fut = asyncio.run_coroutine_threadsafe(_do(), self.worker.loop)
+                raw = fut.result(timeout=12)
                 js = json.loads(raw.decode())
                 self.root.after(0, lambda: self._show_settings_dialog(js))
             except Exception as exc:

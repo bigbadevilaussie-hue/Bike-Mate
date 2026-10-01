@@ -470,6 +470,17 @@ class SettingsCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* c) override {
     std::string v = c->getValue();
     if (v.length() == 0) return;
+
+    // Read request: single byte 0x01 -> send current settings via notify
+    if (v.length() == 1 && (uint8_t)v[0] == 0x01) {
+      char sbuf[192];
+      settingsToJson(sbuf, sizeof(sbuf));
+      pSettingsChar->setValue((uint8_t*)sbuf, strlen(sbuf));
+      pSettingsChar->notify();
+      tprint("[SETTINGS] read request served: %s", sbuf);
+      return;
+    }
+
     String payload = String(v.c_str());
     tprint("[SETTINGS] RX: %s", payload.c_str());
     if (settingsApplyJson(payload.c_str())) {

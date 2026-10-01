@@ -328,15 +328,6 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
 
     std::string v = c->getValue();
 
-    if (v.length() == 1 && (uint8_t)v[0] == 0x02) {
-      maintenanceModeRequested = true;
-      uint8_t ack = 0x01;
-      pOtaChar->setValue(&ack, 1);
-      pOtaChar->notify();
-      tprint("[MAINT] mode requested via BLE");
-      return;
-    }
-
     // Settings read: single byte 0x01 -> notify JSON on same characteristic
     if (v.length() == 1 && (uint8_t)v[0] == 0x01) {
       char sbuf[192];

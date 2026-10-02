@@ -27,7 +27,7 @@ OTA_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26ae"
 SETTINGS_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26ae"  # reuse OTA char to bypass macOS cache
 
 DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/1I48SYu8vTC4CDTFLUhZh53siI8ULbQ8W"
-UPLOAD_URL = "https://script.google.com/macros/s/AKfycbz3xknkHcub61nntHvPqYrTFEmhKqHn_S1GhoUya0kAzrf-N89lIP6JA9tmpzSJV6mL/exec"
+UPLOAD_URL = "https://script.google.com/macros/s/AKfycbzDVMS5o5TSlW4H99B8fxv4CjwQ2iBDpMt0MPpyKiryXuIDkyDoRiw4E5TTso6Ag7U/exec"
 
 OTA_DIR = os.path.expanduser("~/bike-mate-ota")
 OTA_PORT = 8000
@@ -257,8 +257,7 @@ def backup_firmware_to_drive():
             raw = f.read()
         b64 = base64.b64encode(raw).decode()
         body = urllib.parse.urlencode({
-            "filename": "bike_mate.bin",
-            "folder": ver,
+            "filename": f"bike_mate_{ver}.bin",
             "binary": "1",
             "data": b64,
         }).encode()

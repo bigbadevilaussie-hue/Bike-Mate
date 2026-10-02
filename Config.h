@@ -12,7 +12,7 @@
 // BIKE-MATE — configuration
 // V3.64: BENCH_MODE 1, UPLOAD_ENABLED 1, new Apps Script deployment
 
-#define BIKE_MATE_VERSION "4.53.Panic"
+#define BIKE_MATE_VERSION "4.54"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
@@ -181,7 +181,7 @@ struct WakeSample {
 // ---- Drive upload module ----
 #define UPLOAD_ENABLED 1
 #define UPLOAD_HOUR_LOCAL 4
-#define UPLOAD_URL "https://script.google.com/macros/s/AKfycbz3xknkHcub61nntHvPqYrTFEmhKqHn_S1GhoUya0kAzrf-N89lIP6JA9tmpzSJV6mL/exec"
+#define UPLOAD_URL "https://script.google.com/macros/s/AKfycbzDVMS5o5TSlW4H99B8fxv4CjwQ2iBDpMt0MPpyKiryXuIDkyDoRiw4E5TTso6Ag7U/exec"
 #define UPLOAD_URL_MAX 256
 #define UPLOAD_WIFI_TIMEOUT_MS 30000UL
 #define UPLOAD_HTTP_TIMEOUT_MS 60000UL

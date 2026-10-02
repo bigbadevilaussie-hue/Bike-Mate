@@ -243,6 +243,9 @@ a Tier-1 blocker is open" going forward.
 - Do NOT explain three things at once. Answer, then stop.
 - The user edits files himself. Ask before assuming he wants automation.
 - "Cages" = cars. "Sprint" = the bike, not a software sprint.
+- Do NOT comment on time of day. No "it'''s late", "go to bed",
+  "call it a night", or scheduling advice. Nick decides when
+  to work and when to stop. This is not your call.
 
 ---
 
@@ -255,3 +258,33 @@ failure like the last battery."
 
 The 10mA Mini 360 is the actual threat. Fix or replace it, or the
 4-week baseline is meaningless.
+
+---
+
+## GUI 4.00 plan (started 2026-10-02)
+
+Current: GUI v3.15, monolith `bikemate.py` (~1000 lines)
+Target: GUI v4.00, modular `bikemate/` package + theme system + Fan-Mate-style reports
+
+Order of work:
+  1. Split `bikemate.py` into a `bikemate/` package (pure refactor, no behaviour change)
+     - config.py, state.py, helpers.py, servers.py, drive.py,
+       ble_worker.py, widgets.py, reports.py, dialogs.py, app.py
+     - Keep a 6-line `bikemate.py` launcher importing from the package
+  2. Port Fan-Mate's theme system (THEME_DAY / THEME_NIGHT, is_daytime(),
+     current_theme(), apply_theme(), Toggle Day/Night menu item)
+  3. Rewrite BikeReport in Fan-Mate style (ReportPlot widget, stat cards,
+     warning banner, three stacked graphs)
+  4. Bump GUI_VERSION 3.15 -> 4.00
+
+Fan-Mate reference (for structure + theme):
+  ~/Documents/Arduino/fanmate/fanmate/
+    config.py     THEME_DAY, THEME_NIGHT, is_daytime helpers
+    state.py      shared runtime state + fonts
+    widgets.py    Card, Graph, ReportPlot classes
+    reports.py    Report2H / ReportDaily / ReportWeekly
+    app.py        App class + menu + toggle_theme + apply_theme
+    helpers.py    time + status + version helpers
+
+Decision deferred: monolith is fine for now. Split only if the file
+grows past ~1500 lines or a section becomes genuinely hard to navigate.

@@ -5,7 +5,8 @@ Update this file whenever the wiring changes. If it drifts from reality,
 reality wins — fix this file.
 
 Snapshot date: 2026-10-01
-Firmware on bench: V4.36
+Section 6 updated: 2026-10-02 (peer review: Le Mistral, GPT, Grok, Gemini)
+Firmware on bench: V4.38.5
 
 ---
 
@@ -111,7 +112,7 @@ Two independent power sources:
 - 324Ω measured (nominal 330Ω, within tolerance)
 - Lights when `accState = true` (engine running, ride in progress)
 
-### Section 6 — Switched 12V rail (BUILT, breadboard, V4.39)
+### Section 6 — Switched 12V rail (BUILT, breadboard, 2026-10-02)
 
     GPIO 1 ──┬── [324Ω] ── green LED ── GND
              │
@@ -207,7 +208,7 @@ Board target:
 
 ## FIRMWARE STATE
 
-- `BIKE_MATE_VERSION "4.36"`
+- `BIKE_MATE_VERSION "4.38.5"`
 - `BENCH_MODE 1` (30s wake) — do not deploy
 - `GPS_STUB_ENABLED 1` (fake coordinates)
 - NTC: reverted to V4.34 constants, reads within ~1.5C of room temp
@@ -279,7 +280,8 @@ Ordered by dependency. Software TODO is in `TODO.md`.
 - Real 12V voltage reading (PSU must be on)
 - Buck-powered operation (USB currently)
 - Real GPS fix (NEO-6M not wired)
-- MOSFET ACC switch behaviour (not built)
+- Switched-rail load behaviour with GPS/USB charger connected
+  (MOSFET circuit itself is built — see Section 6)
 - Sleep current measurement (needs DMM in series)
 - Upload pipeline with real files (needs PSU on + files)
 - Perfboard behaviour (not built)

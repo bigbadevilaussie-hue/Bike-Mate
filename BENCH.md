@@ -1,6 +1,6 @@
 # Bike-Mate — Bench Setup
 
-Physical snapshot of the breadboard at firmware V4.36.
+Physical snapshot of the breadboard at firmware V4.38.5.
 Update this file whenever the wiring changes. If it drifts from reality,
 reality wins — fix this file.
 
@@ -48,7 +48,7 @@ Two independent power sources:
 
 ---
 
-## TRACED CIRCUITS (V4.36 bench)
+## TRACED CIRCUITS (V4.38.5 bench)
 
 ### Section 1 — Voltage divider (GPIO 0)
 

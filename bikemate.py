@@ -49,12 +49,39 @@ WEATHER_TZ  = "Australia%2FBrisbane"
 WEATHER_REFRESH_SEC = 1800
 PULL_TIMEOUT_SEC = 35
 
-BG, CARD, GRID = "#1e1e2e", "#313244", "#2a2a3a"
+THEME_DAY = {
+    "bg": "#eef1f7", "card": "#ffffff", "card_border": "#d8dde8",
+    "grid": "#e6e9f0", "fg": "#1e1e2e", "muted": "#7a8194",
+    "accent": "#1e66f5", "blue": "#1e66f5", "green": "#2f9e44",
+    "yellow": "#d99a00", "orange": "#e8590c", "red": "#d20f39",
+    "fill": "#cfe0ff",
+}
+THEME_NIGHT = {
+    "bg": "#181825", "card": "#232334", "card_border": "#313145",
+    "grid": "#2a2a3a", "fg": "#cdd6f4", "muted": "#9399b2",
+    "accent": "#89b4fa", "blue": "#89b4fa", "green": "#a6e3a1",
+    "yellow": "#f9e2af", "orange": "#fab387", "red": "#e64553",
+    "fill": "#2c3f5e",
+}
+DAY_START_HOUR = 6
+DAY_END_HOUR = 18
+
+# Legacy aliases (night theme) - kept for code paths not yet converted.
+BG, CARD, GRID = THEME_NIGHT["bg"], THEME_NIGHT["card"], THEME_NIGHT["grid"]
 FG, BLUE, GREEN, YELLOW, ORANGE, MUTED = (
-    "#cdd6f4", "#89b4fa", "#a6e3a1", "#f9e2af", "#fab387", "#9399b2")
-RED = "#e64553"
-FILL_GREEN = "#2a4a35"
-FILL_BLUE  = "#2c3f5e"
+    THEME_NIGHT["fg"], THEME_NIGHT["blue"], THEME_NIGHT["green"],
+    THEME_NIGHT["yellow"], THEME_NIGHT["orange"], THEME_NIGHT["muted"])
+RED = THEME_NIGHT["red"]
+FILL_GREEN = THEME_NIGHT["fill"]
+FILL_BLUE  = THEME_NIGHT["fill"]
+
+
+def is_daytime():
+    return DAY_START_HOUR <= datetime.now().hour < DAY_END_HOUR
+
+
+def current_theme():
+    return THEME_DAY if is_daytime() else THEME_NIGHT
 
 HIST_LEN = 60
 volt_hist = deque([None] * HIST_LEN, maxlen=HIST_LEN)
@@ -520,12 +547,17 @@ class BLEWorker(threading.Thread):
                     if device_version != d["fv"]:
                         device_version = d["fv"]
                         print(f"[DEVICE] firmware version: {d['fv']}")
-                volt_hist.append(float(d.get("v", 12.6)))
-                temp_hist.append(float(d.get("t", 20.0)))
+                if "v" in d and "t" in d:
+                    v = float(d["v"])
+                    t = float(d["t"])
+                    if t < 24.0:
+                        print(f"[TSPIKE] raw={payload.decode()}")
+                    volt_hist.append(v)
+                    temp_hist.append(t)
             except Exception as e:
                 if time.time() - last_parse_fail > 10:
                     last_parse_fail = time.time()
-                    print(f"[NOTIFY] parse fail: {e}")
+                    print(f"[NOTIFY] parse fail: {e} raw={payload[:100]}")
 
         while self.running:
             try:
@@ -581,19 +613,31 @@ class BLEWorker(threading.Thread):
 
 
 class Graph(tk.Canvas):
-    def __init__(self, parent, color, fill, y_min=None, y_max=None, w=380, h=120):
-        super().__init__(parent, width=w, height=h, bg=BG, highlightthickness=0)
-        self.color, self.fill, self.y_min, self.y_max = color, fill, y_min, y_max
+    def __init__(self, parent, app, color_key="blue", fill_key=None,
+                 y_min=None, y_max=None, w=380, h=120):
+        super().__init__(parent, width=w, height=h,
+                         bg=app.theme["card"], highlightthickness=0)
+        self.app = app
+        self.color_key = color_key
+        self.fill_key = fill_key or "fill"
+        self.y_min, self.y_max = y_min, y_max
         self.w, self.h = w, h
         self.pad_l, self.pad_r, self.pad_t, self.pad_b = 34, 6, 6, 6
         self.data = deque([None] * HIST_LEN, maxlen=HIST_LEN)
+
+    def apply_theme(self):
+        t = self.app.theme
+        self.configure(bg=t["card"])
+        self.redraw()
 
     def set_data(self, d):
         self.data = d
         self.redraw()
 
     def redraw(self):
+        t = self.app.theme
         self.delete("all")
+        self.configure(bg=t["card"])
         pts = [p for p in self.data if p is not None]
         pw = self.w - self.pad_l - self.pad_r
         ph = self.h - self.pad_t - self.pad_b
@@ -611,11 +655,11 @@ class Graph(tk.Canvas):
         for i in range(5):
             v = hi - (i / 4) * rng
             y = self.pad_t + (i / 4) * ph
-            self.create_line(self.pad_l, y, self.w - self.pad_r, y, fill=GRID)
-            self.create_text(self.pad_l - 4, y, text=f"{v:.1f}", fill=MUTED,
+            self.create_line(self.pad_l, y, self.w - self.pad_r, y, fill=t["grid"])
+            self.create_text(self.pad_l - 4, y, text=f"{v:.1f}", fill=t["muted"],
                              font=("Helvetica", 9), anchor="e")
         if not pts:
-            self.create_text(self.w / 2, self.h / 2, text="waiting…", fill=MUTED)
+            self.create_text(self.w / 2, self.h / 2, text="waiting…", fill=t["muted"])
             return
         first = next((i for i, p in enumerate(self.data) if p is not None), 0)
         trim = [p for p in list(self.data)[first:] if p is not None]
@@ -629,19 +673,21 @@ class Graph(tk.Canvas):
         if m >= 2:
             poly = [self.pad_l, self.pad_t + ph] + coords + \
                    [self.pad_l + pw, self.pad_t + ph]
-            self.create_polygon(poly, fill=self.fill, outline="")
-            self.create_line(*coords, fill=self.color, width=2,
+            self.create_polygon(poly, fill=t[self.fill_key], outline="")
+            self.create_line(*coords, fill=t[self.color_key], width=2,
                              capstyle=tk.ROUND, joinstyle=tk.ROUND)
         lx, ly = coords[-2], coords[-1]
         self.create_oval(lx - 3, ly - 3, lx + 3, ly + 3,
-                         fill=self.color, outline="")
+                         fill=t[self.color_key], outline="")
 
 
 class App:
     def __init__(self, root):
         self.root = root
+        self.theme = current_theme()
+        self.is_day = is_daytime()
         root.title("Bike-Mate")
-        root.configure(bg=BG)
+        root.configure(bg=self.theme["bg"])
         root.resizable(False, False)
         start_ota_server()
         start_drive_server()
@@ -658,7 +704,13 @@ class App:
         am.add_separator()
         am.add_command(label="📤 Update Firmware", command=self.menu_ota)
         am.add_separator()
-        am.add_command(label="📊 Open Reports", command=self.open_reports)
+        reports_menu = tk.Menu(am, tearoff=0)
+        reports_menu.add_command(label="Last 2 Hours", command=lambda: self.open_report("2h"))
+        reports_menu.add_command(label="Daily",        command=lambda: self.open_report("day"))
+        reports_menu.add_command(label="Weekly",       command=lambda: self.open_report("week"))
+        am.add_cascade(label="📊 Reports", menu=reports_menu)
+        am.add_separator()
+        am.add_command(label="🌗 Toggle Day/Night", command=self.toggle_theme)
         am.add_separator()
         am.add_command(label="Quit", command=self.on_quit)
         mb.add_cascade(label="🏍️ Bike-Mate", menu=am)
@@ -699,10 +751,10 @@ class App:
                                       font=("Helvetica", 11, "bold"))
         self.last_ride_pre.pack(pady=(0, 8))
         vgc = tk.Frame(root, bg=CARD); vgc.pack(fill="x", padx=20, pady=6)
-        self.volt_graph = Graph(vgc, GREEN, FILL_GREEN, y_min=11.5, y_max=15.0)
+        self.volt_graph = Graph(vgc, self, color_key="green", y_min=11.5, y_max=15.0)
         self.volt_graph.pack(padx=8, pady=8)
         tgc = tk.Frame(root, bg=CARD); tgc.pack(fill="x", padx=20, pady=6)
-        self.temp_graph = Graph(tgc, BLUE, FILL_BLUE)
+        self.temp_graph = Graph(tgc, self, color_key="orange", y_min=15.0, y_max=40.0)
         self.temp_graph.pack(padx=8, pady=8)
         self.footer_lbl = tk.Label(root, text=f"GUI v{GUI_VERSION}",
                                    bg=BG, fg=MUTED,
@@ -711,6 +763,8 @@ class App:
         root.protocol("WM_DELETE_WINDOW", self.on_quit)
         threading.Thread(target=weather_thread_loop, daemon=True).start()
         self.worker.start()
+        self.apply_theme()
+        self.theme_check()
         self.tick()
 
     def _col(self, parent, label, value):
@@ -721,6 +775,97 @@ class App:
                      font=("Helvetica", 16, "bold"))
         v.pack(pady=(0, 4))
         return v
+
+    def toggle_theme(self):
+        self.is_day = not self.is_day
+        self.theme = THEME_DAY if self.is_day else THEME_NIGHT
+        print(f"[THEME] toggled to {'day' if self.is_day else 'night'}")
+        self.apply_theme()
+
+    def theme_check(self):
+        if is_daytime() != self.is_day:
+            self.is_day = is_daytime()
+            self.theme = current_theme()
+            print(f"[THEME] auto-switched to {'day' if self.is_day else 'night'}")
+            self.apply_theme()
+        self.root.after(60_000, self.theme_check)
+
+    def apply_theme(self):
+        t = self.theme
+        self.root.configure(bg=t["bg"])
+
+        # Widgets whose bg/fg are driven by special logic, not just theme
+        special_fg = {
+            self.acc_lbl:    ("green" if latest_data.get("a") else "muted"),
+            self.eng_lbl:    ("green" if latest_data.get("e") else "muted"),
+            self.warn_lbl:   ("red"   if latest_data.get("w") else "muted"),
+            self.volt_lbl:   None,  # set by tick()
+            self.state_lbl:  None,  # set by tick()
+            self.temp_lbl:   None,  # set by tick()
+            self.last_ride_lbl:  None,
+            self.last_ride_sub:  None,
+            self.last_ride_pre:  None,
+        }
+
+        def walk(w):
+            try:
+                cls = w.winfo_class()
+            except Exception:
+                return
+            try:
+                if cls == "Frame":
+                    w.configure(bg=t["card"] if w is not self.root else t["bg"])
+                elif cls == "Label":
+                    # Which frame is this label in? card or bg?
+                    parent_bg = t["bg"]
+                    try:
+                        if w.master.winfo_class() == "Frame" and w.master is not self.root:
+                            parent_bg = t["card"]
+                    except Exception:
+                        pass
+                    w.configure(bg=parent_bg)
+                    # Don't override fg for special labels
+                    if w in special_fg:
+                        key = special_fg[w]
+                        if key is not None:
+                            w.configure(fg=t[key])
+                    else:
+                        # heuristic: muted for the small column headers,
+                        # fg for values. Check font size.
+                        try:
+                            font = w.cget("font")
+                            fs = int(str(font).split()[-1].rstrip(")")) if "bold" not in str(font) else 0
+                        except Exception:
+                            fs = 0
+                        w.configure(fg=t["fg"] if fs == 0 or fs >= 12 else t["muted"])
+                elif cls == "Button":
+                    w.configure(bg=t["card"], fg=t["fg"],
+                                activebackground=t["accent"],
+                                activeforeground=t["fg"])
+                elif cls == "Entry":
+                    w.configure(bg=t["card"], fg=t["fg"],
+                                insertbackground=t["fg"])
+                elif cls == "Menu":
+                    pass  # menu colours are macOS-native
+            except Exception:
+                pass
+            for c in w.winfo_children():
+                walk(c)
+
+        walk(self.root)
+
+        # Graphs need explicit apply_theme
+        try:
+            self.volt_graph.apply_theme()
+        except Exception:
+            pass
+        try:
+            self.temp_graph.apply_theme()
+        except Exception:
+            pass
+
+    def open_report(self, mode):
+        BikeReport(self.root, self, mode)
 
     def on_quit(self):
         stop_ota_server()
@@ -1120,6 +1265,14 @@ class BikeReport(tk.Toplevel):
 
         if not all_files:
             return []
+
+        if self.mode == "2h":
+            from datetime import date
+            y = date.today().strftime("%Y-%m-%d")
+            target = os.path.join(base, f"wakes_{y}.csv")
+            if os.path.exists(target):
+                return [target]
+            return all_files[-1:]
 
         if self.mode == "day":
             from datetime import date, timedelta

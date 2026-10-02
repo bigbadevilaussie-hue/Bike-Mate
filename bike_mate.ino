@@ -243,6 +243,13 @@ static void goToSleep() {
   display.clearDisplay();
   display.display();
   display.ssd1306_command(SSD1306_DISPLAYOFF);
+  // V4.42: add the current wake duration to totalSeconds before sleeping.
+  // The next wake adds the assumed sleep interval (wakeMs/1000). Without
+  // this, the ~1s of setup+loop time per wake is lost, drifting the RTC
+  // ~48 min/day at 30s cadence. The RTC oscillator adds another 15-30 min
+  // per day of drift, bounded by the BLE time sync on GUI connect.
+  totalSeconds += millis() / 1000;
+
   tprint("[SLEEP] mode=%s V=%.2f conn=%d wake=%lus",
          mode, latestBatteryVoltage,
          isActuallyConnected() ? 1 : 0, wakeSec);
@@ -350,6 +357,7 @@ void updateStateTransitions(unsigned long now) {
     if (!isLogging) startRideLog();
     tprint("[STATE] settle complete ACC ON %.2f", V);
     wakeLoggerForceWrite();
+    wakeLoggerPause();
   }
 
   if (parkedTimerActive && (now - parkedTimerStart) >= parkedDelayMs) {
@@ -368,6 +376,7 @@ void updateStateTransitions(unsigned long now) {
     alarmSequenceActive = true; alarmStep = 0; alarmStepTimer = millis();
     if (isLogging) closeRideLog();
     tprint("[STATE] arming complete");
+    wakeLoggerResume();
     wakeLoggerForceWrite();
 
 #if UPLOAD_ENABLED && BENCH_MODE
@@ -383,8 +392,6 @@ void updateStateTransitions(unsigned long now) {
 
 void doStateWork(unsigned long now) {
   float V = latestBatteryVoltage;
-
-  if (isLogging) writeRideRow();
 
   if (inPanic && !lowBattBeepActive) {
     if (now - lastPanicBeep >= 120000UL) {
@@ -653,6 +660,13 @@ void loop() {
   if (pushRequested && isActuallyConnected() && !pushInProgress) {
     pushRequested = false;
     pushNewSlots(pushGuiEpoch);
+  }
+
+  // V4.41: ride log writes on its own 5s timer.
+  static unsigned long lastRideLog = 0;
+  if (isLogging && (now - lastRideLog >= (LOG_INTERVAL_SEC * 1000UL))) {
+    lastRideLog = now;
+    writeRideRow();
   }
 
   if (firstTick || (now - lastTick >= TICK_MS)) {

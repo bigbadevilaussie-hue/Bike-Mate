@@ -337,8 +337,29 @@ static int uploadAllRideFiles(int* okCount) {
         }
       }
 
-      // Rule 6: completed rides are always upload-eligible.
-      // (V3.58: removed the "newest completed ride" skip.)
+      // Rule 7: never upload the newest completed ride.
+      // It stays on the ESP forever so the GUI can always pull it
+      // via BLE. Only rides OLDER than newest_epoch are uploaded.
+      // When a newer ride finishes, the previously-newest becomes
+      // eligible and is uploaded on the next run.
+      if (!skip) {
+        extern Preferences prefs;
+        prefs.begin("rides", true);
+        uint32_t newest = prefs.getUInt("newest_epoch", 0);
+        prefs.end();
+        if (newest > 0) {
+          char newestPath[48];
+          rideStorageBuildFilename(newest, newestPath, sizeof(newestPath));
+          const char* np = (newestPath[0] == '/') ? newestPath + 1 : newestPath;
+          tprint("[UPLOAD] Rule7: n='%s' np='%s' newest=%lu", n, np, (unsigned long)newest);
+          if (strcmp(n, np) == 0) {
+            skip = true;
+            tprint("[UPLOAD] skipping newest ride %s", n);
+          }
+        } else {
+          tprint("[UPLOAD] Rule7: newest_epoch is 0");
+        }
+      }
 
       if (!skip) {
 
@@ -528,16 +549,14 @@ bool driveUploadPerform() {
 
   wifiBringDown();
 
-  // V3.58: clear newest_epoch after upload. Any completed ride
-  // eligible for upload has now been uploaded (and deleted on 302).
-  // Clearing this stops push chasing a deleted file on the next wake.
+  // V4.39: newest_epoch is NEVER cleared here. The newest completed
+  // ride stays on the ESP permanently so the GUI can pull it via BLE.
+  // Only older rides are uploaded and deleted. newest_epoch advances
+  // naturally in closeRideLog() when a newer ride finishes.
   if (rideFails == 0) {
-    prefs.begin("rides", false);
-    prefs.putUInt("newest_epoch", 0);
-    prefs.end();
-    tprint("[UPLOAD] newest_epoch cleared");
+    tprint("[UPLOAD] upload ok, newest_epoch preserved");
   } else {
-    tprint("[UPLOAD] ride upload failed, keeping newest_epoch");
+    tprint("[UPLOAD] ride upload failed, newest_epoch preserved");
   }
 
   uint32_t ep = currentEpoch();

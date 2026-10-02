@@ -115,6 +115,14 @@ static void _writeSample(uint32_t epoch) {
     return;
   }
 
+  extern bool inPanic;
+  extern bool engineWasRunning;
+  extern bool accState;
+
+  int state = 0;
+  if (inPanic) state = 2;
+  else if (engineWasRunning || accState) state = 1;
+
   char row[96];
   int n = snprintf(row, sizeof(row),
                    "%lu,%ld,%ld,%.2f,%d,%d,0x%02X,%d\n",
@@ -122,7 +130,7 @@ static void _writeSample(uint32_t epoch) {
                    (long)_lat_x1e7, (long)_lon_x1e7,
                    latestBatteryVoltage,
                    (int)latestTemperatureC,
-                   0,
+                   state,
                    (int)_buildFlags(),
                    (int)_sats);
   if (n > 0) f.write((uint8_t*)row, n);

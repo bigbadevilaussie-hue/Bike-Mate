@@ -12,8 +12,7 @@
 // BIKE-MATE — configuration
 // V3.64: BENCH_MODE 1, UPLOAD_ENABLED 1, new Apps Script deployment
 
-#define BIKE_MATE_VERSION "4.38.4"
-#define BENCH_MODE 1
+#define BIKE_MATE_VERSION "4.43"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
@@ -61,6 +60,7 @@
 #define RIDE_FILE_PREFIX    "/ride_"
 
 // ---- Wake intervals ----
+#define BENCH_MODE 1
 #define WAKE_BENCH_MS    30000UL
 #define WAKE_DAY_MS     300000UL
 #define WAKE_NIGHT_MS   600000UL

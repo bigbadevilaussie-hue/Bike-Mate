@@ -288,3 +288,76 @@ Fan-Mate reference (for structure + theme):
 
 Decision deferred: monolith is fine for now. Split only if the file
 grows past ~1500 lines or a section becomes genuinely hard to navigate.
+
+---
+
+## Session 2026-10-02 evening — GPS + OLED + theme
+
+### Shipped (V4.46, committed)
+- GUI 3.15 -> theme system ported from Fan-Mate (day/night, THEME_DAY/THEME_NIGHT)
+- Toggle Day/Night menu item
+- Reports submenu -> Last 2 Hours / Daily / Weekly
+- Settings dialog + report window themed
+- Firmware V4.42-4.46 in sequence:
+  - V4.42: wake log pauses during rides (settle -> pause, arming -> resume)
+  - V4.42: 5s ride log timer (was 30s, now 5s via separate main-loop timer)
+  - V4.42: real state column in wake log (0=MONITOR, 1=RUNNING, 2=PANIC)
+  - V4.42: TZ fix - setenv("TZ","AEST-10") at top of file builders
+  - V4.42: RTC wake-overhead fix (totalSeconds += millis()/1000 before sleep)
+  - V4.43: ADC mux throwaway read before NTC sampling
+  - V4.43: settings + report theming (GUI)
+  - V4.44: TZ fix confirmed working (Rule 7 now matches n==np)
+  - V4.44: MAIL_ENABLED 0 (bench mode, no emails)
+  - V4.45: GpsModule.cpp/.h written - NMEA parser, no external library
+  - V4.45: GPS wired into bike_mate.ino (init + tick + stub removed)
+  - V4.45: GPS_STUB_ENABLED 0
+  - V4.46: GPS moved from GPIO 20/21 to GPIO 5/7 (WiFi conflict)
+  - V4.46: OLED speed screen (big speed middle, volts/temp/time bottom)
+  - V4.46: ride log lat/lon from GPS
+  - V4.46: RTC persistence for GPS lat/lon/sats
+  - V4.46: version bump, MAIL_ENABLED 0
+
+### Known issues
+- **GPS not reading on GPIO 5.** All `[GPS] fix=0 sats=0` even with wire on GPIO 5.
+  Suspect: Serial1 pin mapping on C3, or wire not making contact.
+  Next step: add avail= to init print, check RX buffer, DMM on GPS TX.
+- **BLE HCI error spam.** `BT_HCI: CC evt: op=0x2008/0x2009 status=0x7`
+  every 3s. Deferred to production board. Advertising restart fix pending.
+- **Temp sawtooth on OLED/report.** Deferred to production board (better decoupling).
+- **Dual upload.** Both `.csv` and `.csv.gz` upload to Drive. Rule 7 skips
+  the raw but the `.gz` still uploads and deletes. Minor.
+- **Rule 7 confirmation.** TZ fix worked, n==np match, newest ride stays.
+  Verified in serial: `[UPLOAD] skipping newest ride ride_20261002210204.csv`.
+- **NVS was blank** after flashing HW test sketch with erase. Rebuilds naturally.
+
+### Hardware status
+- GPS VCC -> 5V from buck (was 3.3V, brownout issue fixed)
+- GPS TX -> GPIO 5 (was GPIO 20, WiFi interference)
+- GPS RX -> GPIO 7 (unused)
+- GPS GND -> GND
+- OLED, NTC, voltage divider, LEDs, buzzer all verified working (HW test sketch)
+- MOSFET switched rail on breadboard (verified Section 6 BENCH.md)
+- No TVS, no fuse yet
+- Mini 360 still the buck (12mA quiescent) - MP1584EN ordered, not arrived
+
+### Pending for next session
+1. Fix GPS reading on GPIO 5 (avail= diagnostic)
+2. Walk test outdoors - get a fix, confirm lat/lon in ride log
+3. Speed display verification (OLED screen)
+4. GUI report rewrite (Fan-Mate style stat cards + banner)
+5. GUI modularisation (still monolith, ~1100 lines)
+6. GUI version bump 3.15 -> 4.00 (after report rewrite)
+7. Rule 7 `.gz` skip (dual upload)
+8. Pending seal cleanup (stale .sealed after failed upload)
+9. Field install prep (MP1584EN swap, BENCH_MODE 0, TVS, fuse)
+
+### Files changed this session
+- Config.h (version, MAIL_ENABLED, GPS_STUB_ENABLED, BENCH_MODE)
+- DriveUpload.cpp (Rule 7, TZ fix, Rule7 debug)
+- WakeLogger.cpp (state write, TZ fix)
+- Sensors.cpp (ADC mux settle)
+- RideLogger.cpp (GPS lat/lon)
+- GpsModule.cpp / GpsModule.h (new)
+- bike_mate.ino (GPS init/tick, pause/resume, 5s ride timer, RTC fix)
+- bikemate.py (theme system, reports submenu, settings theming)
+- BENCH.md (Section 6, version consistency)

@@ -45,6 +45,7 @@ RTC_DATA_ATTR bool inPanic = false;
 RTC_DATA_ATTR unsigned long cycleCount = 0;
 RTC_DATA_ATTR float lastRestingVoltage = 0.0;
 RTC_DATA_ATTR uint8_t lowVoltLoops = 0;
+RTC_DATA_ATTR uint8_t panicLatchCount = 0;
 RTC_DATA_ATTR bool lowBattMailLatched = false;
 
 bool isCountingDown = false;
@@ -236,36 +237,11 @@ void updateStateTransitions(unsigned long now) {
     lastRestingVoltage = V;
   }
 
-  if (!inPanic && V < V_PANIC_ENTER) {
-    inPanic = true;
-    lastPanicBeep = now;
-    lowBattBeepActive = true;
-    lowBattBeepStep = 0;
-    lowBattBeepRemaining = 5;
-    lowBattBeepTimer = now;
-    tprint("[STATE] PANIC enter %.2f", V);
-    wakeLoggerForceWrite();
-
-    // V4.35: send one panic email on entry. The atRest gate below
-    // excludes PANIC, so without this the worst-case battery state
-    // never triggers an alert.
-    if (!lowBattMailLatched) {
-      if (sendLowBatteryAlert(V, V_PANIC_ENTER)) {
-        lowBattMailLatched = true;
-        tprint("[MAIL] PANIC alert sent %.2f", V);
-      } else {
-        tprint("[MAIL] PANIC send failed");
-      }
-    }
-    if (engineWasRunning || accState || isLogging) {
-      engineWasRunning = false;
-      accState = false;
-      isCountingDown = false;
-      isArmingCountdown = true;
-      armingStartMillis = millis();
-    }
-  } else if (inPanic && V > V_PANIC_EXIT) {
+  // V4.51: PANIC enter moved to doStateWork() - only checked on wake.
+  // PANIC exit still here for fast recovery.
+  if (inPanic && V > V_PANIC_EXIT) {
     inPanic = false;
+    panicLatchCount = 0;
     tprint("[STATE] PANIC exit %.2f", V);
   }
 
@@ -275,12 +251,15 @@ void updateStateTransitions(unsigned long now) {
   if (atRest && V < WARN_EMAIL_VOLTAGE && !lowBattMailLatched) {
     lowVoltLoops++;
     if (lowVoltLoops >= LOW_VOLT_LOOPS_REQUIRED) {
+      // V4.51: latch on any attempt - success or failure. Otherwise a
+      // disabled mail path (MAIL_ENABLED 0) or a rate-limit retries
+      // every loop iteration.
+      lowBattMailLatched = true;
+      lowVoltLoops = 0;
       if (sendLowBatteryAlert(V, WARN_EMAIL_VOLTAGE)) {
-        lowBattMailLatched = true;
-        lowVoltLoops = 0;
         tprint("[MAIL] low batt alert sent %.2f", V);
       } else {
-        tprint("[MAIL] send failed, will retry");
+        tprint("[MAIL] low batt alert attempted (send failed)");
       }
     } else {
       tprint_verbose("[MAIL] low volt loop %d/%d", lowVoltLoops, LOW_VOLT_LOOPS_REQUIRED);
@@ -360,8 +339,52 @@ void updateStateTransitions(unsigned long now) {
   }
 }
 
-void doStateWork(unsigned long now) {
+void doStateWork(unsigned long now, bool wasWake) {
   float V = latestBatteryVoltage;
+
+  // V4.51: PANIC check ONLY on wake (wasWake = true).
+  // Not on TICK_MS. Not during rides. Not during transitions.
+  // Latch counter survives deep sleep. Day: 3 wakes, Night: 4 wakes.
+  bool panicCheckAllowed = wasWake &&
+                           !engineWasRunning && !accState &&
+                           !isCountingDown && !isArmingCountdown;
+
+  if (panicCheckAllowed && !inPanic) {
+    bool isNight = strcmp(currentWakeMode(), "NIGHT") == 0;
+    uint8_t required = isNight ? 4 : 3;
+
+    if (V < V_PANIC_EXIT) {
+      panicLatchCount++;
+    } else {
+      panicLatchCount = 0;
+    }
+
+    if (panicLatchCount >= required) {
+      tprint("[PANIC] latch=%d/%d FIRE V=%.2f", panicLatchCount, required, V);
+      inPanic = true;
+      panicLatchCount = 0;
+      lastPanicBeep = now;
+      lowBattBeepActive = true;
+      lowBattBeepStep = 0;
+      lowBattBeepRemaining = 5;
+      lowBattBeepTimer = now;
+      tprint("[STATE] PANIC enter %.2f after %d wakes", V, required);
+      wakeLoggerForceWrite();
+
+      if (!lowBattMailLatched) {
+        if (sendLowBatteryAlert(V, V_PANIC_ENTER)) {
+          lowBattMailLatched = true;
+          tprint("[MAIL] PANIC alert sent %.2f", V);
+        } else {
+          tprint("[MAIL] PANIC send failed");
+        }
+      }
+    } else {
+      tprint("[PANIC] latch=%d/%d V=%.2f", panicLatchCount, required, V);
+    }
+  } else if (wasWake && inPanic) {
+    tprint("[PANIC] already inPanic V=%.2f", V);
+  }
 
   if (inPanic && !lowBattBeepActive) {
     if (now - lastPanicBeep >= 120000UL) {
@@ -493,6 +516,7 @@ void setup() {
     lowVoltLoops = 0;
     lowBattMailLatched = false;
     uploadCycleCounter = 0;
+    panicLatchCount = 0;
     tprint("cold boot: state reset");
   } else {
     totalSeconds += currentWakeMs() / 1000;
@@ -652,9 +676,10 @@ void loop() {
   }
 
   if (firstTick || (now - lastTick >= TICK_MS)) {
+    bool wasWake = firstTick;
     firstTick = false;
     lastTick = now;
-    doStateWork(now);
+    doStateWork(now, wasWake);
   }
 
   if (shouldSleep()) {

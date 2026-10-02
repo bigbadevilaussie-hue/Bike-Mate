@@ -120,10 +120,14 @@ static void _writeSample(uint32_t epoch) {
   extern bool inPanic;
   extern bool engineWasRunning;
   extern bool accState;
+  extern bool isCountingDown;
+  extern bool isArmingCountdown;
 
   int state = 0;
   if (inPanic) state = 2;
   else if (engineWasRunning || accState) state = 1;
+  else if (isCountingDown) state = 3;
+  else if (isArmingCountdown) state = 4;
 
   char row[96];
   int n = snprintf(row, sizeof(row),

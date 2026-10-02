@@ -17,7 +17,7 @@ from datetime import datetime
 from tkinter import messagebox
 from bleak import BleakScanner, BleakClient
 
-GUI_VERSION = "3.15"
+GUI_VERSION = "4.00"
 DEVICE_NAME = "Bike-Mate-2"
 DATA_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 TIME_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9"
@@ -705,6 +705,8 @@ class App:
         am.add_command(label="📤 Update Firmware", command=self.menu_ota)
         am.add_separator()
         reports_menu = tk.Menu(am, tearoff=0)
+        reports_menu.add_command(label="Last Ride",    command=self.open_last_ride_report)
+        reports_menu.add_separator()
         reports_menu.add_command(label="Last 2 Hours", command=lambda: self.open_report("2h"))
         reports_menu.add_command(label="Daily",        command=lambda: self.open_report("day"))
         reports_menu.add_command(label="Weekly",       command=lambda: self.open_report("week"))
@@ -866,6 +868,24 @@ class App:
 
     def open_report(self, mode):
         BikeReport(self.root, self, mode)
+
+    def open_last_ride_report(self):
+        with latest_ride_lock:
+            r = latest_ride
+        if r and r.get("summary"):
+            LastRideReport(self.root, self)
+        else:
+            WaitingForRide(self.root, self)
+
+    def open_last_ride_report(self):
+        # If we have a cached ride in memory, show it.
+        with latest_ride_lock:
+            r = latest_ride
+        if r and r.get("summary"):
+            LastRideReport(self.root, self)
+            return
+        # Otherwise open a waiting window that polls for up to 3 wake cycles.
+        WaitingForRide(self.root, self)
 
     def on_quit(self):
         stop_ota_server()
@@ -1453,6 +1473,310 @@ class BikeReport(tk.Toplevel):
             canvas.create_text(W - pad_r - 5, pad_t + 4, text=subtitle,
                                fill=MUTED, font=("Helvetica", 9), anchor="ne")
 
+
+
+
+class WaitingForRide(tk.Toplevel):
+    """Waiting screen - polls latest_ride up to 3 wake cycles."""
+
+    def __init__(self, parent, app):
+        super().__init__(parent)
+        self.app = app
+        self.title("Bike-Mate - Last Ride")
+        self.resizable(False, False)
+        self.transient(parent)
+        self._poll_count = 0
+        self._max_polls = 3
+        self._poll_interval_ms = 30000
+
+        wrap = tk.Frame(self)
+        wrap.pack(padx=30, pady=30)
+        self._msg = tk.Label(wrap, text="Waiting for device to wake...",
+                             font=("Helvetica", 14, "bold"))
+        self._msg.pack(pady=(0, 10))
+        self._sub = tk.Label(wrap, text="0 of 3 cycles",
+                             font=("Helvetica", 11))
+        self._sub.pack(pady=(0, 20))
+        tk.Button(wrap, text="Cancel", width=12,
+                  command=self.destroy).pack()
+
+        t = app.theme
+        self.configure(bg=t["bg"])
+        wrap.configure(bg=t["bg"])
+        self._msg.configure(bg=t["bg"], fg=t["fg"])
+        self._sub.configure(bg=t["bg"], fg=t["muted"])
+
+        self.after(1000, self._poll)
+
+    def _poll(self):
+        with latest_ride_lock:
+            r = latest_ride
+        if r and r.get("summary"):
+            self.destroy()
+            LastRideReport(self.app.root, self.app)
+            return
+        self._poll_count += 1
+        if self._poll_count >= self._max_polls:
+            self._msg.config(text="No ride data received")
+            self._sub.config(text="Device may be asleep")
+            return
+        self._sub.config(text=f"{self._poll_count} of {self._max_polls} cycles")
+        self.after(self._poll_interval_ms, self._poll)
+
+
+class LastRideReport(tk.Toplevel):
+    """Last ride report - stat cards + voltage + temp graphs."""
+
+    VOLT_OK_MIN = 12.2
+    VOLT_OK_MAX = 14.8
+
+    def __init__(self, parent, app):
+        super().__init__(parent)
+        self.app = app
+        self.title("Bike-Mate - Last Ride")
+        self.resizable(False, False)
+        self.transient(parent)
+
+        with latest_ride_lock:
+            ride = latest_ride
+        if not ride or not ride.get("summary"):
+            tk.Label(self, text="No ride data", font=("Helvetica", 14)).pack(padx=40, pady=40)
+            tk.Button(self, text="Close", command=self.destroy).pack(pady=(0, 20))
+            return
+
+        self._ride = ride
+        self._build_ui()
+
+    def _build_ui(self):
+        t = self.app.theme
+        self.configure(bg=t["bg"])
+
+        s = self._ride["summary"]
+        rows = self._ride["rows"]
+
+        # Header
+        from datetime import datetime
+        start = datetime.fromtimestamp(s["startEpoch"])
+        dur_min = s["durationSecs"] // 60
+        dur_sec = s["durationSecs"] % 60
+
+        header = tk.Frame(self, bg=t["bg"])
+        header.pack(fill="x", padx=20, pady=(16, 8))
+        tk.Label(header, text=f"Last Ride  -  {start.strftime('%a %d %b, %I:%M%p')}",
+                 bg=t["bg"], fg=t["blue"], font=("Helvetica", 15, "bold")).pack(anchor="w")
+        tk.Label(header, text=f"{dur_min}m {dur_sec}s  -  {s['rowCount']} rows  -  5s cadence",
+                 bg=t["bg"], fg=t["muted"], font=("Helvetica", 10)).pack(anchor="w", pady=(2, 0))
+
+        # Stat cards - voltage
+        vc = tk.Frame(self, bg=t["card"]); vc.pack(fill="x", padx=20, pady=(12, 4))
+        vcf = tk.Frame(vc, bg=t["card"]); vcf.pack(fill="x", pady=10)
+        self._stat(vcf, "VOLT MIN", f"{s['minVolt']:.2f}V",
+                   t["red"] if s["minVolt"] < self.VOLT_OK_MIN else t["fg"])
+        self._stat(vcf, "VOLT AVG", f"{s['avgVolt']:.2f}V", t["fg"])
+        self._stat(vcf, "VOLT MAX", f"{s['maxVolt']:.2f}V",
+                   t["red"] if s["maxVolt"] > self.VOLT_OK_MAX else t["fg"])
+
+        # Stat cards - time under/over
+        uc = tk.Frame(self, bg=t["card"]); uc.pack(fill="x", padx=20, pady=4)
+        ucf = tk.Frame(uc, bg=t["card"]); ucf.pack(fill="x", pady=10)
+        self._stat(ucf, "UNDER 12.2V", f"{s['underSecs']}s",
+                   t["yellow"] if s["underSecs"] > 0 else t["muted"])
+        self._stat(ucf, "OVER 14.8V", f"{s['overSecs']}s",
+                   t["red"] if s["overSecs"] > 0 else t["muted"])
+        self._stat(ucf, "PRE-RIDE", f"{s['preRideVolt']:.2f}V", t["fg"])
+
+        # Stat cards - temp
+        tc = tk.Frame(self, bg=t["card"]); tc.pack(fill="x", padx=20, pady=4)
+        tcf = tk.Frame(tc, bg=t["card"]); tcf.pack(fill="x", pady=10)
+        self._stat(tcf, "TEMP MIN", f"{s['minTemp']}C", t["fg"])
+        self._stat(tcf, "TEMP MAX", f"{s['maxTemp']}C", t["fg"])
+        flags = s.get("flags", 0)
+        flag_str = "OK" if flags == 0 else f"0x{flags:02X}"
+        self._stat(tcf, "FLAGS", flag_str,
+                   t["muted"] if flags == 0 else t["yellow"])
+
+        # Voltage graph - auto-scaled, coloured by status
+        tk.Label(self, text="VOLTAGE (green=OK, yellow=UNDER, red=OVER)",
+                 bg=t["bg"], fg=t["muted"], font=("Helvetica", 10, "bold")).pack(anchor="w", padx=20, pady=(12, 4))
+        vcanvas = tk.Canvas(self, width=560, height=140, bg=t["card"], highlightthickness=0)
+        vcanvas.pack(padx=20)
+        self._draw_voltage_graph(vcanvas, rows)
+
+        # Temp graph
+        tk.Label(self, text="TEMPERATURE (C)",
+                 bg=t["bg"], fg=t["muted"], font=("Helvetica", 10, "bold")).pack(anchor="w", padx=20, pady=(12, 4))
+        tcanvas = tk.Canvas(self, width=560, height=140, bg=t["card"], highlightthickness=0)
+        tcanvas.pack(padx=20)
+        self._draw_temp_graph(tcanvas, rows)
+
+        # Buttons
+        btns = tk.Frame(self, bg=t["bg"]); btns.pack(pady=(16, 20))
+        tk.Button(btns, text="Refresh", width=12,
+                  font=("Helvetica", 11),
+                  command=self._refresh).pack(side="left", padx=6)
+        tk.Button(btns, text="Close", width=12,
+                  font=("Helvetica", 11),
+                  command=self.destroy).pack(side="left", padx=6)
+
+    def _stat(self, parent, label, value, fg):
+        t = self.app.theme
+        c = tk.Frame(parent, bg=t["card"])
+        c.pack(side="left", expand=True, fill="x")
+        tk.Label(c, text=label, bg=t["card"], fg=t["muted"],
+                 font=("Helvetica", 9)).pack(pady=(2, 0))
+        tk.Label(c, text=value, bg=t["card"], fg=fg,
+                 font=("Helvetica", 16, "bold")).pack(pady=(0, 2))
+
+    def _draw_voltage_graph(self, canvas, rows):
+        t = self.app.theme
+        W, H = 560, 140
+        pad_l, pad_r, pad_t, pad_b = 46, 10, 10, 24
+        pw = W - pad_l - pad_r
+        ph = H - pad_t - pad_b
+
+        # Data
+        volts = [r["volt"] for r in rows]
+        epochs = [r["epoch"] for r in rows]
+        if not volts:
+            return
+
+        # Auto-scale with padding
+        y_min, y_max = min(volts), max(volts)
+        if y_max - y_min < 0.5:
+            m = (y_max + y_min) / 2
+            y_min, y_max = m - 0.5, m + 0.5
+        else:
+            pad = (y_max - y_min) * 0.15
+            y_min -= pad; y_max += pad
+
+        x_min, x_max = min(epochs), max(epochs)
+        x_range = (x_max - x_min) or 1
+        y_range = (y_max - y_min) or 1
+
+        # Gridlines
+        for i in range(4):
+            v = y_max - (i / 3) * y_range
+            y = pad_t + (i / 3) * ph
+            canvas.create_line(pad_l, y, W - pad_r, y, fill=t["grid"])
+            canvas.create_text(pad_l - 5, y, text=f"{v:.1f}",
+                               fill=t["muted"], font=("Helvetica", 9), anchor="e")
+
+        # Reference lines
+        for ref_v, label, colour in [
+            (self.VOLT_OK_MIN, "12.2 crank", t["yellow"]),
+            (self.VOLT_OK_MAX, "14.8 over",  t["red"]),
+        ]:
+            if y_min <= ref_v <= y_max:
+                y = pad_t + ph - ((ref_v - y_min) / y_range) * ph
+                canvas.create_line(pad_l, y, W - pad_r, y, fill=colour,
+                                   width=1, dash=(3, 3))
+                canvas.create_text(W - pad_r - 4, y - 6, text=label,
+                                   fill=colour, font=("Helvetica", 8), anchor="e")
+
+        # Classify each point
+        def status(v):
+            if v > self.VOLT_OK_MAX: return "over"
+            if v < self.VOLT_OK_MIN: return "under"
+            return "ok"
+
+        colors = {"ok": t["green"], "under": t["yellow"], "over": t["red"]}
+
+        # Build segments
+        points = []
+        for e, v in zip(epochs, volts):
+            x = pad_l + ((e - x_min) / x_range) * pw
+            y = pad_t + ph - ((v - y_min) / y_range) * ph
+            points.append((x, y, status(v)))
+
+        runs = []
+        current_status = None
+        current_points = []
+        for x, y, st in points:
+            if current_status is None or st != current_status:
+                if current_points:
+                    runs.append((current_status, current_points))
+                current_status = st
+                current_points = [(x, y)]
+            else:
+                current_points.append((x, y))
+        if current_points:
+            runs.append((current_status, current_points))
+
+        # Draw each run
+        for st, pts in runs:
+            if len(pts) >= 2:
+                flat = []
+                for x, y in pts:
+                    flat.extend([x, y])
+                canvas.create_line(*flat, fill=colors[st], width=2,
+                                   capstyle=tk.ROUND, joinstyle=tk.ROUND)
+            else:
+                x, y = pts[0]
+                canvas.create_oval(x-2, y-2, x+2, y+2, fill=colors[st], outline="")
+
+        # X-axis labels
+        from datetime import datetime
+        for frac in (0.0, 0.5, 1.0):
+            t_epoch = x_min + (x_max - x_min) * frac
+            x = pad_l + frac * pw
+            anchor = "sw" if frac == 0.0 else ("s" if frac == 0.5 else "se")
+            canvas.create_text(x, H - 4,
+                               text=datetime.fromtimestamp(t_epoch).strftime("%H:%M"),
+                               fill=t["muted"], font=("Helvetica", 8), anchor=anchor)
+
+    def _draw_temp_graph(self, canvas, rows):
+        t = self.app.theme
+        W, H = 560, 140
+        pad_l, pad_r, pad_t, pad_b = 46, 10, 10, 24
+        pw = W - pad_l - pad_r
+        ph = H - pad_t - pad_b
+
+        temps = [r["temp"] for r in rows]
+        epochs = [r["epoch"] for r in rows]
+        if not temps:
+            return
+
+        y_min, y_max = min(temps), max(temps)
+        if y_max - y_min < 2:
+            m = (y_max + y_min) / 2
+            y_min, y_max = m - 1, m + 1
+        else:
+            pad = (y_max - y_min) * 0.15
+            y_min -= pad; y_max += pad
+
+        x_min, x_max = min(epochs), max(epochs)
+        x_range = (x_max - x_min) or 1
+        y_range = (y_max - y_min) or 1
+
+        for i in range(4):
+            v = y_max - (i / 3) * y_range
+            y = pad_t + (i / 3) * ph
+            canvas.create_line(pad_l, y, W - pad_r, y, fill=t["grid"])
+            canvas.create_text(pad_l - 5, y, text=f"{v:.0f}",
+                               fill=t["muted"], font=("Helvetica", 9), anchor="e")
+
+        coords = []
+        for e, v in zip(epochs, temps):
+            x = pad_l + ((e - x_min) / x_range) * pw
+            y = pad_t + ph - ((v - y_min) / y_range) * ph
+            coords.extend([x, y])
+        if len(coords) >= 4:
+            canvas.create_line(*coords, fill=t["orange"], width=2,
+                               capstyle=tk.ROUND, joinstyle=tk.ROUND)
+
+        from datetime import datetime
+        for frac in (0.0, 0.5, 1.0):
+            t_epoch = x_min + (x_max - x_min) * frac
+            x = pad_l + frac * pw
+            anchor = "sw" if frac == 0.0 else ("s" if frac == 0.5 else "se")
+            canvas.create_text(x, H - 4,
+                               text=datetime.fromtimestamp(t_epoch).strftime("%H:%M"),
+                               fill=t["muted"], font=("Helvetica", 8), anchor=anchor)
+
+    def _refresh(self):
+        for w in self.winfo_children():
+            w.destroy()
+        self._build_ui()
 
 if __name__ == "__main__":
     root = tk.Tk()

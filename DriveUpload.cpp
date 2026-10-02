@@ -356,8 +356,16 @@ static int uploadAllRideFiles(int* okCount) {
           char newestPath[48];
           rideStorageBuildFilename(newest, newestPath, sizeof(newestPath));
           const char* np = (newestPath[0] == '/') ? newestPath + 1 : newestPath;
-          tprint("[UPLOAD] Rule7: n='%s' np='%s' newest=%lu", n, np, (unsigned long)newest);
-          if (strcmp(n, np) == 0) {
+
+          // V4.50: strip .gz so .csv.gz of the newest ride is skipped too
+          char nStripped[64];
+          strncpy(nStripped, n, sizeof(nStripped) - 1);
+          nStripped[sizeof(nStripped) - 1] = 0;
+          char* gz = strstr(nStripped, ".gz");
+          if (gz) *gz = 0;
+
+          tprint("[UPLOAD] Rule7: n='%s' np='%s' newest=%lu", nStripped, np, (unsigned long)newest);
+          if (strcmp(nStripped, np) == 0) {
             skip = true;
             tprint("[UPLOAD] skipping newest ride %s", n);
           }

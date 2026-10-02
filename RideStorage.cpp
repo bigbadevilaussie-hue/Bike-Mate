@@ -34,6 +34,9 @@ static uint32_t _currentEpoch = 0;
 
 void rideStorageBuildFilename(uint32_t epoch, char* buf, size_t n) {
 
+  setenv("TZ", "AEST-10", 1);
+  tzset();
+
   time_t t = epoch;
 
   struct tm* ti = localtime(&t);

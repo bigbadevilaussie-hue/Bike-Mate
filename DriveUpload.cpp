@@ -292,6 +292,11 @@ static int uploadAllWakeFiles(const char* currentWakeFile, int* okCount) {
 static int uploadAllRideFiles(int* okCount) {
   extern char wifiMessage[24];
 
+  // V4.44: ensure TZ is set before building filenames. localtime()
+  // returns UTC if tzset() hasn't run, and Rule 7 compares filenames.
+  setenv("TZ", "AEST-10", 1);
+  tzset();
+
   snprintf(wifiMessage, sizeof(wifiMessage), "Rides");
 
   int fails = 0;

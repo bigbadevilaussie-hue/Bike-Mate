@@ -3,6 +3,7 @@
 // Summary written to NVS "rides" namespace on close.
 
 #include "RideLogger.h"
+#include "GpsModule.h"
 #include "RideStorage.h"
 #include "Sensors.h"
 #include "Settings.h"
@@ -77,8 +78,8 @@ void writeRideRow() {
 
   RideRow row;
   row.epoch     = epoch;
-  row.lat_x1e7  = 0;
-  row.lon_x1e7  = 0;
+  row.lat_x1e7  = gpsLat_x1e7();
+  row.lon_x1e7  = gpsLon_x1e7();
   row.volt_x100 = v100;
   row.temp      = t;
   row.state     = 1;

@@ -12,7 +12,7 @@
 // BIKE-MATE — configuration
 // V3.64: BENCH_MODE 1, UPLOAD_ENABLED 1, new Apps Script deployment
 
-#define BIKE_MATE_VERSION "4.43"
+#define BIKE_MATE_VERSION "4.46"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
@@ -32,7 +32,7 @@
 #define STATUS_LED_PIN 10
 
 // ---- GPS stub ----
-#define GPS_STUB_ENABLED 1
+#define GPS_STUB_ENABLED 0
 #define GPS_STUB_LAT    (-27.420264910682718)
 #define GPS_STUB_LON    ( 152.45246261005468)
 #define GPS_STUB_SATS   8
@@ -154,7 +154,7 @@ struct WakeSample {
 #define WIFI_ATTEMPT_TIMEOUT_MS 30000UL
 
 // ---- Mail module ----
-#define MAIL_ENABLED 1
+#define MAIL_ENABLED 0
 
 
 

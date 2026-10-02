@@ -28,6 +28,7 @@
 #include "OtaManager.h"
 #include "DriveUpload.h"
 #include "WifiManager.h"
+#include "GpsModule.h"
 
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
 #error "Bike-Mate requires Arduino ESP32 core 2.x (2.0.17)"
@@ -73,38 +74,7 @@ unsigned long lastUploadAttempt = 0;
 
 RTC_DATA_ATTR static uint8_t uploadCycleCounter = 0;
 
-// ---- GPS stub ----
-bool gpsHasFix() {
-#if GPS_STUB_ENABLED
-  return true;
-#else
-  return false;
-#endif
-}
-
-int32_t gpsLat_x1e7() {
-#if GPS_STUB_ENABLED
-  return (int32_t)(GPS_STUB_LAT * 1e7);
-#else
-  return 0;
-#endif
-}
-
-int32_t gpsLon_x1e7() {
-#if GPS_STUB_ENABLED
-  return (int32_t)(GPS_STUB_LON * 1e7);
-#else
-  return 0;
-#endif
-}
-
-uint8_t gpsSats() {
-#if GPS_STUB_ENABLED
-  return GPS_STUB_SATS;
-#else
-  return 0;
-#endif
-}
+// GPS functions now in GpsModule.cpp
 
 // ---- logging ----
 void tprint(const char* fmt, ...) {
@@ -491,6 +461,7 @@ void doStateWork(unsigned long now) {
 void setup() {
   Serial.begin(115200);
   delay(300);
+  gpsModuleInit();
   esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
   const char* causeStr =
       (cause == ESP_SLEEP_WAKEUP_TIMER) ? "timer" :
@@ -638,6 +609,17 @@ void loop() {
   if (now - lastSecondMark >= 1000) {
     lastSecondMark = now;
     totalSeconds++;
+  }
+
+  gpsModuleTick();
+
+  // V4.45 debug - print GPS state every 5s
+  static unsigned long lastGpsPrint = 0;
+  if (millis() - lastGpsPrint > 5000) {
+    lastGpsPrint = millis();
+    tprint("[GPS] fix=%d sats=%d spd=%.1f lat=%ld lon=%ld",
+           gpsHasFix() ? 1 : 0, gpsSats(), gpsSpeed_kmh(),
+           (long)gpsLat_x1e7(), (long)gpsLon_x1e7());
   }
 
   readSensors();

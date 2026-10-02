@@ -30,6 +30,8 @@ static bool _paused = false;
 // ---- helpers ----
 
 static void buildFilename(uint32_t epoch, char* buf, size_t n) {
+  setenv("TZ", "AEST-10", 1);
+  tzset();
   time_t t = epoch;
   struct tm* ti = localtime(&t);
   snprintf(buf, n, "/wakes_%04d-%02d-%02d.csv",

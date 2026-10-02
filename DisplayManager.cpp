@@ -155,10 +155,12 @@ static void drawArmingScreen() {
 }
 
 static void drawRunningScreen() {
+  extern float gpsSpeed_kmh();
   char tb[12];
   formatTime12h_buf(currentEpoch(), tb, sizeof(tb));
   display.setTextColor(SSD1306_WHITE);
 
+  // Top row: REC + GPS
   display.setTextSize(1);
   display.setCursor(8, 0);
   display.print("REC");
@@ -169,26 +171,33 @@ static void drawRunningScreen() {
   display.print("GPS ");
   display.print(gpsSats());
 
-  display.setCursor(0, 12);
-  display.print(currentStateString());
+  // Middle: big speed, no units
+  char spd[8];
+  if (gpsHasFix()) {
+    int kph = (int)(gpsSpeed_kmh() + 0.5f);
+    if (kph < 2) kph = 0;
+    snprintf(spd, sizeof(spd), "%d", kph);
+  } else {
+    snprintf(spd, sizeof(spd), "--");
+  }
+  display.setTextSize(4);
+  int slen = strlen(spd);
+  int sx = (SCREEN_W - slen * 24) / 2;
+  if (sx < 0) sx = 0;
+  display.setCursor(sx, 18);
+  display.print(spd);
 
-  char vb[8];
-  snprintf(vb, sizeof(vb), "%.1fV", latestBatteryVoltage);
-  int vlen = strlen(vb);
-  int vx = (SCREEN_W - vlen * 18) / 2;
-  if (vx < 0) vx = 0;
-  display.setTextSize(3);
-  display.setCursor(vx, 26);
-  display.print(vb);
-
+  // Bottom row: volts, temp, time
   display.setTextSize(1);
   display.setCursor(0, 56);
-  display.print((int)latestTemperatureC); display.print("C");
+  display.print(latestBatteryVoltage, 1);
+  display.print("V");
 
-  display.setCursor(44, 56);
-  display.print(accState ? "ACC ON" : "ACC OFF");
+  display.setCursor(48, 56);
+  display.print((int)latestTemperatureC);
+  display.print("C");
 
-  display.setCursor(82, 56);
+  display.setCursor(88, 56);
   display.print(tb);
 
   display.display();

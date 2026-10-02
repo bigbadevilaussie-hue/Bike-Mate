@@ -12,7 +12,7 @@
 // BIKE-MATE — configuration
 // V3.64: BENCH_MODE 1, UPLOAD_ENABLED 1, new Apps Script deployment
 
-#define BIKE_MATE_VERSION "4.46"
+#define BIKE_MATE_VERSION "4.50.gpsp2"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
@@ -30,6 +30,10 @@
 #define ACC_LED_PIN 1
 #define BUZZER_PIN 4
 #define STATUS_LED_PIN 10
+
+// ---- GPS UART ----
+#define GPS_RX_PIN 2
+#define GPS_TX_PIN 21
 
 // ---- GPS stub ----
 #define GPS_STUB_ENABLED 0

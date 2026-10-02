@@ -8,10 +8,10 @@ extern void tprint(const char* fmt, ...);
 // GPS UART pins - on the C3 SuperMini, UART0 on GPIO 20/21 is free
 // because the USB console uses USB-Serial-JTAG.
 #ifndef GPS_RX_PIN
-#define GPS_RX_PIN 5
+#define GPS_RX_PIN 2
 #endif
 #ifndef GPS_TX_PIN
-#define GPS_TX_PIN 7
+#define GPS_TX_PIN 21
 #endif
 #define GPS_BAUD 9600
 
@@ -141,9 +141,12 @@ static void _parseLine(char* line, uint8_t len) {
 }
 
 void gpsModuleInit() {
+  Serial1.setRxBufferSize(256);
   Serial1.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
-  tprint("[GPS] UART init RX=%d TX=%d baud=%d",
-         GPS_RX_PIN, GPS_TX_PIN, GPS_BAUD);
+  delay(300);
+  int avail = Serial1.available();
+  tprint("[GPS] UART init RX=%d TX=%d baud=%d avail=%d",
+         GPS_RX_PIN, GPS_TX_PIN, GPS_BAUD, avail);
 }
 
 void gpsModuleTick() {

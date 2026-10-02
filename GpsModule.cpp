@@ -92,7 +92,7 @@ static void _parseLine(char* line, uint8_t len) {
   // GPRMC - recommended minimum
   if (strncmp(line, "$GPRMC,", 7) == 0 || strncmp(line, "$GNRMC,", 7) == 0) {
     char* status = _fieldStr(line, 2);
-    if (status && *status == 'A') {
+    if (status && *status == 'A' && _sats >= 4) {
       _hasFix = true;
       char* latF = _fieldStr(line, 3);
       char* latH = _fieldStr(line, 4);
@@ -114,11 +114,14 @@ static void _parseLine(char* line, uint8_t len) {
     char* fixQ = _fieldStr(line, 6);
     char* satsF = _fieldStr(line, 7);
     char* altF = _fieldStr(line, 9);
-    if (fixQ) {
-      int q = atoi(fixQ);
-      _hasFix = (q > 0);
-    }
+    // sats first, then fix - 4 sats minimum for a valid 2D fix
     if (satsF && *satsF) _sats = (uint8_t)atoi(satsF);
+    if (fixQ && *fixQ) {
+      int q = atoi(fixQ);
+      _hasFix = (q > 0 && _sats >= 4);
+    } else {
+      _hasFix = false;
+    }
     if (altF && *altF) _altitude_m = atof(altF);
   }
   // GPVTG - track + speed

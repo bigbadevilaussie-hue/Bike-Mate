@@ -39,6 +39,12 @@ static int medianRawVoltage() {
 }
 
 static float readNTC() {
+  // V4.43: throwaway read to settle the ADC mux after channel switch.
+  // The C3's ADC multiplexes channels - the first read after a switch
+  // is polluted by the previous channel's charge. Voltage reads 21x
+  // (median), temp only 5x, so the pollution dominates the temp value.
+  analogRead(THERMISTOR_PIN);
+
   int raw = 0;
   for (int i = 0; i < ADC_SAMPLES; i++) {
     raw += analogRead(THERMISTOR_PIN);

@@ -1154,7 +1154,33 @@ class App:
         tk.Button(btn_row, text="Cancel", command=dlg.destroy, width=10,
                   font=("Helvetica", 11)).pack(side="left", padx=8)
         tk.Button(btn_row, text="Apply", command=apply, width=10,
-                  font=("Helvetica", 11), bg=BLUE, fg=BG).pack(side="left", padx=8)
+                  font=("Helvetica", 11)).pack(side="left", padx=8)
+
+        # V4.43: theme the settings dialog to match the current theme.
+        t = self.theme
+        def theme_walk(w):
+            try:
+                cls = w.winfo_class()
+            except Exception:
+                return
+            try:
+                if cls in ("Frame", "Toplevel"):
+                    w.configure(bg=t["bg"])
+                elif cls == "Label":
+                    w.configure(bg=t["bg"], fg=t["fg"])
+                elif cls == "Entry":
+                    w.configure(bg=t["card"], fg=t["fg"],
+                                insertbackground=t["fg"],
+                                highlightbackground=t["card_border"])
+                elif cls == "Button":
+                    w.configure(bg=t["card"], fg=t["fg"],
+                                activebackground=t["accent"],
+                                activeforeground=t["fg"])
+            except Exception:
+                pass
+            for c in w.winfo_children():
+                theme_walk(c)
+        theme_walk(dlg)
 
     def tick(self):
         d = latest_data
@@ -1354,6 +1380,32 @@ class BikeReport(tk.Toplevel):
 
         tk.Button(self, text="Close", command=self.destroy,
                   font=("Helvetica", 11)).pack(pady=(16, 20))
+
+        # V4.43: theme the report to match the current theme.
+        t = self.app.theme
+        def tw(w):
+            try:
+                cls = w.winfo_class()
+            except Exception:
+                return
+            try:
+                if cls in ("Frame", "Toplevel"):
+                    w.configure(bg=t["bg"])
+                elif cls == "Label":
+                    # header labels use bg, card labels use card
+                    if w.master.winfo_class() in ("Frame", "Toplevel"):
+                        w.configure(bg=t["bg"])
+                elif cls == "Canvas":
+                    w.configure(bg=t["card"])
+                elif cls == "Button":
+                    w.configure(bg=t["card"], fg=t["fg"],
+                                activebackground=t["accent"],
+                                activeforeground=t["fg"])
+            except Exception:
+                pass
+            for c in w.winfo_children():
+                tw(c)
+        tw(self)
 
     def _draw_graph(self, canvas, xs, ys, color, fill, subtitle=""):
         W, H = 640, 160

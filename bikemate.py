@@ -929,6 +929,9 @@ class App:
         threading.Thread(target=_worker, daemon=True).start()
 
     def menu_ota(self):
+        # V4.56: restart the OTA server to avoid stale single-threaded hangs
+        stop_ota_server()
+        start_ota_server()
         if not os.path.isfile(BUILD_BIN):
             messagebox.showerror("OTA", f"Firmware not found:\n{BUILD_BIN}\n\nRun Sketch → Export Compiled Binary in Arduino IDE first.")
             return

@@ -310,6 +310,7 @@ void updateStateTransitions(unsigned long now) {
   }
 
   if (parkedTimerActive && (now - parkedTimerStart) >= parkedDelayMs) {
+    if (isLogging) closeRideLog();   // V4.55: ride ends at engine stop
     engineWasRunning = false;
     accState = false;
     isArmingCountdown = true;
@@ -323,7 +324,7 @@ void updateStateTransitions(unsigned long now) {
       (millis() - armingStartMillis) / 1000 >= armingSeconds) {
     isArmingCountdown = false;
     alarmSequenceActive = true; alarmStep = 0; alarmStepTimer = millis();
-    if (isLogging) closeRideLog();
+    // V4.55: closeRideLog moved to engine stop - ride ends when engine stops
     tprint("[STATE] arming complete");
     wakeLoggerResume();
     wakeLoggerForceWrite();
@@ -652,11 +653,17 @@ void loop() {
   updateBeeps(now);
   updateOLED_EdgeTriggered();
 
+  // V4.55: only restart advertising on the transition from connected
+  // to disconnected. Repeated start() calls cause BT_HCI op=0x2008/0x2009
+  // status=0x7 spam. isAdvertising() isn't in this ESP32 core version.
+  static bool wasConnected = false;
   if (now - lastAdvRestart >= ADV_RESTART_MS) {
     lastAdvRestart = now;
-    if (pServer && !isActuallyConnected()) {
+    bool conn = isActuallyConnected();
+    if (pServer && !conn && wasConnected) {
       pServer->getAdvertising()->start();
     }
+    wasConnected = conn;
   }
   if (isActuallyConnected() && now - lastPublish >= 2000) {
     lastPublish = now;

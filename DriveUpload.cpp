@@ -222,6 +222,19 @@ static int uploadAllWakeFiles(const char* currentWakeFile, int* okCount) {
         (strncmp(name, "/wakes_", 7) == 0 ||
          strncmp(name, "wakes_", 6) == 0)) {
 
+      // V4.55: skip raw .sealed if a .sealed.gz exists for it
+      String nameStr = String(name);
+      if (nameStr.endsWith(".sealed")) {
+        String gzPath = nameStr;
+        if (!gzPath.startsWith("/")) gzPath = "/" + gzPath;
+        gzPath += ".gz";
+        if (LittleFS.exists(gzPath)) {
+          entry.close();
+          entry = root.openNextFile();
+          continue;
+        }
+      }
+
       if (!isCurrentWakeFile(name, currentWakeFile)) {
         strncpy(uploadNames[nameCount],
                 name,
@@ -321,6 +334,19 @@ static int uploadAllRideFiles(int* okCount) {
     if (name &&
         (strncmp(name, "/ride_", 6) == 0 ||
          strncmp(name, "ride_", 5) == 0)) {
+
+      // V4.55: skip raw .csv if a .csv.gz exists for it
+      String nameStr = String(name);
+      if (nameStr.endsWith(".csv")) {
+        String gzPath = nameStr;
+        if (!gzPath.startsWith("/")) gzPath = "/" + gzPath;
+        gzPath += ".gz";
+        if (LittleFS.exists(gzPath)) {
+          entry.close();
+          entry = root.openNextFile();
+          continue;
+        }
+      }
 
       bool skip = false;
 

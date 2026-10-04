@@ -98,14 +98,22 @@ bool wakeLoggerInit() {
 
 // ---- flags ----
 static uint8_t _buildFlags() {
+  extern bool gpsHasFix();
   uint8_t f = 0;
   if (inPanic) f |= FLAG_PANIC;
-  if (_sats > 0) f |= FLAG_GPS_FIX;
+  if (gpsHasFix()) f |= FLAG_GPS_FIX;
+
+  // V4.57: storage level check - set bit when LittleFS > 75%
+  size_t total = LittleFS.totalBytes();
+  size_t used = LittleFS.usedBytes();
+  if (total > 0 && (used * 100 / total) >= 75) {
+    f |= FLAG_STORAGE_LOW;
+  }
   return f;
 }
 
 // ---- write one row ----
-static void _writeSample(uint32_t epoch) {
+static void _writeSample(uint32_t epoch, int stateOverride = -1) {
   if (_paused) return;
   if (_currentPath[0] == 0) {
     if (!openCurrentFile(epoch)) return;
@@ -124,7 +132,9 @@ static void _writeSample(uint32_t epoch) {
   extern bool isArmingCountdown;
 
   int state = 0;
-  if (inPanic) state = 2;
+  if (stateOverride >= 0) {
+    state = stateOverride;
+  } else if (inPanic) state = 2;
   else if (engineWasRunning || accState) state = 1;
   else if (isCountingDown) state = 3;
   else if (isArmingCountdown) state = 4;
@@ -166,7 +176,15 @@ void wakeLoggerTick() {
   uint32_t now = currentEpoch();
   if (now == 0) return;
 
-  _writeSample(now);
+  size_t total = LittleFS.totalBytes();
+  size_t used = LittleFS.usedBytes();
+  if (total > 0) {
+    tprint("[STORAGE] %u%% used (%u/%u bytes)",
+           (unsigned)((used * 100) / total),
+           (unsigned)used, (unsigned)total);
+  }
+
+  _writeSample(now, -1);
 #if DEBUG_VERBOSE
   tprint("[WAKE] sample @ %lu V=%.2f T=%d",
          (unsigned long)now, latestBatteryVoltage,
@@ -175,13 +193,13 @@ void wakeLoggerTick() {
 }
 
 // ---- force write ----
-void wakeLoggerForceWrite() {
+void wakeLoggerForceWrite(int state) {
   if (_paused) return;
 
   uint32_t now = currentEpoch();
   if (now == 0) return;
 
-  _writeSample(now);
+  _writeSample(now, state);
   tprint("[WAKE] force @ %lu", (unsigned long)now);
 }
 

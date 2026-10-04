@@ -737,7 +737,7 @@ class App:
         self.volt_lbl.pack(pady=14)
         rc = tk.Frame(root, bg=CARD); rc.pack(fill="x", padx=20, pady=6)
         ri = tk.Frame(rc, bg=CARD); ri.pack(fill="x", pady=6)
-        self.temp_lbl = self._col(ri, "Temp", "--.-C")
+        self.temp_lbl = self._col(ri, "🏍️ Temp", "--.-C")
         self.time_lbl = self._col(ri, "Time", "--:--")
         lr = tk.Frame(root, bg=CARD); lr.pack(fill="x", padx=20, pady=6)
         tk.Label(lr, text="Last Ride", bg=CARD, fg=MUTED,
@@ -928,6 +928,23 @@ class App:
                     "Sync", "Sync failed"))
         threading.Thread(target=_worker, daemon=True).start()
 
+    def _auto_close_dialog(self, title, message, seconds=2):
+        dlg = tk.Toplevel(self.root)
+        dlg.title(title)
+        dlg.configure(bg=self.theme["bg"])
+        dlg.resizable(False, False)
+        dlg.transient(self.root)
+        tk.Label(dlg, text=message, bg=self.theme["bg"], fg=self.theme["fg"],
+                 font=("Helvetica", 11), padx=20, pady=20,
+                 justify="left").pack()
+        dlg.update_idletasks()
+        w = dlg.winfo_width()
+        h = dlg.winfo_height()
+        x = self.root.winfo_rootx() + (self.root.winfo_width() - w) // 2
+        y = self.root.winfo_rooty() + (self.root.winfo_height() - h) // 2
+        dlg.geometry(f"+{x}+{y}")
+        dlg.after(seconds * 1000, dlg.destroy)
+
     def menu_ota(self):
         # V4.56: restart the OTA server to avoid stale single-threaded hangs
         stop_ota_server()
@@ -997,12 +1014,13 @@ class App:
         def on_result(ok, detail):
             if ok:
                 set_status(f"OTA metadata sent - device will fetch from {url}")
-                self.root.after(0, lambda: messagebox.showinfo(
+                self.root.after(0, lambda: self._auto_close_dialog(
                     "OTA",
                     f"Device acknowledged.\n\n"
                     f"The device will fetch and flash on its next wake.\n"
                     f"Confirmation email will arrive once complete.\n\n"
-                    f"URL: {url}"))
+                    f"URL: {url}",
+                    seconds=2))
             else:
                 try:
                     os.remove(dest)

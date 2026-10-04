@@ -46,6 +46,9 @@ RTC_DATA_ATTR unsigned long cycleCount = 0;
 RTC_DATA_ATTR float lastRestingVoltage = 0.0;
 RTC_DATA_ATTR uint8_t lowVoltLoops = 0;
 RTC_DATA_ATTR uint8_t panicLatchCount = 0;
+static bool engineStartCapture = false;
+static unsigned long engineStartCaptureMs = 0;
+static unsigned long lastCaptureRow = 0;
 RTC_DATA_ATTR bool lowBattMailLatched = false;
 
 bool isCountingDown = false;
@@ -285,8 +288,16 @@ void updateStateTransitions(unsigned long now) {
       isCountingDown = true;
       countdownStartMillis = millis();
       ridePreVoltage = lastRestingVoltage;
+      if (gpsHasFix()) {
+        setRideStartLocation(gpsLat_x1e7(), gpsLon_x1e7());
+        tprint("[STATE] ride start loc %.7f,%.7f",
+               gpsLat_x1e7() / 1e7, gpsLon_x1e7() / 1e7);
+      }
       tprint("[STATE] engine start %.2f preV=%.2f", V, ridePreVoltage);
       wakeLoggerForceWrite();
+      engineStartCapture = true;
+      engineStartCaptureMs = millis();
+      lastCaptureRow = 0;
     }
   }
 
@@ -680,6 +691,23 @@ void loop() {
   if (isLogging && (now - lastRideLog >= (LOG_INTERVAL_SEC * 1000UL))) {
     lastRideLog = now;
     writeRideRow();
+  }
+
+  // V4.57: engine-start capture - 100ms wake rows for 5s after engine start
+  if (engineStartCapture) {
+    static unsigned long lastActiveLog = 0;
+    if (now - lastActiveLog > 500) {
+      lastActiveLog = now;
+      tprint("[CAPTURE] active flag=%d elapsed=%lu",
+             (int)engineStartCapture,
+             (unsigned long)(now - engineStartCaptureMs));
+    }
+    if (now - engineStartCaptureMs >= 5000UL) {
+      engineStartCapture = false;
+    } else if (now - lastCaptureRow >= 100UL) {
+      lastCaptureRow = now;
+      wakeLoggerForceWrite(1);
+    }
   }
 
   if (firstTick || (now - lastTick >= TICK_MS)) {

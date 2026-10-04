@@ -12,7 +12,7 @@
 // BIKE-MATE — configuration
 // V3.64: BENCH_MODE 1, UPLOAD_ENABLED 1, new Apps Script deployment
 
-#define BIKE_MATE_VERSION "4.56"
+#define BIKE_MATE_VERSION "4.60"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
@@ -121,7 +121,7 @@ struct WakeSample {
 #define FLAG_FREEZING 0x04
 #define FLAG_HOT_AMBIENT 0x08
 #define FLAG_ENCLOSURE_HOT 0x10
-#define FLAG_THERMAL_CUT 0x20
+#define FLAG_STORAGE_LOW 0x20   // V4.57: repurposed from FLAG_THERMAL_CUT
 #define FLAG_PANIC 0x40
 #define FLAG_GPS_FIX 0x80
 

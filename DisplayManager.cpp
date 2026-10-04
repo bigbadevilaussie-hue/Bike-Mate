@@ -257,9 +257,12 @@ void updateOLED_EdgeTriggered() {
     snprintf(key, sizeof(key), "ARM|%d",
              (int)((millis() - armingStartMillis) / 1000));
   } else if (accState || engineWasRunning || isLogging) {
-    snprintf(key, sizeof(key), "RUN|%d|%d|%d",
+    // V4.58: include GPS sats and fix in the key so the OLED redraws
+    // when the satellite count changes.
+    snprintf(key, sizeof(key), "RUN|%d|%d|%d|%d|%d",
              (int)latestBatteryVoltage, isLogging ? 1 : 0,
-             isLogging ? (int)((millis() / 500) % 2) : 0);
+             isLogging ? (int)((millis() / 500) % 2) : 0,
+             (int)gpsSats(), gpsHasFix() ? 1 : 0);
   } else {
     snprintf(key, sizeof(key), "MON");
   }

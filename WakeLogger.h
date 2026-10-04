@@ -14,7 +14,7 @@
 
 bool wakeLoggerInit();
 void wakeLoggerTick();
-void wakeLoggerForceWrite();
+void wakeLoggerForceWrite(int state = 0);
 
 // Pause/resume — no writes while paused. Used by DriveUpload and OTA.
 void wakeLoggerPause();

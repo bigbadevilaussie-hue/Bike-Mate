@@ -185,10 +185,9 @@ static bool shouldSleep() {
   if (uploadRequested) return false;
   if (millis() - bootMillis < 5000UL) return false;
 
-  if (isActuallyConnected()) {
-    if (millis() - bootMillis < 60000UL) return false;
-    return true;
-  }
+  // V4.73: BLE no longer blocks sleep indefinitely. A connection
+  // longer than BLE_MAX_CONN_MS is force-disconnected in loop().
+  if (isActuallyConnected()) return false;
 
   if (millis() - lastDisconnectMillis < 3000UL) return false;
 
@@ -402,7 +401,12 @@ void doStateWork(unsigned long now, bool wasWake) {
   // V4.72: beep once per PANIC wake. Device is awake for only a few
   // seconds, so this fires on every wake and the beep sequence plays
   // out before sleep. No 2-minute gate needed.
-  if (inPanic && !lowBattBeepActive) {
+  // V4.73: beep only once per wake. doStateWork() can fire more than
+  // once inside a single wake if TICK_MS elapses while still awake.
+  static bool panicBeepThisWake = false;
+  if (wasWake) panicBeepThisWake = false;
+  if (inPanic && !panicBeepThisWake && !lowBattBeepActive) {
+    panicBeepThisWake = true;
     lowBattBeepActive = true;
     lowBattBeepStep = 0;
     lowBattBeepRemaining = 5;
@@ -553,6 +557,14 @@ void setup() {
     tprint("[OTA] pending flag cleared, version now V%s", BIKE_MATE_VERSION);
   }
 
+  if (!wakeLoggerInit()) {
+    tprint_verbose("[BOOT] WakeLogger init deferred (no epoch yet)");
+  }
+
+  // V4.73: clear stale .sealed files. This must run AFTER wakeLoggerInit()
+  // because LittleFS.begin() is inside wakeLoggerInit(). Running it earlier
+  // meant the scan silently saw an unmounted filesystem and never deleted
+  // anything, which is why "pending seal exists" fired on every cycle.
   {
     File root = LittleFS.open("/");
     if (root && root.isDirectory()) {
@@ -574,9 +586,6 @@ void setup() {
     }
   }
 
-  if (!wakeLoggerInit()) {
-    tprint_verbose("[BOOT] WakeLogger init deferred (no epoch yet)");
-  }
   loadRideState();
 
   {
@@ -692,6 +701,23 @@ void loop() {
   if (isLogging && (now - lastRideLog >= (LOG_INTERVAL_SEC * 1000UL))) {
     lastRideLog = now;
     writeRideRow();
+  }
+
+  // V4.73: force BLE disconnect if a client has held the link past
+  // BLE_MAX_CONN_MS. Prevents the Mac GUI from pinning the device awake.
+  {
+    static unsigned long bleConnectedSince = 0;
+    static bool bleWasConnected = false;
+    bool conn = isActuallyConnected();
+    if (conn && !bleWasConnected) bleConnectedSince = millis();
+    if (!conn && bleWasConnected) bleConnectedSince = 0;
+    if (conn && bleConnectedSince > 0 &&
+        (millis() - bleConnectedSince) > BLE_MAX_CONN_MS) {
+      tprint("[BLE] hard timeout, disconnecting");
+      pServer->disconnect(pServer->getConnId());
+      bleConnectedSince = 0;
+    }
+    bleWasConnected = conn;
   }
 
   // V4.57: engine-start capture - 100ms wake rows for 5s after engine start

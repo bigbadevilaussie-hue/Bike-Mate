@@ -232,6 +232,7 @@ Ordered by dependency. Software TODO is in `TODO.md`.
 
 ### Bench (before perfboard)
 
+- [ ] **Add INA226 current monitor on the switched rail** — after the P-FET, powered from the switched rail so it draws nothing in sleep. Logs GPS + QC3.0 current when the rail is on. Confirms P-FET off-state (rail at 0 V → INA226 reads 0 mA).
 - [ ] **Turn PSU on to 12.0V** — verify divider reads correctly, observe raw value
 - [ ] **Calibrate `BATTERY_SLOPE`** — PSU at 12.0V, 12.6V, 13.8V, compare to DMM
 - [ ] **Measure buck quiescent** — PSU 12V → buck, no load on 5V, DMM in series

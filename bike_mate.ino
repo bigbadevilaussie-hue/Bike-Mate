@@ -29,6 +29,8 @@
 #include "DriveUpload.h"
 #include "WifiManager.h"
 #include "GpsModule.h"
+#include "SerialBuffer.h"
+#include "WebServer.h"
 
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
 #error "Bike-Mate requires Arduino ESP32 core 2.x (2.0.17)"
@@ -67,6 +69,7 @@ unsigned long lastAdvRestart = 0;
 unsigned long lastSecondMark = 0;
 
 static unsigned long bootMillis = 0;
+static unsigned long maintStartMs = 0;
 unsigned long lastDisconnectMillis = 0;
 
 static bool firstTick = false;
@@ -93,6 +96,7 @@ void tprint(const char* fmt, ...) {
   vsnprintf(buf, sizeof(buf), fmt, args);
   va_end(args);
   Serial.println(buf);
+  serialBufWrite(buf);
 }
 
 void tprint_verbose(const char* fmt, ...) {
@@ -108,6 +112,7 @@ void tprint_verbose(const char* fmt, ...) {
   vsnprintf(buf, sizeof(buf), fmt, args);
   va_end(args);
   Serial.println(buf);
+  serialBufWrite(buf);
 #endif
 }
 
@@ -183,6 +188,7 @@ static bool shouldSleep() {
   if (otaRequest) return false;
   if (wifiActive) return false;
   if (uploadRequested) return false;
+  if (serverIsRunning()) return false;
   if (millis() - bootMillis < 5000UL) return false;
 
   // V4.73: BLE no longer blocks sleep indefinitely. A connection
@@ -507,6 +513,7 @@ void doStateWork(unsigned long now, bool wasWake) {
 void setup() {
   Serial.begin(115200);
   delay(300);
+  serialBufInit();
   gpsModuleInit();
   esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
   const char* causeStr =
@@ -751,10 +758,45 @@ void loop() {
     doStateWork(now, wasWake);
   }
 
+  // V4.75: maintenance mode lifecycle.
+  //   Enter: BLE set maintenanceModeRequested. ACK already sent in callback.
+  //          Bring WiFi up, start HTTP server, record start time.
+  //   Exit:  /maint/off hit, or MAINT_MAX_MS elapsed. Stop server, WiFi down.
+  {
+    extern volatile bool maintenanceModeRequested;
+
+    if (maintenanceModeRequested && !serverIsRunning()) {
+      maintenanceModeRequested = false;
+      tprint("[MAINT] entering");
+      if (wifiBringUp()) {
+        serverSetup();
+        maintStartMs = millis();
+        tprint("[MAINT] active, cap %lus", MAINT_MAX_MS / 1000UL);
+      } else {
+        tprint("[MAINT] wifi bring-up FAILED");
+        wifiBringDown();
+      }
+    }
+
+    if (serverIsRunning()) {
+      serverLoop();
+      bool timedOut = (millis() - maintStartMs) > MAINT_MAX_MS;
+      if (maintOffRequested || timedOut) {
+        tprint("[MAINT] exiting (%s)",
+               timedOut ? "timeout" : "user");
+        maintOffRequested = false;
+        serverStop();
+        wifiBringDown();
+      }
+    }
+  }
+
   // V4.72: hard max-awake timeout. Any stuck state that keeps us awake
   // past MAX_AWAKE_MS gets force-slept. OTA is exempt — force-sleeping
   // mid-flash bricks the firmware, worse than staying awake.
-  if (!otaRequest && (millis() - bootMillis) > MAX_AWAKE_MS) {
+  // V4.75: maintenance mode is also exempt — it has its own cap.
+  if (!otaRequest && !serverIsRunning() &&
+      (millis() - bootMillis) > MAX_AWAKE_MS) {
     tprint("[GUARD] max-awake timeout (%lus), forcing sleep",
            (unsigned long)((millis() - bootMillis) / 1000UL));
     goToSleep();

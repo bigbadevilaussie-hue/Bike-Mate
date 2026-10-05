@@ -342,6 +342,41 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
       return;
     }
 
+    // V4.75: maintenance mode command. Payload is {"maint":"on"} or {"maint":"off"}.
+    // "on" -> set flag, ACK over BLE, then main loop brings WiFi up.
+    // "off" -> ignored here; the off path is HTTP /maint/off, since BLE
+    //          is dead while maintenance is running.
+    if (v.length() > 1) {
+      String mv = String(v.c_str());
+      int mi = mv.indexOf("\"maint\":\"");
+      if (mi >= 0) {
+        int vs = mi + 9;
+        int ve = mv.indexOf("\"", vs);
+        if (ve > vs) {
+          String val = mv.substring(vs, ve);
+          if (val == "on") {
+            maintenanceModeRequested = true;
+            uint8_t ack = 0x01;
+            pOtaChar->setValue(&ack, 1);
+            pOtaChar->notify();
+            delay(80);   // let BLE stack flush before loop() stops BLE
+            tprint("[MAINT] on requested");
+          } else if (val == "off") {
+            uint8_t nack = 0x02;
+            pOtaChar->setValue(&nack, 1);
+            pOtaChar->notify();
+            tprint("[MAINT] off over BLE ignored, use /maint/off");
+          } else {
+            uint8_t nack = 0xFF;
+            pOtaChar->setValue(&nack, 1);
+            pOtaChar->notify();
+            tprint("[MAINT] unknown value");
+          }
+        }
+        return;
+      }
+    }
+
     // Settings apply: multi-byte payload containing "voltage"
     if (v.length() > 1) {
       String sv = String(v.c_str());

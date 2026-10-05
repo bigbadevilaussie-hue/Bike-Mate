@@ -13,7 +13,7 @@
 // V4.70: dead defines removed, section headers added.
 // Deploy-specific values (UPLOAD_URL, SMTP_*) still live here pending move to Deploy.h.
 
-#define BIKE_MATE_VERSION "4.73"
+#define BIKE_MATE_VERSION "4.75"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
@@ -56,7 +56,7 @@
 #define NVS_NAMESPACE_UPLOAD "upload"
 
 // ---- Wake intervals ----
-#define BENCH_MODE 0
+#define BENCH_MODE 1
 #define WAKE_BENCH_MS    30000UL
 #define WAKE_DAY_MS     300000UL
 #define WAKE_NIGHT_MS   600000UL
@@ -64,6 +64,7 @@
 #define NIGHT_END_HOUR      4
 #define MAX_AWAKE_MS    180000UL   // V4.72: 180 s hard max-awake, OTA exempt
 #define BLE_MAX_CONN_MS  600000UL   // V4.73: force disconnect after 10 min
+#define MAINT_MAX_MS     900000UL   // V4.75: 15 min maintenance cap
 
 // ---- Structs ----
 struct RideRow {

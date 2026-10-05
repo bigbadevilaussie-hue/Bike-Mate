@@ -18,7 +18,7 @@ from datetime import datetime
 from tkinter import messagebox
 from bleak import BleakScanner, BleakClient
 
-GUI_VERSION = "4.17"
+GUI_VERSION = "4.21"
 
 # Maintenance mode state. "OFF" | "PENDING" | "ON"
 # Firmware doesn't implement the command yet, so PENDING will
@@ -54,8 +54,8 @@ DRIVE_PORT = 8001
 
 BACKUP_DELAY_SEC = 600
 
-WEATHER_LAT = -27.28
-WEATHER_LON = 152.51
+WEATHER_LAT = -27.4319
+WEATHER_LON = 152.4511
 WEATHER_TZ  = "Australia%2FBrisbane"
 WEATHER_REFRESH_SEC = 1800
 PULL_TIMEOUT_SEC = 35
@@ -1044,6 +1044,9 @@ class App:
                 print(f"[OTA] HTTP {r.status_code}: {r.text[:80]}")
                 if r.status_code == 200:
                     set_status("firmware uploaded, device rebooting")
+                    # Bike is about to reboot. Cold boot wipes maintRequest.
+                    with maintenance_lock:
+                        maintenance_state = "OFF"
                     self.root.after(0, lambda: self._auto_close_dialog(
                         "OTA",
                         f"Uploaded {size:,} bytes to {BIKE_IP}.\n"

@@ -12,12 +12,13 @@ Version log:
 
 import asyncio, json, struct, threading, time, os, urllib.request, urllib.parse, subprocess, socket, hashlib, re, shutil, ssl, base64
 import tkinter as tk
+import requests
 from collections import deque
 from datetime import datetime
 from tkinter import messagebox
 from bleak import BleakScanner, BleakClient
 
-GUI_VERSION = "4.15"
+GUI_VERSION = "4.17"
 
 # Maintenance mode state. "OFF" | "PENDING" | "ON"
 # Firmware doesn't implement the command yet, so PENDING will
@@ -1084,7 +1085,51 @@ class App:
                     seconds=2)
                 return
             maintenance_state = "PENDING"
-        self._send_maint_command("off")
+
+        # Off path is HTTP, not BLE. BLE is dead while maint is up.
+        # POST /maint/off, then poll until the serial server stops
+        # responding (bike has left maint).
+        import urllib.request
+
+        def _post():
+            try:
+                req = urllib.request.Request(
+                    f"http://{BIKE_IP}/maint/off",
+                    method="POST")
+                with urllib.request.urlopen(req, timeout=5) as r:
+                    print(f"[MAINT] /maint/off -> HTTP {r.status}")
+            except Exception as e:
+                print(f"[MAINT] /maint/off failed: {e}")
+
+        threading.Thread(target=_post, daemon=True).start()
+        self._start_maint_off_poll()
+
+    def _start_maint_off_poll(self):
+        import urllib.request
+        started = time.time()
+        url = f"http://{BIKE_IP}/serial-raw"
+
+        def poll():
+            global maintenance_state
+            elapsed = time.time() - started
+            if elapsed > 90:
+                print("[MAINT] off poll: 90s elapsed, force OFF")
+                with maintenance_lock:
+                    maintenance_state = "OFF"
+                return
+            try:
+                with urllib.request.urlopen(url, timeout=2) as r:
+                    if r.status == 200:
+                        # still up, keep polling
+                        pass
+            except Exception:
+                print(f"[MAINT] off poll: server unreachable, state -> OFF")
+                with maintenance_lock:
+                    maintenance_state = "OFF"
+                return
+            self.root.after(2000, poll)
+
+        self.root.after(2000, poll)
 
     def _send_maint_command(self, on_off):
         global maintenance_state

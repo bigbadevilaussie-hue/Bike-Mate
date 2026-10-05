@@ -17,7 +17,7 @@ from datetime import datetime
 from tkinter import messagebox
 from bleak import BleakScanner, BleakClient
 
-GUI_VERSION = "4.00"
+GUI_VERSION = "4.01"
 DEVICE_NAME = "Bike-Mate-2"
 DATA_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 TIME_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9"
@@ -1240,8 +1240,7 @@ class App:
         elif t < 10: te = "🥶"
         elif t < 20: te = "🌤"
         elif t < 30: te = "☀️"
-        elif t < 40: te = "🔥"
-        else: te = "💀"
+        else: te = "☀️"
         self.temp_lbl.config(text=f"{te} {t:.1f}C")
         self.time_lbl.config(text=f"{time_emoji()} {local_time_str()}")
         self.acc_lbl.config(text="ON" if d.get("a") else "OFF",

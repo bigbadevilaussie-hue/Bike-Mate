@@ -166,7 +166,10 @@ bool otaPerformUpdate(const char* url, uint32_t expectedSize, const char* expect
   Preferences prefs;
   prefs.begin("ota", false);
   prefs.putBool("pending", true);
+  bool verifyPending = prefs.getBool("pending", false);
   prefs.end();
+  tprint("[OTA] NVS verify pending=%d", verifyPending ? 1 : 0);
+  delay(500);
 
   wifiBringDown();
 

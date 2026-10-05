@@ -30,6 +30,7 @@ size_t rideStorageEnumerate(RideFileVisitor visitor);
 
 // Check if a ride file exists.
 bool rideStorageExists(uint32_t startEpoch);
+bool rideStorageReopen(uint32_t startEpoch);
 
 // Current open file name (empty string if none).
 const char* rideStorageCurrentFile();

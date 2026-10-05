@@ -313,6 +313,35 @@ bool rideStorageExists(
 
 // ---- current file ----
 
+// V4.82: reopen the ride file after deep-sleep wake if a ride was in
+// progress. Mirrors the create path but uses "a" mode so existing rows
+// are preserved.
+bool rideStorageReopen(uint32_t startEpoch) {
+  if (startEpoch == 0) return false;
+
+  char path[40];
+  rideStorageBuildFilename(startEpoch, path, sizeof(path));
+
+  if (!LittleFS.exists(path)) {
+    tprint("[RIDE] reopen: file not found %s", path);
+    return false;
+  }
+
+  if (_rideFile) {
+    _rideFile.close();
+  }
+  _rideFile = LittleFS.open(path, "a");
+  if (!_rideFile) {
+    tprint("[RIDE] reopen: open failed %s", path);
+    return false;
+  }
+
+  strncpy(_currentFile, path, sizeof(_currentFile) - 1);
+  _currentFile[sizeof(_currentFile) - 1] = 0;
+  _currentEpoch = startEpoch;
+  return true;
+}
+
 const char* rideStorageCurrentFile() {
 
   return _currentFile;

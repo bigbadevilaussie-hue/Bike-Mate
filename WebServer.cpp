@@ -4,6 +4,7 @@
 
 #include <WebServer.h>
 #include <Update.h>
+#include <Preferences.h>
 
 extern void tprint(const char* fmt, ...);
 
@@ -92,6 +93,18 @@ static void handleOtaDone() {
                 "FAIL: " + String(Update.errorString()));
   } else {
     tprint("[OTA] rebooting");
+
+    // V4.83: set NVS flag so the next boot forces maintenance mode.
+    // HTTP OTA bypasses OtaManager.cpp entirely, so the flag has to be
+    // set here.
+    Preferences prefs;
+    prefs.begin("ota", false);
+    prefs.putBool("pending", true);
+    bool verifyPending = prefs.getBool("pending", false);
+    prefs.end();
+    tprint("[OTA] NVS verify pending=%d", verifyPending ? 1 : 0);
+    delay(500);
+
     server.send(200, "text/plain", "OK, rebooting");
     delay(500);
     ESP.restart();

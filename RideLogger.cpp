@@ -38,6 +38,20 @@ void loadRideState() {
          isLogging ? 1 : 0,
          (unsigned long)rideStartEpoch,
          (int)currentRowCount);
+
+  // V4.82: if a ride was in progress when we slept, the LittleFS file
+  // handle was lost. Reopen it so appends continue working. Covers
+  // mid-ride sleep paths (brownout, PANIC, guard backstop).
+  if (isLogging && rideStartEpoch > 0) {
+    bool ok = rideStorageReopen(rideStartEpoch);
+    tprint("[RIDE] reopen after wake: %s (epoch=%lu)",
+           ok ? "OK" : "FAIL", (unsigned long)rideStartEpoch);
+    if (!ok) {
+      isLogging = false;
+      currentRowCount = 0;
+      tprint("[RIDE] could not reopen, isLogging cleared");
+    }
+  }
 }
 
 void startRideLog() {

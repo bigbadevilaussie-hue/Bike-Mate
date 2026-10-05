@@ -571,12 +571,19 @@ void setup() {
   prefs.begin("ota", true);
   bool otaPending = prefs.getBool("pending", false);
   prefs.end();
+  tprint("[OTA] boot read pending=%d", otaPending ? 1 : 0);
   if (otaPending) {
     tprint("[OTA] ====== POST-UPDATE COLD BOOT DETECTED ======");
     prefs.begin("ota", false);
     prefs.putBool("pending", false);
     prefs.end();
     tprint("[OTA] pending flag cleared, version now V%s", BIKE_MATE_VERSION);
+
+    // V4.79: after an OTA, force the bike into maintenance mode on
+    // this boot so the serial page comes up immediately. Lets the
+    // GUI confirm the new firmware without waiting a wake cycle.
+    maintRequest = true;
+    tprint("[MAINT] post-OTA boot, forcing maint on this wake");
   }
 
   if (!wakeLoggerInit()) {
@@ -814,7 +821,14 @@ void loop() {
   // past MAX_AWAKE_MS gets force-slept. OTA is exempt — force-sleeping
   // mid-flash bricks the firmware, worse than staying awake.
   // V4.75: maintenance mode is also exempt — it has its own cap.
-  if (!otaRequest && !serverIsRunning() &&
+  // V4.81: guard only fires when the device is idle. Rides, arming,
+  // engine-run, and alarms are legitimate reasons to stay awake past
+  // MAX_AWAKE_MS. Previously the guard killed mid-ride logging.
+  bool inActiveWork = engineWasRunning || accState ||
+                      isCountingDown || isArmingCountdown ||
+                      isLogging || alarmSequenceActive ||
+                      lowBattBeepActive;
+  if (!otaRequest && !serverIsRunning() && !inActiveWork &&
       (millis() - bootMillis) > MAX_AWAKE_MS) {
     tprint("[GUARD] max-awake timeout (%lus), forcing sleep",
            (unsigned long)((millis() - bootMillis) / 1000UL));

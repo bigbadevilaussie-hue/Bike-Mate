@@ -7,229 +7,203 @@ Ranked by verifiability, not by AI consensus. Categories:
 
 ---
 
-## Tier 1 — Verifiable from code, fix now
+## Tier 1 — Safety-critical, do before any field deployment
 
-### 1. Set `BENCH_MODE 0` before any deployment
+### 1. Set `BENCH_MODE 0`
 - **Cat:** A
 - **Effort:** 1 line
-- **What:** `Config.h` has `#define BENCH_MODE 1`. If it ever boots on the bike, it wakes every 30s and never triggers the 04:00 upload.
+- **What:** `Config.h` currently has `BENCH_MODE 1`. If it boots on the bike,
+  it wakes every 30 s and never triggers the 04:00 upload.
 - **Done when:** `BENCH_MODE 0`, committed.
 
 ### 2. Fix `readSensors()` early-return
 - **Cat:** A
 - **Effort:** 3 lines
-- **What:** `if (raw < 100) return;` leaves `latestBatteryVoltage` frozen at the last value. Sensor fault reads as healthy battery.
+- **What:** `if (raw < 100) return;` leaves `latestBatteryVoltage` frozen at
+  the last value. Sensor fault reads as healthy battery.
 - **Fix:** Set `latestBatteryVoltage = 0` and a fault flag.
-- **Done when:** Disconnecting the divider makes firmware report fault, not stale data.
+- **Done when:** Disconnecting the divider makes firmware report fault,
+  not stale data.
 
-### 3. Move MD5 verification before `Update.end(true)`
-- **Cat:** A
-- **Effort:** Small reorder in `OtaManager.cpp`
-- **What:** Corrupt image is committed to the OTA partition before MD5 is checked. Next reboot boots the bad image.
-- **Done when:** `Update.end(false)` → verify MD5 → commit. Or fetch to RAM, verify, then flash.
-
-### 4. Raise panic threshold to 12.2V
+### 3. Raise panic threshold to 12.2V
 - **Cat:** A
 - **Effort:** 2 lines in `Config.h`
-- **What:** 12.0V is below the stated 12.2V crank floor. Panic fires after the prime directive is already violated.
+- **What:** `V_PANIC_ENTER 12.0` is below the stated 12.2V crank floor.
+  Panic fires after the prime directive is already violated.
 - **Also:** raise `WARN_EMAIL_VOLTAGE` from 12.50 → 12.60
 - **Done when:** Config updated, tested at PSU 12.3V.
 
-### 5. Fix PANIC sleep behaviour
-- **Cat:** A (verifiable in code) — but whether it matters depends on usage
-- **Effort:** Medium
-- **What:** `shouldSleep()` requires `!inPanic`. PANIC = never sleeps = OLED + BLE + beeping at 40mA forever.
-- **Fix:** Allow sleep in PANIC with a slower wake interval (e.g. 30 min). One email, then quiet.
-- **Done when:** PSU at 11.9V → device sleeps, doesn't drain.
+---
+
+## Tier 2 — Firmware correctness
+
+### 4. Measure sleep current
+- **Cat:** A
+- **Effort:** Bench work
+- **What:** The MP1584EN buck quiescent draw is unmeasured. The Mini 360
+  was suspected 10 mA. If the sleep current is above ~5 mA the prime
+  directive is not achievable.
+- **How:** PSU 12 V → buck, DMM in series on the 12 V line, no load on 5 V.
+  Then with ESP32 sleeping.
+- **Done when:** Bench.md has actual measured numbers.
+
+### 5. Field install prep
+- **Cat:** B
+- **Effort:** Multi-day
+- **What:** Perfboard build. TVS fitted. Fuse inline. MOSFET ACC rail
+  wired. GPS wired. GPS antenna positioned. MP1584EN swapped in if
+  sleep current test justifies.
+- **Done when:** 4-week baseline starts.
+
+### 6. Wire GPS + outdoor walk test
+- **Cat:** B
+- **Effort:** Bench + outdoor
+- **What:** GPS not yet wired. `GpsModule.cpp` is written but unproven.
+- **Done when:** Fix acquired, lat/lon in ride log non-zero.
 
 ---
 
-## Tier 2 — Verifiable but lower urgency
+## Tier 3 — Robustness
 
-### 6. Reconcile documentation
-- **Cat:** A (docs are verifiably stale)
-- **Effort:** Medium
-- **What:** README says V2.00, PROJECT_STATE says V3.50, HANDOFF says V3.29, code says V4.21. FILES.md says SDA=8, code says 6. PROJECT_STATE says TX 13dBm, code says 8.5.
-- **Impact:** Misleads future AI sessions and yourself.
-- **Done when:** All docs match current code. Add a `VERSION` file as single source.
-
-### 7. Establish one voltage calibration
-- **Cat:** A (three calibrations exist in code)
-- **Effort:** Small bench work
-- **What:** Config's `ADC_SLOPE`/`DIVIDER_RATIO 10.771` (unused), Sensors' `BATTERY_SLOPE 0.008058` (ideal 10:1, live), stated hardware (11:1). Wrong one is live.
-- **Fix:** PSU 12.00V + multimeter, adjust slope until firmware matches, put winning numbers in Config.h only.
-- **Done when:** One constant, one source, verified.
-
-### 8. `newest_epoch` only cleared on successful upload
+### 7. `newest_epoch` only cleared on successful upload
 - **Cat:** A (code clears it unconditionally)
 - **Effort:** Small
 - **What:** Cleared even on partial failure. GUI push contract breaks.
 - **Done when:** Partial upload leaves `newest_epoch` intact.
 
-### 9. `_mailFailCount` decay
+### 8. `_mailFailCount` decay
 - **Cat:** A (no decay logic in code)
 - **Effort:** Small
-- **What:** 3 failures = email dead until cold boot. The failure mode guarantees it: backoff blocks sends, so no send can succeed to clear backoff.
+- **What:** 3 failures = email dead until cold boot. The failure mode
+  guarantees it: backoff blocks sends, so no send can succeed to clear
+  backoff.
 - **Fix:** Time-based decay, or reset per wake.
-- **Done when:** Fail 3 times, wait 24h, alert succeeds.
+- **Done when:** Fail 3 times, wait 24 h, alert succeeds.
 
-### 10. Add max-awake timeout
-- **Cat:** A (not in code)
+### 9. Add max-awake timeout for stuck maint
+- **Cat:** A (maint already has one, general case does not)
 - **Effort:** Small
-- **What:** If anything blocks sleep (stuck BLE client, stuck WiFi, stuck flag), device stays awake at 40mA indefinitely.
-- **Fix:** `if (millis() - awakeStart > 120s) force sleep;`
-- **Done when:** Stuck state doesn't prevent sleep.
+- **What:** `MAX_AWAKE_MS` covers normal operation. Maint is exempt and
+  uses `MAINT_MAX_MS` instead. But if any future feature keeps the
+  device awake past its own budget, there's no backstop.
+- **Done when:** Every awake path has a bounded cap.
 
-### 11. 302 verification before deleting local files
+### 10. 302 verification before deleting local files
 - **Cat:** A (code treats 302 as success without checking)
 - **Effort:** Medium
-- **What:** Apps Script always returns 302. Actual errors hidden behind the redirect. Drive-side failure looks like success → local file deleted.
+- **What:** Apps Script always returns 302. Actual errors hidden behind
+  the redirect. Drive-side failure looks like success → local file deleted.
 - **Fix:** Follow redirect, check body, or use a second endpoint.
 - **Done when:** Simulated Drive failure doesn't delete local files.
 
-### 12. `postFile()` RAM blow-up
+### 11. `postFile()` RAM blow-up
 - **Cat:** B (depends on file size in practice)
 - **Effort:** Medium
-- **What:** Loads whole file + ~3× URL-encoded copy. A big ride CSV will OOM on the C3.
-- **Done when:** Can upload 100KB file without crash.
+- **What:** Loads whole file + ~3× URL-encoded copy. A big ride CSV will
+  OOM on the C3.
+- **Done when:** Can upload 100 KB file without crash.
+
+### 12. Retire port-8000 OTA server from GUI
+- **Cat:** A
+- **Effort:** Small
+- **What:** `start_ota_server()` / `stop_ota_server()` / `OTA_DIR` /
+  `OTA_PORT` / `OTA_HOSTNAME` / `OTA_WAIT_SEC` are dead code now that
+  OTA is HTTP POST from the GUI. Port 8000 is still bound but nothing
+  serves from it.
+- **Done when:** Dead code removed, port not bound.
+
+### 13. Remove dead `send_ota_command` from `BLEWorker`
+- **Cat:** A
+- **Effort:** Small
+- **What:** Nothing calls it after GUI 4.12. It still references
+  `OTA_WAIT_SEC` and does the old BLE wait pattern.
+- **Done when:** Method removed, no call sites.
 
 ---
 
-## Tier 2.5 — Board revision items (do on perfboard, not breadboard)
+## Tier 4 — Nice to have
 
-### Divider swap — 470k / 47k
-- **Cat:** A (known values, known math)
-- **Effort:** 2 resistors, next board revision
-- **What:** Current divider is 98.8k + 9.98k = 108.78 kΩ → 116 µA continuous on 12 V. Swap to 470k + 47k = 517 kΩ → 24 µA. 80% reduction. Saves ~62 mAh over 4 weeks.
-- **Why not 1M/100k:** same output voltage (11:1 ratio), but 11× over the ADC's recommended source impedance. The 100 nF cap keeps it stable, but calibration gets harder for an 8 mAh gain over 4 weeks. Not worth it.
-- **Verify after swap:** PSU at 12.0 / 12.6 / 13.8 V, DMM on divider output, confirm reading matches firmware within ±0.1 V. Recalibrate BATTERY_SLOPE if needed.
-- **Sequencing:** Do NOT touch the divider until MP1584EN is fitted and PANIC sleep is fixed. The divider is the last 3–4% of the budget. Buck and firmware first.
-- **Done when:** 470k/47k fitted, calibrated, and 4-week average includes ~24 µA divider contribution in BENCH.md.
+### 14. Maint cap counter on serial page
+- **Cat:** A
+- **Effort:** Small
+- **What:** Show `remaining Ns` in the maint log every 30 s, or as a
+  header on `/serial-raw`. Useful for knowing how long until timeout.
+- **Done when:** Visible during maint.
 
-## Tier 3 — Depends on usage, verify first
+### 15. Serial page styling pass
+- **Cat:** C
+- **Effort:** Small
+- **What:** Current page is functional but plain. Could add a compact
+  header with firmware version, RSSI, uptime, remaining maint time.
+- **Done when:** Looks nicer, still serves the same data.
 
-### 13. PANIC sends email
+### 16. Kill the `.sealed` upload race
+- **Cat:** B
+- **Effort:** Small
+- **What:** Occasionally a `.sealed` file exists at boot, gets deleted
+  immediately, but the upload may have already started on a different
+  path. Rare.
+- **Done when:** No `.sealed` files linger.
+
+---
+
+## Tier 5 — Deferred / depends on usage
+
+### 17. PANIC sends email
 - **Cat:** B — depends on whether the panic-email path is ever hit
-- **Effort:** Small
-- **What:** `atRest` gate requires `!inPanic`, so panic transition sends no email.
-- **Verify:** Does a 12.1V transition trigger an alert in the actual build?
+- **What:** `atRest` gate requires `!inPanic`, so panic transition sends
+  no email. Fixed in V4.72 by bypassing latches on PANIC wake.
 
-### 14. `lowVoltLoops` debounce
-- **Cat:** B — 100ms debounce may be fine in practice
-- **Effort:** Small
-- **What:** Counts 50ms loop passes. `LOW_VOLT_LOOPS_REQUIRED 2` = 100ms, not 2 samples.
+### 18. `lowVoltLoops` debounce
+- **Cat:** B — 100 ms debounce may be fine in practice
+- **What:** Counts 50 ms loop passes. `LOW_VOLT_LOOPS_REQUIRED 2` = 100 ms,
+  not 2 samples.
 - **Verify:** Has a false alert ever occurred?
 
-### 15. `LittleFS.begin(true)` formats on corruption
+### 19. `LittleFS.begin(true)` formats on corruption
 - **Cat:** B — depends on how often flash corrupts
-- **Effort:** Small
-- **What:** `begin(true)` formats on mount failure. One corruption wipes data history.
+- **What:** `begin(true)` formats on mount failure. One corruption wipes
+  data history.
 - **Verify:** Has a LittleFS corruption event ever been seen?
 
-### 16. LittleFS free-space check
+### 20. LittleFS free-space check before ride start
 - **Cat:** B — only matters if uploads fail repeatedly
-- **Effort:** Small
-- **What:** No free-space check. Extended WiFi outage → files accumulate → silent failure.
-- **Verify:** Do uploads actually fail long enough to fill the FS?
+- **What:** No free-space check. Extended WiFi outage → files accumulate
+  → silent failure.
 
-### 17. NVS ride summary accumulation
+### 21. NVS ride summary accumulation
 - **Cat:** B — years-long problem
-- **Effort:** Medium
 - **What:** Every ride leaves an `s<epoch>` blob forever.
 - **Verify:** How many rides/year? 365 entries = fine for years.
 
-### 18. `gpsHasFix()` duplicate stub
+### 22. `gpsHasFix()` duplicate stub
 - **Cat:** A (code has two stubs) but cosmetic
-- **Effort:** Small
-- **What:** DisplayManager has `gpsHasFix() { return true; }` that ignores the real stub state.
-- **Done when:** Single GPS source.
+- **What:** DisplayManager has `gpsHasFix() { return true; }` that ignores
+  the real stub state.
 
-### 19. Ride interval 5s vs actual 30s
-- **Cat:** B — depends on whether 5s was intended
-- **Effort:** Small
-- **What:** Config says `LOG_INTERVAL_SEC 5`, `writeRideRow()` only called at `TICK_MS 30000`.
-- **Verify:** Is 5s or 30s desired for ride sampling?
+### 23. Ride interval 5s vs actual 30s
+- **Cat:** B — depends on whether 5 s was intended
+- **What:** Config says `LOG_INTERVAL_SEC 5`, `writeRideRow()` only called
+  at `TICK_MS 30000`.
 
-### 20. `setRideStartLocation()` never called
+### 24. `setRideStartLocation()` never called
 - **Cat:** A (grep shows zero calls)
-- **Effort:** Small
 - **What:** GPS start location is always 0 in ride summaries.
-- **Done when:** Either wire it up or remove the dead field.
 
 ---
 
-## Tier 4 — Ignore unless proven relevant
+## Done — historical
 
-| Issue | Cat | Verdict |
-|---|---|---|
-| GPS stub pollutes uploaded data | B | GPS isn't wired — deliberate |
-| ACC reported real but LED only | B | MOSFETs unwired |
-| Buzzer overlap | C | Cosmetic edge case |
-| Engine-start rebound during arming | B | Only matters if it happens |
-| `currentStateString()` missing ARMING | B | Cosmetic |
-| Mail threshold 12.5V chatty | B | Depends on battery/climate |
-| Ride CSV without summary | B | Depends on whether it's wanted |
-| Trickle tender false positive | B | Only if a tender is used |
-| Clock drift over deep sleep | B | Needs measurement |
-| Long-park mode missing | B | Depends on rider behaviour |
-| OTA mid-ride kills ride | B | Unlikely |
-| OTA unauthenticated source | B | Hobby project, fine |
-| GUI HTTP servers on 0.0.0.0 | B | LAN only, fine |
-| SSL verify disabled | B | Fine for hobby |
-| Weather API over HTTP | B | Cosmetic |
-| `mDNS Familys-iMac.local` dependency | B | Works as-is |
-| SCL GPIO9 boot strap comment | C | Note only |
-| `latestMilliVolts = raw * 0.728` | C | Diagnostic only |
-| `rideStorageEnumerate()` dead code | C | Harmless |
-| `wakeLoggerRotate()` dead code | C | Harmless |
-| `FLAG_THERMAL_CUT` no producer | C | Unused flag |
-| `WAKE_LOG_INTERVAL_SEC` unused | C | Dead define |
-| `MAIL_FALLBACK_DAYS` unused | C | Dead define |
-| NVS namespace defines hardcoded | C | Cosmetic |
-| Version chaos | A | Covered by #6 |
+The following were done in previous sessions and no longer need work:
 
----
-
-## Sprint Plan
-
-### Sprint 1 — Safety (today, ~30 min)
-- [ ] #1 Set `BENCH_MODE 0`
-- [ ] #2 Fix `readSensors()` early-return
-- [ ] #4 Raise panic threshold 12.0 → 12.2
-
-**Commit:** V4.22 — "Safety-critical fixes"
-
-### Sprint 2 — Firmware correctness (this weekend, ~2 hrs)
-- [ ] #3 MD5 before commit
-- [ ] #5 PANIC sleep behaviour
-- [ ] #8 `newest_epoch` conditional clear
-
-**Commit:** V4.23 — "Panic + OTA correctness"
-
-### Sprint 3 — Calibration & docs (next week)
-- [ ] #7 Voltage calibration with PSU + DMM
-- [ ] #6 Reconcile docs
-
-**Commit:** V4.24 + docs tag
-
-### Sprint 4 — Robustness (following week)
-- [ ] #9 Mail backoff decay
-- [ ] #10 Max-awake timeout
-- [ ] #11 302 verification
-- [ ] #12 Stream uploads
-
-**Commit:** V4.25
-
-### Sprint 5 — Hardware bring-up
-- [ ] #18 GPS duplicate stub
-- [ ] #20 `setRideStartLocation()` wire or remove
-- [ ] 100nF cap on voltage divider
-- [ ] Measure sleep current
-- [ ] Fix `NTC_B` to 3950 + recalibrate
-- [ ] Wire MOSFET ACC
-- [ ] Wire GPS
-
-**Commit:** V5.00 breadboard complete
+- PANIC sleep behaviour (V4.72)
+- Max-awake timeout for normal operation (V4.72)
+- BENCH_MODE 1 compiled in (V4.73 set 0, reverted for dev)
+- `_mailFailCount` latches bypassed on PANIC wake (V4.72)
+- 302 handling for upload (accepted)
+- MD5 verification on OTA (accepted)
+- Maintenance mode + serial page + HTTP OTA (V4.75-4.78)
+- GUI HTTP OTA during maint (GUI 4.12+)
 
 ---
 

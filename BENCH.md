@@ -1,5 +1,9 @@
 # Bike-Mate — Bench Setup
 
+> **Snapshot from 2026-10-01.** Hardware layout below has not changed, but
+> firmware versions referenced in this file are historical. Current version
+> is in `Config.h`. See `PROJECT_STATE.md` for current hardware status.
+
 Physical snapshot of the breadboard at firmware V4.38.5.
 Update this file whenever the wiring changes. If it drifts from reality,
 reality wins — fix this file.

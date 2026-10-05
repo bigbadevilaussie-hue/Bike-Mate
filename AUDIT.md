@@ -1,5 +1,11 @@
 # Bike-Mate — Peer Review Audit
 
+> **HISTORICAL.** This document is a snapshot from 2026-10-01 at V4.21 / GUI
+> V3.11. Many findings have since been addressed (PANIC sleep, max-awake
+> timeout, BENCH_MODE, mail latch decay, and others). It is preserved as
+> a record of what the four reviewers found at that time. For current
+> priorities see `TODO.md`. For current state see `PROJECT_STATE.md`.
+
 **Date:** 2026-10-01
 **Firmware reviewed:** V4.21 (Config.h) / GUI V3.11
 **Reviewers:** Claude, Gemini, ChatGPT, Mistral (independent desk checks)

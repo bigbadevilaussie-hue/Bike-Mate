@@ -17,7 +17,15 @@ from datetime import datetime
 from tkinter import messagebox
 from bleak import BleakScanner, BleakClient
 
-GUI_VERSION = "4.01"
+GUI_VERSION = "4.02"
+
+# Maintenance mode state. "OFF" | "PENDING" | "ON"
+# Firmware doesn't implement the command yet, so PENDING will
+# currently time out back to OFF. Once firmware ACKs, PENDING
+# flips to ON and stays until "off" ACK.
+maintenance_state = "OFF"
+maintenance_lock = threading.RLock()
+MAINTENANCE_ACK_TIMEOUT_MS = 5000
 DEVICE_NAME = "Bike-Mate-2"
 DATA_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 TIME_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9"
@@ -701,6 +709,11 @@ class App:
         am.add_separator()
         am.add_command(label="⚙️  Settings", command=self.open_settings)
         am.add_separator()
+        am.add_command(label="🔧  Activate Maintenance Mode",
+                       command=self.activate_maintenance)
+        am.add_command(label="🛑  Deactivate Maintenance Mode",
+                       command=self.deactivate_maintenance)
+        am.add_separator()
         am.add_command(label="📤 Update Firmware", command=self.menu_ota)
         am.add_separator()
         reports_menu = tk.Menu(am, tearoff=0)
@@ -731,6 +744,9 @@ class App:
         self.state_lbl = tk.Label(sf, text="💤 MONITOR", bg=CARD, fg=BLUE,
                                   font=("Helvetica", 26, "bold"))
         self.state_lbl.pack(pady=14)
+        self.maint_lbl = tk.Label(sf, text="", bg=CARD, fg=YELLOW,
+                                  font=("Helvetica", 11, "bold"))
+        self.maint_lbl.pack(pady=(0, 8))
         vc = tk.Frame(root, bg=CARD); vc.pack(fill="x", padx=20, pady=6)
         self.volt_lbl = tk.Label(vc, text="--.-- V", bg=CARD, fg=GREEN,
                                  font=("Helvetica", 46, "bold"))
@@ -1036,6 +1052,52 @@ class App:
 
         self.worker.send_ota_command(payload, on_result)
 
+    def activate_maintenance(self):
+        global maintenance_state
+        with maintenance_lock:
+            if maintenance_state != "OFF":
+                self._auto_close_dialog(
+                    "Maintenance",
+                    f"Already {maintenance_state.lower()}.",
+                    seconds=2)
+                return
+            maintenance_state = "PENDING"
+        self._send_maint_command("on")
+
+    def deactivate_maintenance(self):
+        global maintenance_state
+        with maintenance_lock:
+            if maintenance_state == "OFF":
+                self._auto_close_dialog(
+                    "Maintenance",
+                    "Already off.",
+                    seconds=2)
+                return
+            maintenance_state = "PENDING"
+        self._send_maint_command("off")
+
+    def _send_maint_command(self, on_off):
+        # TODO: firmware does not implement this command yet. When the
+        # device ACKs, flip maintenance_state to ON (or OFF) and update
+        # the on-screen label. For now, log the intent and time out.
+        payload = '{"maint":"' + on_off + '"}'
+        print(f"[MAINT] send {payload}")
+        self.root.after(MAINTENANCE_ACK_TIMEOUT_MS,
+                        lambda: self._maint_ack_timeout(on_off))
+
+    def _maint_ack_timeout(self, requested):
+        global maintenance_state
+        with maintenance_lock:
+            if maintenance_state != "PENDING":
+                return
+            maintenance_state = "OFF"
+        print(f"[MAINT] no ACK for '{requested}', reverting to OFF")
+        self._auto_close_dialog(
+            "Maintenance",
+            f"No ACK from device for '{requested}'.\n"
+            f"Firmware command not yet implemented.",
+            seconds=3)
+
     def open_settings(self):
         def _read():
             print("[SET-DBG] open_settings triggered")
@@ -1236,6 +1298,14 @@ class App:
         elif st == "PANIC": self.state_lbl.config(fg=RED)
         elif st == "MONITOR": self.state_lbl.config(fg=BLUE)
         else: self.state_lbl.config(fg=FG)
+        with maintenance_lock:
+            m = maintenance_state
+        if m == "OFF":
+            self.maint_lbl.config(text="")
+        elif m == "PENDING":
+            self.maint_lbl.config(text="🔧 MAINTENANCE: PENDING", fg=YELLOW)
+        elif m == "ON":
+            self.maint_lbl.config(text="🔧 MAINTENANCE: ON", fg=GREEN)
         if t < 0: te = "❄️"
         elif t < 10: te = "🥶"
         elif t < 20: te = "🌤"

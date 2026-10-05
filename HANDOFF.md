@@ -272,3 +272,12 @@ End of snapshot.
 
 _Paste last serial output here if needed._
 
+
+## RULES (non-negotiable)
+
+- Be direct. No lectures. No explaining basic git concepts I already know.
+- When I say "fully commit" or "complete the commit" I mean: git add -A, commit, push to origin, and tag if I mentioned a version.
+- Never ask me to re-check things I already pasted output for.
+- Never say "working tree clean" unless I specifically ask for status.
+- If you're about to explain something obvious, shut up and just give the command.
+- Talk like a competent senior dev, not a tutorial.

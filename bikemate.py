@@ -17,7 +17,7 @@ from datetime import datetime
 from tkinter import messagebox
 from bleak import BleakScanner, BleakClient
 
-GUI_VERSION = "4.02"
+GUI_VERSION = "4.15"
 
 # Maintenance mode state. "OFF" | "PENDING" | "ON"
 # Firmware doesn't implement the command yet, so PENDING will
@@ -26,6 +26,8 @@ GUI_VERSION = "4.02"
 maintenance_state = "OFF"
 maintenance_lock = threading.RLock()
 MAINTENANCE_ACK_TIMEOUT_MS = 5000
+MAINTENANCE_BROWSER_DELAY_MS = 3000
+BIKE_IP = "192.168.8.196"
 DEVICE_NAME = "Bike-Mate-2"
 DATA_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 TIME_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9"
@@ -745,7 +747,8 @@ class App:
                                   font=("Helvetica", 26, "bold"))
         self.state_lbl.pack(pady=14)
         self.maint_lbl = tk.Label(sf, text="", bg=CARD, fg=YELLOW,
-                                  font=("Helvetica", 11, "bold"))
+                                  font=("Helvetica", 13, "bold"),
+                                  padx=12, pady=4)
         self.maint_lbl.pack(pady=(0, 8))
         vc = tk.Frame(root, bg=CARD); vc.pack(fill="x", padx=20, pady=6)
         self.volt_lbl = tk.Label(vc, text="--.-- V", bg=CARD, fg=GREEN,
@@ -782,6 +785,7 @@ class App:
         self.worker.start()
         self.apply_theme()
         self.theme_check()
+        self._check_maint_on_startup()
         self.tick()
 
     def _col(self, parent, label, value):
@@ -962,95 +966,101 @@ class App:
         dlg.after(seconds * 1000, dlg.destroy)
 
     def menu_ota(self):
-        # V4.56: restart the OTA server to avoid stale single-threaded hangs
-        stop_ota_server()
-        start_ota_server()
+        # V4.77: OTA runs over HTTP during maintenance mode.
+        # The bike's WiFi is only up in maint, so this is a hard gate.
+        with maintenance_lock:
+            m = maintenance_state
+        if m != "ON":
+            messagebox.showwarning(
+                "OTA",
+                "Activate Maintenance Mode first.\n\n"
+                "OTA runs over WiFi while the bike is in maintenance.")
+            return
+
         if not os.path.isfile(BUILD_BIN):
-            messagebox.showerror("OTA", f"Firmware not found:\n{BUILD_BIN}\n\nRun Sketch → Export Compiled Binary in Arduino IDE first.")
+            messagebox.showerror(
+                "OTA",
+                f"Firmware not found:\n{BUILD_BIN}\n\n"
+                f"Run Sketch → Export Compiled Binary in Arduino IDE first.")
             return
 
         src_ver = read_firmware_version() or "?"
+
+        # During maint, BLE is dead so latest_data["fv"] is stale.
+        # Ask the bike directly over HTTP.
+        import urllib.request
+        try:
+            with urllib.request.urlopen(
+                    f"http://{BIKE_IP}/version", timeout=3) as r:
+                dev_ver = r.read().decode().strip() or "?"
+        except Exception:
+            dev_ver = latest_data.get("fv", "?")
+        size = os.path.getsize(BUILD_BIN)
+        size_mb = size / (1024 * 1024)
 
         try:
             bin_mtime = os.path.getmtime(BUILD_BIN)
             cfg_mtime = os.path.getmtime(CONFIG_H)
             stale = cfg_mtime > bin_mtime
+            built_str = datetime.fromtimestamp(bin_mtime).strftime("%Y-%m-%d %H:%M")
         except Exception:
             stale = False
-            bin_mtime = 0
+            built_str = "?"
 
-        size = os.path.getsize(BUILD_BIN)
-        md5 = compute_md5(BUILD_BIN) or "?"
-        dev_ver = latest_data.get("fv", "?")
-
-        built_str = datetime.fromtimestamp(bin_mtime).strftime("%Y-%m-%d %H:%M") if bin_mtime else "?"
-        size_mb = size / (1024 * 1024)
         msg = (
-            f"File:        bike_mate.ino.bin\n"
+            f"Upload bike_mate.ino.bin to {BIKE_IP}/ota?\n\n"
             f"Size:        {size:,} bytes ({size_mb:.2f} MB)\n"
-            f"MD5:         {md5[:16]}...\n"
-            f"Source ver:  {src_ver}\n"
-            f"Built:       {built_str}\n"
-            f"Device ver:  {dev_ver}\n"
+            f"Source ver:  V{src_ver}\n"
+            f"Device ver:  V{dev_ver}\n"
+            f"Built:       {built_str}"
         )
         if stale:
-            msg += "\n⚠️  Config.h is newer than the .bin.\nRe-export the binary before updating."
-        msg += "\n\nProceed with OTA update?"
-
+            msg += ("\n\n⚠️  Config.h is newer than the .bin.\n"
+                    "Re-export the binary before updating.")
         if not messagebox.askyesno("Bike-Mate OTA", msg):
             return
 
-        dest = os.path.join(OTA_DIR, "bike_mate.bin")
-        try:
-            shutil.copy(BUILD_BIN, dest)
-            print(f"[OTA] copied to {dest}")
-        except Exception as e:
-            messagebox.showerror("OTA", f"Copy failed:\n{e}")
-            return
-
+        # Backup to Drive, background, same as before.
         def _backup():
             print(f"[BACKUP] waiting {BACKUP_DELAY_SEC}s before upload")
             time.sleep(BACKUP_DELAY_SEC)
             ok = backup_firmware_to_drive()
-            if ok:
-                print(f"[BACKUP] firmware {src_ver} backed up to Drive")
-            else:
-                print(f"[BACKUP] failed for {src_ver}")
+            print(f"[BACKUP] {'OK' if ok else 'FAILED'} for V{src_ver}")
 
         threading.Thread(target=_backup, daemon=True).start()
 
-        url = f"http://{OTA_HOSTNAME}:{OTA_PORT}/bike_mate.bin"
-        payload = json.dumps(
-            {"url": url, "size": size, "md5": md5, "ver": src_ver},
-            separators=(",", ":"))
-        print(f"[OTA] payload: {payload}")
+        def _upload():
+            url = f"http://{BIKE_IP}/ota"
+            print(f"[OTA] POST {url} ({size} bytes)")
+            set_status("uploading firmware...")
+            try:
+                with open(BUILD_BIN, "rb") as f:
+                    r = requests.post(
+                        url,
+                        files={"firmware": ("bike_mate.ino.bin", f,
+                                            "application/octet-stream")},
+                        timeout=120)
+                print(f"[OTA] HTTP {r.status_code}: {r.text[:80]}")
+                if r.status_code == 200:
+                    set_status("firmware uploaded, device rebooting")
+                    self.root.after(0, lambda: self._auto_close_dialog(
+                        "OTA",
+                        f"Uploaded {size:,} bytes to {BIKE_IP}.\n"
+                        f"Device is rebooting into V{src_ver}.",
+                        seconds=3))
+                else:
+                    body = r.text[:200]
+                    set_status(f"OTA HTTP {r.status_code}")
+                    self.root.after(0, lambda b=body: messagebox.showerror(
+                        "OTA", f"Device rejected upload:\n{b}"))
+            except Exception as e:
+                err = str(e)
+                print(f"[OTA] EXCEPTION: {err}")
+                set_status(f"OTA failed: {err}")
+                self.root.after(0, lambda m=err: messagebox.showerror(
+                    "OTA", f"Upload failed:\n{m}"))
 
-        set_status("sending OTA command...")
-
-        def on_result(ok, detail):
-            if ok:
-                set_status(f"OTA metadata sent - device will fetch from {url}")
-                self.root.after(0, lambda: self._auto_close_dialog(
-                    "OTA",
-                    f"Device acknowledged.\n\n"
-                    f"The device will fetch and flash on its next wake.\n"
-                    f"Confirmation email will arrive once complete.\n\n"
-                    f"URL: {url}",
-                    seconds=2))
-            else:
-                try:
-                    os.remove(dest)
-                    print("[OTA] cleaned up staged file (BLE failed)")
-                except Exception as e:
-                    print(f"[OTA] cleanup failed: {e}")
-                set_status(f"OTA failed: {detail}")
-                self.root.after(0, lambda: messagebox.showerror(
-                    "OTA",
-                    f"Device did not acknowledge.\n\n"
-                    f"Reason: {detail}\n\n"
-                    f"Staged file removed."))
-
-        self.worker.send_ota_command(payload, on_result)
+        threading.Thread(target=_upload, daemon=True).start()
 
     def activate_maintenance(self):
         global maintenance_state
@@ -1077,20 +1087,92 @@ class App:
         self._send_maint_command("off")
 
     def _send_maint_command(self, on_off):
-        # TODO: firmware does not implement this command yet. When the
-        # device ACKs, flip maintenance_state to ON (or OFF) and update
-        # the on-screen label. For now, log the intent and time out.
+        global maintenance_state
         payload = '{"maint":"' + on_off + '"}'
         print(f"[MAINT] send {payload}")
-        self.root.after(MAINTENANCE_ACK_TIMEOUT_MS,
-                        lambda: self._maint_ack_timeout(on_off))
+
+        # Fire-and-forget the BLE write, then poll the bike's IP for
+        # the serial server. Firmware sets a flag on BLE receipt and
+        # enters maintenance on its NEXT wake, so reachability of the
+        # serial page is the real signal that maintenance is running.
+        def on_result(ok, detail):
+            print(f"[MAINT] BLE result for '{on_off}': {ok} ({detail})")
+
+        self.worker.send_ota_command(payload, on_result)
+
+        if on_off == "on":
+            self._start_maint_poll()
+
+    def _start_maint_poll(self):
+        import urllib.request
+        started = time.time()
+        url = f"http://{BIKE_IP}/serial-raw"
+
+        def poll():
+            global maintenance_state
+            elapsed = time.time() - started
+            if elapsed > 11 * 60:
+                print("[MAINT] poll: 11 min elapsed, bike never entered")
+                with maintenance_lock:
+                    maintenance_state = "OFF"
+                return
+            try:
+                with urllib.request.urlopen(url, timeout=3) as r:
+                    if r.status == 200:
+                        print(f"[MAINT] poll: bike is live after {int(elapsed)}s")
+                        with maintenance_lock:
+                            maintenance_state = "ON"
+                        self.root.after(
+                            MAINTENANCE_BROWSER_DELAY_MS,
+                            self._ask_open_serial_page)
+                        return
+            except Exception:
+                pass
+            self.root.after(5000, poll)
+
+        self.root.after(5000, poll)
+
+    def _check_maint_on_startup(self):
+        # On GUI start, ask the bike's IP once whether maint is already
+        # running. Covers GUI restarts while the bike is mid-maintenance.
+        import urllib.request
+        url = f"http://{BIKE_IP}/serial-raw"
+
+        def probe():
+            global maintenance_state
+            try:
+                with urllib.request.urlopen(url, timeout=3) as r:
+                    if r.status == 200:
+                        print("[MAINT] startup: bike already in maint, state -> ON")
+                        with maintenance_lock:
+                            maintenance_state = "ON"
+            except Exception:
+                pass
+
+        threading.Thread(target=probe, daemon=True).start()
+
+    def _ask_open_serial_page(self):
+        ok = messagebox.askyesno(
+            "Maintenance",
+            f"Device is in maintenance mode.\n\n"
+            f"Open the serial page?\nhttp://{BIKE_IP}/serial")
+        if ok:
+            self._open_serial_page()
+
+    def _open_serial_page(self):
+        import webbrowser
+        url = f"http://{BIKE_IP}/serial"
+        print(f"[MAINT] opening {url}")
+        webbrowser.open(url)
 
     def _maint_ack_timeout(self, requested):
         global maintenance_state
         with maintenance_lock:
             if maintenance_state != "PENDING":
+                print(f"[MAINT] timeout fired but state={maintenance_state}, ignoring")
                 return
             maintenance_state = "OFF"
+            print(f"[MAINT] timeout: state -> OFF")
         print(f"[MAINT] no ACK for '{requested}', reverting to OFF")
         self._auto_close_dialog(
             "Maintenance",
@@ -1300,12 +1382,17 @@ class App:
         else: self.state_lbl.config(fg=FG)
         with maintenance_lock:
             m = maintenance_state
+        if not hasattr(self, "_last_maint_log") or self._last_maint_log != m:
+            self._last_maint_log = m
+            print(f"[MAINT] tick sees state={m}")
         if m == "OFF":
-            self.maint_lbl.config(text="")
+            self.maint_lbl.config(text="", bg=CARD, fg=YELLOW)
         elif m == "PENDING":
-            self.maint_lbl.config(text="🔧 MAINTENANCE: PENDING", fg=YELLOW)
+            self.maint_lbl.config(text="🔧  MAINTENANCE: PENDING",
+                                  bg="#ff8c00", fg="#000000")
         elif m == "ON":
-            self.maint_lbl.config(text="🔧 MAINTENANCE: ON", fg=GREEN)
+            self.maint_lbl.config(text="🔧  MAINTENANCE: ON",
+                                  bg="#00c853", fg="#000000")
         if t < 0: te = "❄️"
         elif t < 10: te = "🥶"
         elif t < 20: te = "🌤"

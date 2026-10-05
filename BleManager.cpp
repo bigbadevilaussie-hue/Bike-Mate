@@ -355,12 +355,12 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
         if (ve > vs) {
           String val = mv.substring(vs, ve);
           if (val == "on") {
-            maintenanceModeRequested = true;
+            extern bool maintRequest;
+            maintRequest = true;
             uint8_t ack = 0x01;
             pOtaChar->setValue(&ack, 1);
             pOtaChar->notify();
-            delay(80);   // let BLE stack flush before loop() stops BLE
-            tprint("[MAINT] on requested");
+            tprint("[MAINT] on requested (flag set, will act on next wake)");
           } else if (val == "off") {
             uint8_t nack = 0x02;
             pOtaChar->setValue(&nack, 1);

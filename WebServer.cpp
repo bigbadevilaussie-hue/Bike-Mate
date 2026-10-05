@@ -3,6 +3,7 @@
 #include "SerialBuffer.h"
 
 #include <WebServer.h>
+#include <Update.h>
 
 extern void tprint(const char* fmt, ...);
 
@@ -55,6 +56,52 @@ static void handleSerialRaw() {
   server.send(200, "text/plain", serialBufGet());
 }
 
+static bool otaStarted = false;
+
+static void handleOtaUpload() {
+  HTTPUpload& upload = server.upload();
+  if (upload.status == UPLOAD_FILE_START) {
+    tprint("[OTA] start %s", upload.filename.c_str());
+    otaStarted = false;
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+      tprint("[OTA] begin FAILED: %s", Update.errorString());
+    } else {
+      otaStarted = true;
+    }
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (otaStarted) {
+      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+        tprint("[OTA] write FAILED: %s", Update.errorString());
+        otaStarted = false;
+      }
+    }
+  } else if (upload.status == UPLOAD_FILE_END) {
+    if (otaStarted) {
+      if (Update.end(true)) {
+        tprint("[OTA] OK %u bytes", upload.totalSize);
+      } else {
+        tprint("[OTA] end FAILED: %s", Update.errorString());
+      }
+    }
+  }
+}
+
+static void handleOtaDone() {
+  if (Update.hasError()) {
+    server.send(500, "text/plain",
+                "FAIL: " + String(Update.errorString()));
+  } else {
+    tprint("[OTA] rebooting");
+    server.send(200, "text/plain", "OK, rebooting");
+    delay(500);
+    ESP.restart();
+  }
+}
+
+static void handleVersion() {
+  server.send(200, "text/plain", BIKE_MATE_VERSION);
+}
+
 static void handleMaintOff() {
   maintOffRequested = true;
   tprint("[MAINT] /maint/off received");
@@ -66,6 +113,8 @@ void serverSetup() {
   server.on("/serial",     HTTP_GET,  handleSerialPage);
   server.on("/serial-raw", HTTP_GET,  handleSerialRaw);
   server.on("/maint/off",  HTTP_POST, handleMaintOff);
+  server.on("/ota",        HTTP_POST, handleOtaDone, handleOtaUpload);
+  server.on("/version",    HTTP_GET,  handleVersion);
   server.onNotFound([](){ server.send(404, "text/plain", "404"); });
   server.begin();
   running = true;

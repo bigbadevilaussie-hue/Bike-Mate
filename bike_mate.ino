@@ -53,6 +53,11 @@ static unsigned long engineStartCaptureMs = 0;
 static unsigned long lastCaptureRow = 0;
 RTC_DATA_ATTR bool lowBattMailLatched = false;
 
+// V4.76: maintenance mode request. Set by BLE callback, consumed in
+// doStateWork() on the next wake, cleared when the session exits.
+// Same pattern as otaRequest.
+RTC_DATA_ATTR bool maintRequest = false;
+
 bool isCountingDown = false;
 unsigned long countdownStartMillis = 0;
 extern const int countdownSeconds = 30;
@@ -89,14 +94,20 @@ void tprint(const char* fmt, ...) {
   char ts[20];
   snprintf(ts, sizeof(ts), "[%02lu:%02lu:%02lu.%03lu] ",
            ms/3600000, (ms/60000)%60, (ms/1000)%60, ms%1000);
-  Serial.print(ts);
   char buf[200];
   va_list args;
   va_start(args, fmt);
   vsnprintf(buf, sizeof(buf), fmt, args);
   va_end(args);
-  Serial.println(buf);
-  serialBufWrite(buf);
+
+  // V4.77: build a single line with timestamp + trailing newline so
+  // the ring buffer serves complete lines to /serial-raw. Matches the
+  // shape Fan-Mate's log_print() produces.
+  char line[232];
+  snprintf(line, sizeof(line), "%s%s\n", ts, buf);
+
+  Serial.print(line);
+  serialBufWrite(line);
 }
 
 void tprint_verbose(const char* fmt, ...) {
@@ -105,14 +116,17 @@ void tprint_verbose(const char* fmt, ...) {
   char ts[20];
   snprintf(ts, sizeof(ts), "[%02lu:%02lu:%02lu.%03lu] ",
            ms/3600000, (ms/60000)%60, (ms/1000)%60, ms%1000);
-  Serial.print(ts);
   char buf[200];
   va_list args;
   va_start(args, fmt);
   vsnprintf(buf, sizeof(buf), fmt, args);
   va_end(args);
-  Serial.println(buf);
-  serialBufWrite(buf);
+
+  char line[232];
+  snprintf(line, sizeof(line), "%s%s\n", ts, buf);
+
+  Serial.print(line);
+  serialBufWrite(line);
 #endif
 }
 
@@ -189,6 +203,7 @@ static bool shouldSleep() {
   if (wifiActive) return false;
   if (uploadRequested) return false;
   if (serverIsRunning()) return false;
+  if (maintRequest) return false;
   if (millis() - bootMillis < 5000UL) return false;
 
   // V4.73: BLE no longer blocks sleep indefinitely. A connection
@@ -758,37 +773,41 @@ void loop() {
     doStateWork(now, wasWake);
   }
 
-  // V4.75: maintenance mode lifecycle.
-  //   Enter: BLE set maintenanceModeRequested. ACK already sent in callback.
-  //          Bring WiFi up, start HTTP server, record start time.
-  //   Exit:  /maint/off hit, or MAINT_MAX_MS elapsed. Stop server, WiFi down.
-  {
-    extern volatile bool maintenanceModeRequested;
-
-    if (maintenanceModeRequested && !serverIsRunning()) {
-      maintenanceModeRequested = false;
-      tprint("[MAINT] entering");
-      if (wifiBringUp()) {
-        serverSetup();
-        maintStartMs = millis();
-        tprint("[MAINT] active, cap %lus", MAINT_MAX_MS / 1000UL);
-      } else {
-        tprint("[MAINT] wifi bring-up FAILED");
-        wifiBringDown();
+  // V4.76: maintenance mode. Enter on next wake after BLE request.
+  //   Exit: /maint/off hit, or MAINT_MAX_MS elapsed.
+  if (maintRequest && !serverIsRunning()) {
+    tprint("[MAINT] ====== ENTERING MAINTENANCE MODE ======");
+    wifiActive = true;
+    wakeLoggerPause();
+    if (wifiBringUp()) {
+      serverSetup();
+      maintStartMs = millis();
+      tprint("[MAINT] active, cap %lus", MAINT_MAX_MS / 1000UL);
+      while (serverIsRunning()) {
+        serverLoop();
+        delay(20);
+        if (maintOffRequested) {
+          tprint("[MAINT] exiting (user)");
+          break;
+        }
+        if ((millis() - maintStartMs) > MAINT_MAX_MS) {
+          tprint("[MAINT] exiting (timeout)");
+          break;
+        }
       }
+      maintOffRequested = false;
+      serverStop();
+      wifiBringDown();
+      wakeLoggerResume();
+      wifiActive = false;
+      tprint("[MAINT] ====== MAINTENANCE ENDED ======");
+    } else {
+      tprint("[MAINT] wifi bring-up FAILED");
+      wifiBringDown();
+      wakeLoggerResume();
+      wifiActive = false;
     }
-
-    if (serverIsRunning()) {
-      serverLoop();
-      bool timedOut = (millis() - maintStartMs) > MAINT_MAX_MS;
-      if (maintOffRequested || timedOut) {
-        tprint("[MAINT] exiting (%s)",
-               timedOut ? "timeout" : "user");
-        maintOffRequested = false;
-        serverStop();
-        wifiBringDown();
-      }
-    }
+    maintRequest = false;
   }
 
   // V4.72: hard max-awake timeout. Any stuck state that keeps us awake

@@ -694,18 +694,25 @@ void loop() {
   }
 
   // V4.57: engine-start capture - 100ms wake rows for 5s after engine start
+  // V4.61: use a fresh millis() value inside the block. The loop-level
+  // 'now' is a stale snapshot taken before updateStateTransitions() ran,
+  // so now - engineStartCaptureMs can wrap around (engineStartCaptureMs
+  // is set later in the same iteration, after a LittleFS write, making it
+  // larger than the stale 'now'). That wraparound caused the >= 5000UL
+  // check to fire on the first iteration, killing the capture window.
   if (engineStartCapture) {
     static unsigned long lastActiveLog = 0;
-    if (now - lastActiveLog > 500) {
-      lastActiveLog = now;
+    unsigned long captureNow = millis();
+    if (captureNow - lastActiveLog > 500) {
+      lastActiveLog = captureNow;
       tprint("[CAPTURE] active flag=%d elapsed=%lu",
              (int)engineStartCapture,
-             (unsigned long)(now - engineStartCaptureMs));
+             (unsigned long)(captureNow - engineStartCaptureMs));
     }
-    if (now - engineStartCaptureMs >= 5000UL) {
+    if (captureNow - engineStartCaptureMs >= 5000UL) {
       engineStartCapture = false;
-    } else if (now - lastCaptureRow >= 100UL) {
-      lastCaptureRow = now;
+    } else if (captureNow - lastCaptureRow >= 100UL) {
+      lastCaptureRow = captureNow;
       wakeLoggerForceWrite(1);
     }
   }

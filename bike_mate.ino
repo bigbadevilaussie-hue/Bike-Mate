@@ -429,6 +429,11 @@ void doStateWork(unsigned long now, bool wasWake) {
 
   // ---- OTA (priority) ----
   if (otaRequest) {
+    // V4.71: close any open ride cleanly before OTA reboots the device
+    if (isLogging) {
+      tprint("[OTA] closing ride before update");
+      closeRideLog();
+    }
     tprint("[OTA] ====== ENTERING OTA MODE ======");
     wifiActive = true;
     wakeLoggerPause();
@@ -543,13 +548,7 @@ void setup() {
     prefs.begin("ota", false);
     prefs.putBool("pending", false);
     prefs.end();
-    tprint("[OTA] sending confirmation email");
-    bool mailOk = sendMail("Bike-Mate: OTA complete",
-                           String("Firmware updated successfully.\n\n") +
-                           "New version: " + BIKE_MATE_VERSION + "\n" +
-                           "Device: bike-mate\n");
-    if (mailOk) tprint("[OTA] confirmation email sent");
-    else        tprint("[OTA] confirmation email FAILED");
+    tprint("[OTA] pending flag cleared, version now V%s", BIKE_MATE_VERSION);
   }
 
   {

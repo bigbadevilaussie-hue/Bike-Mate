@@ -13,7 +13,7 @@
 // V4.70: dead defines removed, section headers added.
 // Deploy-specific values (UPLOAD_URL, SMTP_*) still live here pending move to Deploy.h.
 
-#define BIKE_MATE_VERSION "4.70"
+#define BIKE_MATE_VERSION "4.71"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
@@ -146,7 +146,7 @@ struct WakeSample {
 #define WIFI_ATTEMPT_TIMEOUT_MS 30000UL
 
 // ---- Mail module ----
-#define MAIL_ENABLED 0
+#define MAIL_ENABLED 1   // V4.71: enabled; bench gate is in sendMail()
 
 
 

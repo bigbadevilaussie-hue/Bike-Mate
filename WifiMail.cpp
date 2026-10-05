@@ -76,6 +76,10 @@ bool sendMail(const String& subject, const String& body) {
   tprint("[MAIL] disabled by MAIL_ENABLED=0");
   return false;
 #endif
+#if BENCH_MODE
+  tprint("[MAIL] disabled on bench (BENCH_MODE=1)");
+  return false;
+#endif
 
   // Rate limit
   uint32_t now = currentEpoch();
@@ -179,28 +183,4 @@ bool sendLowBatteryAlert(float voltage, float threshold) {
   return sendMail(subject, body);
 }
 
-bool sendRideSummary(uint32_t startEpoch, uint32_t durationSecs,
-                     float preVolt, float avgVolt, float minVolt, float maxVolt,
-                     int8_t minTemp, int8_t maxTemp, uint8_t flags) {
-  String subject = "Bike-Mate: Ride " + String(durationSecs / 60) + "min "
-                 + String(preVolt, 2) + "V";
-  String body;
-  body += "BIKE-MATE RIDE SUMMARY\r\n\r\n";
-  body += "Duration:  " + String(durationSecs / 60) + " min\r\n\r\n";
-  body += "Voltage:\r\n";
-  body += "  Pre-ride: " + String(preVolt, 2) + " V\r\n";
-  body += "  Min:      " + String(minVolt, 2) + " V\r\n";
-  body += "  Max:      " + String(maxVolt, 2) + " V\r\n";
-  body += "  Avg:      " + String(avgVolt, 2) + " V\r\n\r\n";
-  body += "Temperature:\r\n";
-  body += "  Min: " + String(minTemp) + " C\r\n";
-  body += "  Max: " + String(maxTemp) + " C\r\n\r\n";
-  body += "Flags: 0x" + String(flags, HEX) + "\r\n";
-  body += "\r\n--\r\nBike-Mate " + String(BIKE_MATE_VERSION) + "\r\n";
-  return sendMail(subject, body);
-}
-
-bool sendWeeklySummary(const String& text) {
-  String subject = "Bike-Mate: Weekly summary";
-  return sendMail(subject, text);
-}
+// V4.71: sendRideSummary and sendWeeklySummary removed (dead code)

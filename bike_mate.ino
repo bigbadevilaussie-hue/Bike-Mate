@@ -206,9 +206,14 @@ static bool shouldSleep() {
   if (maintRequest) return false;
   if (millis() - bootMillis < 5000UL) return false;
 
-  // V4.73: BLE no longer blocks sleep indefinitely. A connection
-  // longer than BLE_MAX_CONN_MS is force-disconnected in loop().
-  if (isActuallyConnected()) return false;
+  // V4.84: an idle BLE connection does not block sleep. Only recent
+  // incoming writes (GUI -> device) count as activity. The Mac GUI
+  // holds the link open permanently, so the old unconditional gate
+  // pinned the bike awake until the 180 s max-awake guard fired.
+  if (isActuallyConnected() &&
+      (millis() - lastBleWriteMs) < BLE_IDLE_GRACE_MS) {
+    return false;
+  }
 
   if (millis() - lastDisconnectMillis < 3000UL) return false;
 

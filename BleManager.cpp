@@ -27,6 +27,7 @@ BLECharacteristic* pRequestChar = nullptr;
 BLECharacteristic* pOtaChar = nullptr;
 BLECharacteristic* pSettingsChar = nullptr;
 volatile bool maintenanceModeRequested = false;
+volatile unsigned long lastBleWriteMs = 0;   // V4.84: last incoming BLE write
 
 bool bleInited = false;
 
@@ -288,7 +289,7 @@ class ServerCallbacks : public BLEServerCallbacks {
 
 class TimeCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* c) {
-
+    lastBleWriteMs = millis();
     std::string v = c->getValue();
 
     if (v.length() < 4) return;
@@ -313,7 +314,7 @@ class TimeCallbacks : public BLECharacteristicCallbacks {
 
 class RequestCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* c) {
-
+    lastBleWriteMs = millis();
     std::string v = c->getValue();
 
     if (v.length() < 4) return;
@@ -329,7 +330,7 @@ class RequestCallbacks : public BLECharacteristicCallbacks {
 
 class OtaCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* c) {
-
+    lastBleWriteMs = millis();
     std::string v = c->getValue();
 
     // Settings read: single byte 0x01 -> notify JSON on same characteristic
@@ -537,6 +538,7 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
 
 class SettingsCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* c) override {
+    lastBleWriteMs = millis();
     std::string v = c->getValue();
     if (v.length() == 0) return;
 

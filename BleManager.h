@@ -20,6 +20,7 @@ extern volatile bool maintenanceModeRequested;
 
 extern bool bleInited;
 extern volatile bool pushRequested;
+extern volatile unsigned long lastBleWriteMs;   // V4.84
 extern volatile bool pushInProgress;
 extern volatile uint32_t pushGuiEpoch;
 

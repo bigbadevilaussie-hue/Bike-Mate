@@ -95,6 +95,17 @@ Ranked by verifiability, not by AI consensus. Categories:
 
 ---
 
+## Tier 2.5 — Board revision items (do on perfboard, not breadboard)
+
+### Divider swap — 470k / 47k
+- **Cat:** A (known values, known math)
+- **Effort:** 2 resistors, next board revision
+- **What:** Current divider is 98.8k + 9.98k = 108.78 kΩ → 116 µA continuous on 12 V. Swap to 470k + 47k = 517 kΩ → 24 µA. 80% reduction. Saves ~62 mAh over 4 weeks.
+- **Why not 1M/100k:** same output voltage (11:1 ratio), but 11× over the ADC's recommended source impedance. The 100 nF cap keeps it stable, but calibration gets harder for an 8 mAh gain over 4 weeks. Not worth it.
+- **Verify after swap:** PSU at 12.0 / 12.6 / 13.8 V, DMM on divider output, confirm reading matches firmware within ±0.1 V. Recalibrate BATTERY_SLOPE if needed.
+- **Sequencing:** Do NOT touch the divider until MP1584EN is fitted and PANIC sleep is fixed. The divider is the last 3–4% of the budget. Buck and firmware first.
+- **Done when:** 470k/47k fitted, calibrated, and 4-week average includes ~24 µA divider contribution in BENCH.md.
+
 ## Tier 3 — Depends on usage, verify first
 
 ### 13. PANIC sends email

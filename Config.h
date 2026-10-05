@@ -10,9 +10,10 @@
 #endif
 
 // BIKE-MATE — configuration
-// V3.64: BENCH_MODE 1, UPLOAD_ENABLED 1, new Apps Script deployment
+// V4.70: dead defines removed, section headers added.
+// Deploy-specific values (UPLOAD_URL, SMTP_*) still live here pending move to Deploy.h.
 
-#define BIKE_MATE_VERSION "4.61"
+#define BIKE_MATE_VERSION "4.70"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
@@ -35,12 +36,6 @@
 #define GPS_RX_PIN 2
 #define GPS_TX_PIN 21
 
-// ---- GPS stub ----
-#define GPS_STUB_ENABLED 0
-#define GPS_STUB_LAT    (-27.420264910682718)
-#define GPS_STUB_LON    ( 152.45246261005468)
-#define GPS_STUB_SATS   8
-
 // ---- BLE ----
 #define DEVICE_NAME "Bike-Mate-2"
 #define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
@@ -52,16 +47,13 @@
 #define SETTINGS_UUID "beb5483e-36e1-4688-b7f5-ea07361b26b0"
 
 // ---- Logging ----
+// NOTE: LOG_INTERVAL_SEC is aspirational — actual ride cadence is TICK_MS.
+// See audit #17. Decision pending: 5s or 30s?
 #define LOG_INTERVAL_SEC 5
-#define WAKE_LOG_INTERVAL_SEC 300
-#define MAX_ROWS_PER_RIDE 1024
 
-#define NVS_NAMESPACE_SYSTEM "system"
-#define NVS_NAMESPACE_MAIL   "mail"
-#define NVS_NAMESPACE_OTA    "ota"
+// ---- NVS namespaces ----
+// Only UPLOAD is currently referenced. Others reserved for future use.
 #define NVS_NAMESPACE_UPLOAD "upload"
-
-#define RIDE_FILE_PREFIX    "/ride_"
 
 // ---- Wake intervals ----
 #define BENCH_MODE 1
@@ -144,15 +136,11 @@ struct WakeSample {
 #define V_RESTING_MAX 13.2
 
 // ---- ADC ----
-#define R_TOP 100000.0
-#define R_BOTTOM 10000.0
-#define DIVIDER_RATIO 10.771f
+// LIVE: ADC_SAMPLES is used in Sensors.cpp NTC averaging.
+// DEAD (removed V4.70): R_TOP, R_BOTTOM, DIVIDER_RATIO, ADC_SLOPE,
+// ADC_INTERCEPT, ADC_JUMP_LIMIT, V_PLAUSIBLE_MIN, V_PLAUSIBLE_MAX.
+// The live battery calibration is BATTERY_SLOPE in Sensors.cpp.
 #define ADC_SAMPLES 5
-#define ADC_JUMP_LIMIT 3
-#define V_PLAUSIBLE_MIN 8.0
-#define V_PLAUSIBLE_MAX 20.0
-#define ADC_SLOPE 0.00073643f
-#define ADC_INTERCEPT (-0.01602f)
 
 // ---- Unified WiFi bring-up ----
 #define WIFI_ATTEMPT_TIMEOUT_MS 30000UL
@@ -169,8 +157,10 @@ struct WakeSample {
 #define WARN_RECOVER_VOLTAGE    12.70
 #define LOW_VOLT_LOOPS_REQUIRED 2
 #define MAIL_RATE_LIMIT_SEC     3600
-#define MAIL_FALLBACK_DAYS      7
 #define MAIL_FAIL_BACKOFF       3
+#define MAIL_FALLBACK_DAYS      7
+// NOTE: audit #23 — _mailFailCount has no decay; backoff self-locks after 3 fails.
+// TODO #9. (MAIL_FALLBACK_DAYS is the attempted mitigation — see WifiMail.cpp:96.)
 
 // ---- OTA module ----
 #define OTA_ENABLED       1

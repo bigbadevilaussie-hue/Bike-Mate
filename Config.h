@@ -13,7 +13,7 @@
 // V4.70: dead defines removed, section headers added.
 // Deploy-specific values (UPLOAD_URL, SMTP_*) still live here pending move to Deploy.h.
 
-#define BIKE_MATE_VERSION "4.71"
+#define BIKE_MATE_VERSION "4.72"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
@@ -62,6 +62,7 @@
 #define WAKE_NIGHT_MS   600000UL
 #define NIGHT_START_HOUR   22
 #define NIGHT_END_HOUR      4
+#define MAX_AWAKE_MS    180000UL   // V4.72: 180 s hard max-awake, OTA exempt
 
 // ---- Structs ----
 struct RideRow {

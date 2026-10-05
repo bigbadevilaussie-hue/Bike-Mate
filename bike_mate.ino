@@ -173,7 +173,9 @@ const char* currentStateString() {
 }
 
 static bool shouldSleep() {
-  bool base = !inPanic && !engineWasRunning && !accState &&
+  // V4.72: PANIC is now sleep-eligible. PANIC wakes every scheduled
+  // interval, alarms, mails, and returns to sleep. No death spiral.
+  bool base = !engineWasRunning && !accState &&
               !isCountingDown && !isArmingCountdown && !isLogging &&
               !alarmSequenceActive && !lowBattBeepActive;
   if (!base) return false;
@@ -383,13 +385,12 @@ void doStateWork(unsigned long now, bool wasWake) {
       tprint("[STATE] PANIC enter %.2f after %d wakes", V, required);
       wakeLoggerForceWrite();
 
-      if (!lowBattMailLatched) {
-        if (sendLowBatteryAlert(V, V_PANIC_ENTER)) {
-          lowBattMailLatched = true;
-          tprint("[MAIL] PANIC alert sent %.2f", V);
-        } else {
-          tprint("[MAIL] PANIC send failed");
-        }
+      // V4.72: PANIC mail attempts on every wake. Latches bypassed.
+      // The wake interval is the natural throttle.
+      if (sendLowBatteryAlert(V, V_PANIC_ENTER)) {
+        tprint("[MAIL] PANIC alert sent %.2f", V);
+      } else {
+        tprint("[MAIL] PANIC send failed");
       }
     } else {
       tprint("[PANIC] latch=%d/%d V=%.2f", panicLatchCount, required, V);
@@ -398,14 +399,15 @@ void doStateWork(unsigned long now, bool wasWake) {
     tprint("[PANIC] already inPanic V=%.2f", V);
   }
 
+  // V4.72: beep once per PANIC wake. Device is awake for only a few
+  // seconds, so this fires on every wake and the beep sequence plays
+  // out before sleep. No 2-minute gate needed.
   if (inPanic && !lowBattBeepActive) {
-    if (now - lastPanicBeep >= 120000UL) {
-      lastPanicBeep = now;
-      lowBattBeepActive = true;
-      lowBattBeepStep = 0;
-      lowBattBeepRemaining = 5;
-      lowBattBeepTimer = now;
-    }
+    lowBattBeepActive = true;
+    lowBattBeepStep = 0;
+    lowBattBeepRemaining = 5;
+    lowBattBeepTimer = now;
+    tprint("[PANIC] beep");
   }
 
   wakeLoggerSetLocation(gpsLat_x1e7(), gpsLon_x1e7(), gpsSats());
@@ -721,6 +723,15 @@ void loop() {
     firstTick = false;
     lastTick = now;
     doStateWork(now, wasWake);
+  }
+
+  // V4.72: hard max-awake timeout. Any stuck state that keeps us awake
+  // past MAX_AWAKE_MS gets force-slept. OTA is exempt — force-sleeping
+  // mid-flash bricks the firmware, worse than staying awake.
+  if (!otaRequest && (millis() - bootMillis) > MAX_AWAKE_MS) {
+    tprint("[GUARD] max-awake timeout (%lus), forcing sleep",
+           (unsigned long)((millis() - bootMillis) / 1000UL));
+    goToSleep();
   }
 
   if (shouldSleep()) {

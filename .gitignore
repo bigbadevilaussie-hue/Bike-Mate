@@ -4,3 +4,5 @@ __pycache__/
 *.bak
 bikemate.py.new
 bikemate.py.bak
+Config.local.h
+build/

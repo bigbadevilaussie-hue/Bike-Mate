@@ -13,7 +13,7 @@
 // V4.70: dead defines removed, section headers added.
 // Deploy-specific values (UPLOAD_URL, SMTP_*) still live here pending move to Deploy.h.
 
-#define BIKE_MATE_VERSION "5.01"
+#define BIKE_MATE_VERSION "5.03"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
@@ -133,10 +133,12 @@ struct WakeSample {
 #define SPLASH_MS 3000
 
 // ---- Voltage thresholds ----
-#define V_PANIC_ENTER 12.2
-#define V_PANIC_EXIT 12.4
-
-#define V_RESTING_MIN 12.4
+// V5.02: all voltage thresholds are now runtime settings in the
+// bikeset NVS namespace. See Settings.h for the schema.
+//   RUN MODE:     runningEnter, runningExit, runUnder, runOver
+//   MONITOR MODE: monitorNormal, monitorWarning, monitorPanic
+// V_RESTING_MAX remains a compile-time constant (tracking window
+// ceiling — no user need to tune).
 #define V_RESTING_MAX 13.2
 
 // ---- ADC ----
@@ -157,8 +159,9 @@ struct WakeSample {
 #define SMTP_HOST        "smtp.gmail.com"
 #define SMTP_PORT        465
 
-#define WARN_EMAIL_VOLTAGE      12.50
-#define WARN_RECOVER_VOLTAGE    12.70
+// V5.02: WARN_EMAIL_VOLTAGE / WARN_RECOVER_VOLTAGE now settings.
+// Recovery is derived: warning + 200 mV.
+#define WARN_RECOVER_GAP_MV     200
 #define LOW_VOLT_LOOPS_REQUIRED 2
 #define MAIL_RATE_LIMIT_SEC     3600
 #define MAIL_FAIL_BACKOFF       3

@@ -18,7 +18,7 @@ from datetime import datetime
 from tkinter import messagebox
 from bleak import BleakScanner, BleakClient
 
-GUI_VERSION = "4.24"
+GUI_VERSION = "4.25"
 
 # Maintenance mode state. "OFF" | "PENDING" | "ON"
 # Firmware doesn't implement the command yet, so PENDING will
@@ -1357,9 +1357,10 @@ class App:
         dlg.title("Bike-Mate Settings")
         dlg.configure(bg=BG)
         dlg.resizable(False, False)
-        tk.Label(dlg, text="🔋 VOLTAGE", bg=BG, fg=BLUE,
-                 font=("Helvetica", 12, "bold")).pack(pady=(16, 6), padx=20, anchor="w")
         fields = {}
+        def section(title):
+            tk.Label(dlg, text=title, bg=BG, fg=BLUE,
+                     font=("Helvetica", 12, "bold")).pack(pady=(16, 6), padx=20, anchor="w")
         def add_row(label, key, value, unit):
             row = tk.Frame(dlg, bg=BG); row.pack(fill="x", padx=20, pady=4)
             tk.Label(row, text=label, bg=BG, fg=FG, width=20, anchor="w",
@@ -1369,18 +1370,49 @@ class App:
             tk.Label(row, text=unit, bg=BG, fg=MUTED, width=4, anchor="w",
                      font=("Helvetica", 11)).pack(side="left")
             fields[key] = e
-        v = current.get("voltage", {})
-        add_row("Running enter", "running_enter", v.get("running_enter", 13.8), "V")
-        add_row("Running exit",  "running_exit",  v.get("running_exit",  13.0), "V")
-        add_row("Under-run",     "under_run",     v.get("under_run",     13.8), "V")
+        # V5.03: firmware sends compact keys now: {"r":{...},"m":{...}}
+        r = current.get("r", current.get("run", {}))
+        m = current.get("m", current.get("monitor", {}))
+        # map compact keys to internal names
+        r = {
+            "running_enter": r.get("on",  r.get("running_enter", 13.8)),
+            "running_exit":  r.get("off", r.get("running_exit",  13.0)),
+            "run_under":     r.get("un",  r.get("run_under",     13.0)),
+            "run_over":      r.get("ov",  r.get("run_over",      14.8)),
+        }
+        m = {
+            "normal":  m.get("nrm", m.get("normal",  12.5)),
+            "warning": m.get("wrn", m.get("warning", 12.4)),
+            "panic":   m.get("pan", m.get("panic",   12.2)),
+        }
+
+        section("🚀 RUN MODE")
+        add_row("Engine start",  "running_enter", r.get("running_enter", 13.8), "V")
+        add_row("Engine stop",   "running_exit",  r.get("running_exit",  13.0), "V")
+        add_row("Under (charge)", "run_under",    r.get("run_under",     13.0), "V")
+        add_row("Over (reg)",    "run_over",      r.get("run_over",      14.8), "V")
+
+        section("🛌 MONITOR MODE")
+        add_row("Normal floor",  "normal",  m.get("normal",  12.5), "V")
+        add_row("Warning",       "warning", m.get("warning", 12.4), "V")
+        add_row("Panic",         "panic",   m.get("panic",   12.2), "V")
+
         btn_row = tk.Frame(dlg, bg=BG); btn_row.pack(pady=20)
         def apply():
             try:
-                payload = {"voltage": {
-                    "running_enter": float(fields["running_enter"].get()),
-                    "running_exit":  float(fields["running_exit"].get()),
-                    "under_run":     float(fields["under_run"].get()),
-                }}
+                payload = {
+                    "r": {
+                        "on":  float(fields["running_enter"].get()),
+                        "off": float(fields["running_exit"].get()),
+                        "un":  float(fields["run_under"].get()),
+                        "ov":  float(fields["run_over"].get()),
+                    },
+                    "m": {
+                        "nrm": float(fields["normal"].get()),
+                        "wrn": float(fields["warning"].get()),
+                        "pan": float(fields["panic"].get()),
+                    },
+                }
             except ValueError:
                 messagebox.showerror("Settings", "Invalid number"); return
             js = json.dumps(payload, separators=(",", ":"))

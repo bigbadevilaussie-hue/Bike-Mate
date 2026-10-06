@@ -108,8 +108,8 @@ void writeRideRow() {
   rideSumV += v100;
   if (t < rideMinT) rideMinT = t;
   if (t > rideMaxT) rideMaxT = t;
-  if (latestBatteryVoltage < (config.underRun_mv / 1000.0f)) rideUnderSecs += LOG_INTERVAL_SEC;
-  if (latestBatteryVoltage > TH_OVER_VOLT) rideOverSecs += LOG_INTERVAL_SEC;
+  if (latestBatteryVoltage < (config.runUnder_mv / 1000.0f)) rideUnderSecs += LOG_INTERVAL_SEC;
+  if (latestBatteryVoltage > (config.runOver_mv / 1000.0f)) rideOverSecs += LOG_INTERVAL_SEC;
 
   currentRowCount++;
   lastLogEpoch = epoch;

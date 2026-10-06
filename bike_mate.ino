@@ -263,13 +263,13 @@ void updateStateTransitions(unsigned long now) {
   float V = latestBatteryVoltage;
 
   if (!engineWasRunning && !isCountingDown && !inPanic &&
-      V >= V_RESTING_MIN && V <= V_RESTING_MAX) {
+      V >= (config.monitorNormal_mv / 1000.0f) && V <= V_RESTING_MAX) {
     lastRestingVoltage = V;
   }
 
   // V4.51: PANIC enter moved to doStateWork() - only checked on wake.
   // PANIC exit still here for fast recovery.
-  if (inPanic && V > V_PANIC_EXIT) {
+  if (inPanic && V > ((config.monitorPanic_mv + WARN_RECOVER_GAP_MV) / 1000.0f)) {
     inPanic = false;
     panicLatchCount = 0;
     tprint("[STATE] PANIC exit %.2f", V);
@@ -278,7 +278,10 @@ void updateStateTransitions(unsigned long now) {
   bool atRest = !engineWasRunning && !isCountingDown && !accState &&
                 !inPanic && !isArmingCountdown;
 
-  if (atRest && V < WARN_EMAIL_VOLTAGE && !lowBattMailLatched) {
+  float warnEmailV = config.monitorWarning_mv / 1000.0f;
+  float warnRecoverV = (config.monitorWarning_mv + WARN_RECOVER_GAP_MV) / 1000.0f;
+
+  if (atRest && V < warnEmailV && !lowBattMailLatched) {
     lowVoltLoops++;
     if (lowVoltLoops >= LOW_VOLT_LOOPS_REQUIRED) {
       // V4.51: latch on any attempt - success or failure. Otherwise a
@@ -286,7 +289,7 @@ void updateStateTransitions(unsigned long now) {
       // every loop iteration.
       lowBattMailLatched = true;
       lowVoltLoops = 0;
-      if (sendLowBatteryAlert(V, WARN_EMAIL_VOLTAGE)) {
+      if (sendLowBatteryAlert(V, warnEmailV)) {
         tprint("[MAIL] low batt alert sent %.2f", V);
       } else {
         tprint("[MAIL] low batt alert attempted (send failed)");
@@ -294,14 +297,14 @@ void updateStateTransitions(unsigned long now) {
     } else {
       tprint_verbose("[MAIL] low volt loop %d/%d", lowVoltLoops, LOW_VOLT_LOOPS_REQUIRED);
     }
-  } else if (V >= WARN_EMAIL_VOLTAGE || !atRest) {
+  } else if (V >= warnEmailV || !atRest) {
     if (lowVoltLoops > 0) {
       lowVoltLoops = 0;
       tprint_verbose("[MAIL] low volt loops reset");
     }
   }
 
-  if (V >= WARN_RECOVER_VOLTAGE && lowBattMailLatched) {
+  if (V >= warnRecoverV && lowBattMailLatched) {
     lowBattMailLatched = false;
     tprint("[MAIL] latch cleared (recovered %.2f)", V);
   }
@@ -392,7 +395,8 @@ void doStateWork(unsigned long now, bool wasWake) {
     bool isNight = strcmp(currentWakeMode(), "NIGHT") == 0;
     uint8_t required = isNight ? 4 : 3;
 
-    if (V < V_PANIC_EXIT) {
+    float panicExitV = (config.monitorPanic_mv + WARN_RECOVER_GAP_MV) / 1000.0f;
+    if (V < panicExitV) {
       panicLatchCount++;
     } else {
       panicLatchCount = 0;
@@ -412,7 +416,7 @@ void doStateWork(unsigned long now, bool wasWake) {
 
       // V4.72: PANIC mail attempts on every wake. Latches bypassed.
       // The wake interval is the natural throttle.
-      if (sendLowBatteryAlert(V, V_PANIC_ENTER)) {
+      if (sendLowBatteryAlert(V, config.monitorPanic_mv / 1000.0f)) {
         tprint("[MAIL] PANIC alert sent %.2f", V);
       } else {
         tprint("[MAIL] PANIC send failed");

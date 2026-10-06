@@ -16,6 +16,28 @@ def current_theme():
     return THEME_DAY if is_daytime() else THEME_NIGHT
 
 
+def is_bike_daytime():
+    """True if the bike is in its day wake-interval window right now.
+    Uses the firmware's boundaries (22:00-04:00 is night), not the
+    GUI theme boundaries (18:00-06:00 is night)."""
+    hr = datetime.now().hour
+    if BIKE_NIGHT_START_HOUR > BIKE_NIGHT_END_HOUR:
+        return not (hr >= BIKE_NIGHT_START_HOUR or hr < BIKE_NIGHT_END_HOUR)
+    return not (BIKE_NIGHT_START_HOUR <= hr < BIKE_NIGHT_END_HOUR)
+
+
+def expected_wake_seconds():
+    """How long until the bike's next wake in field mode.
+    Day: 300 s. Night: 600 s. Uses the firmware's boundaries."""
+    return 300 if is_bike_daytime() else 600
+
+
+def pending_timeout_seconds():
+    """How long the GUI waits for the bike to enter maint.
+    Wake interval + 2 min margin."""
+    return expected_wake_seconds() + 120
+
+
 def get_lan_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:

@@ -80,6 +80,12 @@ THEME_NIGHT = {
 DAY_START_HOUR = 6
 DAY_END_HOUR = 18
 
+# Firmware's wake-interval boundaries (Config.h NIGHT_START_HOUR/NIGHT_END_HOUR).
+# Different from theme boundaries — the bike switches to slow wakes at 22:00,
+# the GUI switches to dark theme at 18:00.
+BIKE_NIGHT_START_HOUR = 22
+BIKE_NIGHT_END_HOUR = 4
+
 # Legacy aliases (night theme) - kept for code paths not yet converted.
 BG, CARD, GRID = THEME_NIGHT["bg"], THEME_NIGHT["card"], THEME_NIGHT["grid"]
 FG, BLUE, GREEN, YELLOW, ORANGE, MUTED = (

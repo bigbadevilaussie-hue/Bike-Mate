@@ -99,8 +99,29 @@ The rules below are non-negotiable. Read them first.
 - External 0.96" SSD1306 128x64 OLED (SDA 6, SCL 9)
 - MF52AT NTC 10k on GPIO 3
 - Voltage divider on GPIO 0
-- GPS not wired
+- GPS wired on bench, getting real fix (10-12 sats indoors)
 - MOSFET ACC rail breadboard only
+- Mini 360 buck on bench — MP1584EN swap pending (5-pack in transit)
+
+### GUI layout
+`bikemate.py` is now a 10-line launcher. The real code lives in the
+`bikemate/` package:
+
+  bikemate/
+    __init__.py
+    config.py     — constants, themes, UUIDs, IPs, timeouts
+    state.py      — mutable globals, deques, locks
+    helpers.py    — small utility funcs, time/emoji helpers
+    weather.py    — weather fetch + background loop
+    widgets.py    — Graph
+    ota.py        — HTTP OTA servers
+    drive.py      — Drive sync + backup + local server
+    ble.py        — BLEWorker
+    reports.py    — BikeReport, LastRideReport, WaitingForRide
+    app.py        — App class (menu, tick, main window)
+
+Edit modules in `bikemate/`, not the launcher. Extraction was a
+marker/strip process — see commit log for the markers pattern.
 
 ### Build
 - Arduino IDE 2.x, ESP32 core 2.0.17
@@ -123,14 +144,43 @@ The rules below are non-negotiable. Read them first.
 
 - Triggered by BLE `{"maint":"on"}` from the GUI.
 - Firmware sets `maintRequest = true` (RTC flag), ACKs, sleeps.
-- On next wake, the maint block in `loop()` brings WiFi up (which stops
-  BLE), starts an HTTP server, enters maint for up to `MAINT_MAX_MS`
-  (15 min). If the wake was maint-bound, BLE is never brought up.
+- On next wake, the maint block in `loop()` brings WiFi up, starts
+  an HTTP server, enters maint for up to `MAINT_MAX_MS` (15 min).
+  If the wake was maint-bound (maintRequest set at setup() time),
+  `bleInit()` is skipped entirely — clean radio for WiFi.
 - During maint: BLE off, WiFi up, serial page live, OTA available via
-  HTTP POST. OLED stays lit. Sensors sampled at 500 ms.
+  HTTP POST. OLED shows MAINT MODE with wifiMessage + countdown.
+  Sensors sampled every 500 ms for engine-start detection.
 - Exit: HTTP `/maint/off`, engine start detected (voltage crosses
   `runningEnter_mv`), or 15-min timeout.
 - See `MAINTENANCE.md` for full detail.
+
+### Clock
+- LAN clock from the Opal router (GL-SFT1200) is primary source.
+  `opalClockSync()` in `WifiManager.cpp` fetches `http://<gateway>/`
+  and reads the Date header. ~150 ms typical.
+- NTP (`configTime()`) is fallback only, fires if the Opal miss.
+- No hard gate. `wifiBringUp()` succeeds even with stale clock.
+- Opal's HTTP server occasionally drops SYNs under admin-UI load
+  (Fan-Mate saw the same on 192.168.8.1:80). Fallback to NTP covers
+  it. NVS clock persistence is planned but not yet done.
+
+### WiFi bring-up
+- `wifiBringUp()` retries twice with a 3 s settle.
+- The C3 in core 2.0.17 fails association intermittently (status=0
+  after 30 s, WL_IDLE_STATUS) when BLE has been live in the same
+  session. Retry masks it.
+- 8.5 dBm TX power is mandatory on this board.
+
+### Settings
+- Seven runtime settings in NVS `bikeset` namespace, split into
+  RUN MODE (runningEnter, runningExit, runUnder, runOver) and
+  MONITOR MODE (monitorNormal, monitorWarning, monitorPanic).
+- Compact JSON keys for BLE MTU: r.on/r.off/r.un/r.ov,
+  m.nrm/m.wrn/m.pan.
+- GUI dialog: two sections, 7 fields.
+- Move to HTTP settings during maint is the next planned change —
+  avoids BLE write race with the 30 s bench sleep.
 
 ### HTTP endpoints (only during maint)
 
@@ -177,11 +227,12 @@ Any change to these must be tested end-to-end on real hardware.
 See `TODO.md` for the full ranked list. Short version:
 
 1. Set `BENCH_MODE 0` before deployment
-2. Fix `readSensors()` early-return
-3. Measure sleep current (MP1584EN swap if needed)
-4. Wire GPS, test outdoors
+2. Fix `readSensors()` early-return (stale voltage on fault)
+3. MP1584EN quiescent measurement — 5-pack in transit, replace Mini 360
+4. GPS wired on bench. Outdoor walk test pending
 5. Complete the switched 12V rail
-6. Field install + 4-week baseline
+6. Move settings to HTTP during maint
+7. Field install + 4-week baseline
 
 ---
 
@@ -189,14 +240,16 @@ See `TODO.md` for the full ranked list. Short version:
 
 - `BENCH_MODE 1` compiled in for dev — do not deploy
 - `readSensors()` early-return leaves stale voltage on fault
-- MP1584EN quiescent current unmeasured
-- GPS not wired
-- WiFi NTP is a hard gate on maint entry — if NTP fails, maint fails
+- MP1584EN quiescent current unmeasured (5-pack in transit)
 - `_mailFailCount` has no decay
 - 302 handled as success without body check
 - GUI maint state doesn't auto-flip to OFF when bike exits via engine-start bail
 - GUI ride pull races service discovery — `[RIDE] pull err: Service Discovery`
 - HTTP OTA percent progress not available (Content-Length stripped)
+- Footer FW version shows v? if connect-time fv notify lands after DATA read
+- Settings write over BLE races 30 s bench sleep — HTTP settings during maint is the fix
+- Opal HTTP server drops SYNs under admin-UI load — NTP fallback covers it
+- Clock not persisted to NVS — cold boot resets to 0 until next sync
 
 ---
 

@@ -12,6 +12,8 @@ from .config import HIST_LEN
 # flips to ON and stays until "off" ACK.
 maintenance_state = "OFF"
 maintenance_lock = threading.RLock()
+maint_pending_since = 0.0
+maint_pending_timeout = 0
 temp_hist = deque([None] * HIST_LEN, maxlen=HIST_LEN)
 volt_hist = deque([None] * HIST_LEN, maxlen=HIST_LEN)
 latest_data = {"v": None, "t": None, "a": 0, "e": 0, "w": 0, "s": "--", "p": 0, "fv": "?"}

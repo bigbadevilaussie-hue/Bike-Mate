@@ -1,4 +1,6 @@
-Config.local.h
-build/
-*.elf
-*.map
+__pycache__/
+*.pyc
+.DS_Store
+*.bak
+bikemate.py.new
+bikemate.py.bak

@@ -474,6 +474,9 @@ class App:
                     seconds=2)
                 return
             state.maintenance_state = "PENDING"
+            state.maint_pending_since = time.time()
+            state.maint_pending_timeout = pending_timeout_seconds()
+        print(f"[MAINT] pending, timeout {state.maint_pending_timeout}s")
         self._send_maint_command("on")
 
     def deactivate_maintenance(self):
@@ -867,8 +870,15 @@ class App:
             if self.maint_lbl.winfo_ismapped():
                 self.maint_lbl.pack_forget()
         elif m == "PENDING":
-            self.maint_lbl.config(text="🔧  MAINTENANCE: PENDING",
-                                  bg="#ff8c00", fg="#000000")
+            # V4.29: show a countdown so the user knows the bike is
+            # asleep, not dead. Day wait: ~7 min. Night wait: ~12 min.
+            elapsed = time.time() - state.maint_pending_since if state.maint_pending_since else 0
+            timeout = state.maint_pending_timeout or 660
+            remaining = max(0, int(timeout - elapsed))
+            mm, ss = divmod(remaining, 60)
+            self.maint_lbl.config(
+                text=f"🔧  MAINT PENDING  {mm}:{ss:02d}  (bike asleep)",
+                bg="#ff8c00", fg="#000000")
             if not self.maint_lbl.winfo_ismapped():
                 self.maint_lbl.pack(pady=(0, 8))
         elif m == "ON":

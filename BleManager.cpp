@@ -5,6 +5,7 @@
 #include "Settings.h"
 
 #include <Preferences.h>
+#include <esp_bt.h>
 #include <LittleFS.h>
 #include <string>
 #include <time.h>
@@ -64,7 +65,22 @@ void bleStop() {
     }
   }
 
-  delay(100);
+  // V4.86: wait for the BT controller to actually go idle before
+  // returning. WiFi bring-up tears down and re-inits the shared radio;
+  // if the BT side is still mid-teardown the WiFi driver never leaves
+  // WL_IDLE_STATUS and association times out. Bounded so a stuck
+  // controller can't pin us here.
+  unsigned long t0 = millis();
+  while (millis() - t0 < 2000UL) {
+    esp_bt_controller_status_t st = esp_bt_controller_get_status();
+    if (st == ESP_BT_CONTROLLER_STATUS_IDLE ||
+        st == ESP_BT_CONTROLLER_STATUS_INITED) {
+      break;
+    }
+    delay(20);
+  }
+
+  delay(200);
 }
 
 void bleStart() {

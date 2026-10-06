@@ -20,6 +20,85 @@ extern uint32_t totalSeconds;
 
 char wifiMessage[24] = "";
 
+static volatile uint32_t wifiLastEvent = 0;
+static volatile uint32_t wifiLastDisconnectReason = 0;
+static volatile int8_t wifiLastDisconnectRssi = 0;
+static volatile uint32_t wifiEventCount = 0;
+
+static void wifiDebugEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
+  wifiLastEvent = (uint32_t)event;
+  wifiEventCount++;
+
+  switch (event) {
+    case ARDUINO_EVENT_WIFI_READY:
+      tprint("[WIFI-EVENT] READY");
+      break;
+
+    case ARDUINO_EVENT_WIFI_STA_START:
+      tprint("[WIFI-EVENT] STA_START");
+      break;
+
+    case ARDUINO_EVENT_WIFI_STA_CONNECTED: {
+      char bssid[18];
+      snprintf(bssid, sizeof(bssid),
+               "%02X:%02X:%02X:%02X:%02X:%02X",
+               info.wifi_sta_connected.bssid[0],
+               info.wifi_sta_connected.bssid[1],
+               info.wifi_sta_connected.bssid[2],
+               info.wifi_sta_connected.bssid[3],
+               info.wifi_sta_connected.bssid[4],
+               info.wifi_sta_connected.bssid[5]);
+
+      tprint("[WIFI-EVENT] STA_CONNECTED bssid=%s channel=%u",
+             bssid,
+             (unsigned)info.wifi_sta_connected.channel);
+      break;
+    }
+
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+      wifiLastDisconnectReason =
+          (uint32_t)info.wifi_sta_disconnected.reason;
+      wifiLastDisconnectRssi =
+          info.wifi_sta_disconnected.rssi;
+
+      tprint("[WIFI-EVENT] STA_DISCONNECTED reason=%u rssi=%d",
+             (unsigned)info.wifi_sta_disconnected.reason,
+             (int)info.wifi_sta_disconnected.rssi);
+
+      tprint("[WIFI-EVENT] disconnect ssid='%.*s'",
+             info.wifi_sta_disconnected.ssid_len,
+             info.wifi_sta_disconnected.ssid);
+
+      tprint("[WIFI-EVENT] bssid=%02X:%02X:%02X:%02X:%02X:%02X",
+             info.wifi_sta_disconnected.bssid[0],
+             info.wifi_sta_disconnected.bssid[1],
+             info.wifi_sta_disconnected.bssid[2],
+             info.wifi_sta_disconnected.bssid[3],
+             info.wifi_sta_disconnected.bssid[4],
+             info.wifi_sta_disconnected.bssid[5]);
+      break;
+
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+      tprint("[WIFI-EVENT] GOT_IP ip=%s mask=%s gw=%s",
+             WiFi.localIP().toString().c_str(),
+             WiFi.subnetMask().toString().c_str(),
+             WiFi.gatewayIP().toString().c_str());
+      break;
+
+    case ARDUINO_EVENT_WIFI_STA_LOST_IP:
+      tprint("[WIFI-EVENT] LOST_IP");
+      break;
+
+    case ARDUINO_EVENT_WIFI_STA_STOP:
+      tprint("[WIFI-EVENT] STA_STOP");
+      break;
+
+    default:
+      tprint("[WIFI-EVENT] event=%d", (int)event);
+      break;
+  }
+}
+
 static void setMsg(const char* m) {
   snprintf(wifiMessage, sizeof(wifiMessage), "%s", m);
 }
@@ -172,13 +251,34 @@ static bool _wifiBringUpOnce(unsigned long perAttemptTimeoutMs) {
     esp_wifi_set_config(WIFI_IF_STA, &wc);
   }
 
+  // Static IP: reserved on Opal for Bike-Mate MAC AC:27:6E:26:0B:90
+  IPAddress staticIP(192, 168, 8, 196);
+  IPAddress gateway(192, 168, 8, 1);
+  IPAddress subnet(255, 255, 255, 0);
+  IPAddress dns(192, 168, 8, 1);
+  WiFi.config(staticIP, gateway, subnet, dns);
+
+  tprint("[WIFI] static IP %s gw=%s",
+         staticIP.toString().c_str(),
+         gateway.toString().c_str());
+
   setMsg("Connecting");
   tprint("[WIFI] connecting to '%s'", WIFI_SSID);
   esp_err_t connErr = esp_wifi_connect();
   tprint("[WIFI] esp_wifi_connect = 0x%08X", connErr);
 
   unsigned long t0 = millis();
+  unsigned long lastIpDiag = 0;
   while (WiFi.status() != WL_CONNECTED) {
+    if (millis() - lastIpDiag >= 2000UL) {
+      lastIpDiag = millis();
+      tprint("[WIFI-IP] status=%d ip=%s mask=%s gw=%s",
+             WiFi.status(),
+             WiFi.localIP().toString().c_str(),
+             WiFi.subnetMask().toString().c_str(),
+             WiFi.gatewayIP().toString().c_str());
+    }
+
     if (millis() - t0 > perAttemptTimeoutMs) {
       tprint("[WIFI] timeout after %lu ms (status=%d)",
              (unsigned long)perAttemptTimeoutMs, WiFi.status());
@@ -224,6 +324,7 @@ static bool _wifiBringUpOnce(unsigned long perAttemptTimeoutMs) {
 // second attempt after a full teardown + settle usually succeeds.
 // Two attempts total, then give up (bike sleeps, retries next wake).
 bool wifiBringUp(unsigned long perAttemptTimeoutMs) {
+  WiFi.onEvent(wifiDebugEvent);
   for (int attempt = 1; attempt <= 2; attempt++) {
     tprint("[WIFI] attempt %d/2", attempt);
     if (_wifiBringUpOnce(perAttemptTimeoutMs)) {

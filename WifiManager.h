@@ -9,6 +9,7 @@
 bool wifiBringUp(unsigned long perAttemptTimeoutMs = WIFI_ATTEMPT_TIMEOUT_MS);
 void wifiBringDown();
 bool wifiPingTest();
+void clockBringUp();
 
 // V3.31: message shown on OLED during WiFi
 extern char wifiMessage[24];

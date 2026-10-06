@@ -103,10 +103,16 @@ static void setMsg(const char* m) {
   snprintf(wifiMessage, sizeof(wifiMessage), "%s", m);
 }
 
+// V5.08: ping the LAN gateway, not the internet. Maint and the
+// clock fetch only need LAN reachability. On a bad-uplink day the
+// internet ping can take 15+ seconds (jitter + TCP retries), which
+// delays maint entry for no reason. LAN round-trip is ~5 ms.
 bool wifiPingTest() {
+  IPAddress gw = WiFi.gatewayIP();
+  if ((uint32_t)gw == 0) return false;
   WiFiClient test;
-  test.setTimeout(5000);
-  bool ok = test.connect("www.google.com", 443);
+  test.setTimeout(2000);
+  bool ok = test.connect(gw, 80);
   test.stop();
   return ok;
 }
@@ -304,17 +310,11 @@ static bool _wifiBringUpOnce(unsigned long perAttemptTimeoutMs) {
   tprint("[WIFI] ping OK");
   setMsg("Ping OK");
 
-  // V4.92: try the LAN router clock first. Opal is always up, even
-  // with no upstream, and its Date header is ~20x faster than NTP.
-  if (opalClockSync()) {
-    tprint("[WIFI] clock from LAN");
-  } else if (ntpSync()) {
-    tprint("[WIFI] clock from NTP");
-  } else {
-    tprint("[WIFI] no clock source, continuing with stale clock");
-    setMsg("Clock stale");
-  }
-
+  // V5.07: clock fetch moved OUT of the critical path. The Opal's
+  // uhttpd can stall for 3+ seconds under LuCI load, and NTP can
+  // take 8+ seconds. Neither is required for the HTTP server to
+  // start. The caller runs clockBringUp() after serverSetup() so
+  // maint entry is not gated on clock acquisition.
   return true;
 }
 
@@ -339,6 +339,21 @@ bool wifiBringUp(unsigned long perAttemptTimeoutMs) {
   }
   tprint("[WIFI] all attempts failed");
   return false;
+}
+
+// V5.07: called after serverSetup(). Not on the maint-entry
+// critical path. Tries Opal LAN first (fast), falls back to NTP.
+// Failure is non-fatal — the bike keeps its RTC value.
+void clockBringUp() {
+  if (opalClockSync()) {
+    tprint("[CLOCK] from LAN");
+    return;
+  }
+  if (ntpSync()) {
+    tprint("[CLOCK] from NTP");
+    return;
+  }
+  tprint("[CLOCK] no source, keeping RTC");
 }
 
 void wifiBringDown() {

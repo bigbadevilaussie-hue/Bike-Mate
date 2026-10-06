@@ -237,6 +237,15 @@ static void goToSleep() {
       delay(50);
     }
   }
+  // V5.07: last-chance check. The BLE callback runs on the BT stack
+  // task, so maintRequest can be set while we're inside the wait
+  // loops above. If it's set now, abort the sleep and return to the
+  // main loop so the maint block runs on this wake, not the next.
+  if (maintRequest) {
+    tprint("[SLEEP] abort - maint requested during sleep prep");
+    return;
+  }
+
   const char* mode = currentWakeMode();
   uint32_t wakeMs = currentWakeMs();
   uint32_t wakeSec = wakeMs / 1000;
@@ -808,6 +817,10 @@ void loop() {
     wakeLoggerPause();
     if (wifiBringUp()) {
       serverSetup();
+      // V5.07: clock fetch is NOT on the critical path. Opal can
+      // stall 3+ s, NTP can take 8+ s. Server starts immediately,
+      // clock syncs after. If it fails, RTC is used and logged.
+      clockBringUp();
       maintStartMs = millis();
       tprint("[MAINT] active, cap %lus", MAINT_MAX_MS / 1000UL);
       bool engineStartBail = false;

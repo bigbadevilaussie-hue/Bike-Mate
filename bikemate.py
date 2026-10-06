@@ -18,7 +18,7 @@ from datetime import datetime
 from tkinter import messagebox
 from bleak import BleakScanner, BleakClient
 
-GUI_VERSION = "4.21"
+GUI_VERSION = "4.24"
 
 # Maintenance mode state. "OFF" | "PENDING" | "ON"
 # Firmware doesn't implement the command yet, so PENDING will
@@ -97,7 +97,9 @@ def current_theme():
 HIST_LEN = 60
 volt_hist = deque([None] * HIST_LEN, maxlen=HIST_LEN)
 temp_hist = deque([None] * HIST_LEN, maxlen=HIST_LEN)
-latest_data = {"v": 12.6, "t": 20.0, "a": 0, "e": 0, "w": 0, "s": "MONITOR", "p": 0, "fv": "?"}
+latest_data = {"v": None, "t": None, "a": 0, "e": 0, "w": 0, "s": "--", "p": 0, "fv": "?"}
+latest_seen_time = 0.0
+BLE_STALE_SEC = 60
 weather = {"temp": 0.0, "desc": "Loading...", "emoji": "⏳", "updated": 0}
 latest_ride = None
 latest_ride_lock = threading.RLock()
@@ -553,6 +555,8 @@ class BLEWorker(threading.Thread):
             try:
                 d = json.loads(payload.decode())
                 latest_data.update(d)
+                global latest_seen_time
+                latest_seen_time = time.time()
                 if "fv" in d:
                     if device_version != d["fv"]:
                         device_version = d["fv"]
@@ -1416,37 +1420,56 @@ class App:
 
     def tick(self):
         d = latest_data
-        v = d.get("v", 12.6); t = d.get("t", 20.0); st = d.get("s", "MONITOR")
-        if v >= 13.8: c, ve = GREEN, "⚡"
-        elif v >= 12.5: c, ve = GREEN, "🔋"
-        elif v >= 12.0: c, ve = YELLOW, "⚠️"
-        else: c, ve = RED, "🆘"
-        self.volt_lbl.config(text=f"{ve} {v:.2f} V", fg=c)
-        em = {"RUNNING": "🟢", "MONITOR": "💤", "SLEEP": "💤", "PANIC": "🚨"}.get(st, "")
-        self.state_lbl.config(text=f"{em} {st}")
-        if st == "RUNNING": self.state_lbl.config(fg=GREEN)
-        elif st == "PANIC": self.state_lbl.config(fg=RED)
-        elif st == "MONITOR": self.state_lbl.config(fg=BLUE)
-        else: self.state_lbl.config(fg=FG)
+        v = d.get("v"); t = d.get("t"); st = d.get("s", "--")
+        stale = (time.time() - latest_seen_time) > BLE_STALE_SEC
+
+        # Voltage — no fake default
+        if v is None or stale:
+            self.volt_lbl.config(text="--.-- V", fg=MUTED)
+        else:
+            if v >= 13.8: c, ve = GREEN, "⚡"
+            elif v >= 12.5: c, ve = GREEN, "🔋"
+            elif v >= 12.0: c, ve = YELLOW, "⚠️"
+            else: c, ve = RED, "🆘"
+            self.volt_lbl.config(text=f"{ve} {v:.2f} V", fg=c)
+
+        # State — NO SIGNAL when stale, otherwise the reported state
+        if stale or st == "--":
+            self.state_lbl.config(text="❓ NO SIGNAL", fg=MUTED)
+        else:
+            em = {"RUNNING": "🟢", "MONITOR": "💤", "SLEEP": "💤", "PANIC": "🚨"}.get(st, "")
+            self.state_lbl.config(text=f"{em} {st}")
+            if st == "RUNNING": self.state_lbl.config(fg=GREEN)
+            elif st == "PANIC": self.state_lbl.config(fg=RED)
+            elif st == "MONITOR": self.state_lbl.config(fg=BLUE)
+            else: self.state_lbl.config(fg=FG)
         with maintenance_lock:
             m = maintenance_state
         if not hasattr(self, "_last_maint_log") or self._last_maint_log != m:
             self._last_maint_log = m
             print(f"[MAINT] tick sees state={m}")
         if m == "OFF":
-            self.maint_lbl.config(text="", bg=CARD, fg=YELLOW)
+            if self.maint_lbl.winfo_ismapped():
+                self.maint_lbl.pack_forget()
         elif m == "PENDING":
             self.maint_lbl.config(text="🔧  MAINTENANCE: PENDING",
                                   bg="#ff8c00", fg="#000000")
+            if not self.maint_lbl.winfo_ismapped():
+                self.maint_lbl.pack(pady=(0, 8))
         elif m == "ON":
             self.maint_lbl.config(text="🔧  MAINTENANCE: ON",
                                   bg="#00c853", fg="#000000")
-        if t < 0: te = "❄️"
-        elif t < 10: te = "🥶"
-        elif t < 20: te = "🌤"
-        elif t < 30: te = "☀️"
-        else: te = "☀️"
-        self.temp_lbl.config(text=f"{te} {t:.1f}C")
+            if not self.maint_lbl.winfo_ismapped():
+                self.maint_lbl.pack(pady=(0, 8))
+        if t is None or stale:
+            self.temp_lbl.config(text="--.-C", fg=MUTED)
+        else:
+            if t < 0: te = "❄️"
+            elif t < 10: te = "🥶"
+            elif t < 20: te = "🌤"
+            elif t < 30: te = "☀️"
+            else: te = "☀️"
+            self.temp_lbl.config(text=f"{te} {t:.1f}C")
         self.time_lbl.config(text=f"{time_emoji()} {local_time_str()}")
         self.acc_lbl.config(text="ON" if d.get("a") else "OFF",
                             fg=GREEN if d.get("a") else MUTED)

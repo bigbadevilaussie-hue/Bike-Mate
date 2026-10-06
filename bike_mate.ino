@@ -832,11 +832,27 @@ void loop() {
   bool inActiveWork = engineWasRunning || accState ||
                       isCountingDown || isArmingCountdown ||
                       isLogging || alarmSequenceActive ||
-                      lowBattBeepActive;
+                      lowBattBeepActive || uploadRequested;
+
+  // V4.85: the guard measures idle time, not total awake time.
+  // When we transition from busy to idle, reset the guard clock so
+  // queued work (upload, mail, whatever) has a fresh window to run.
+  static bool guardWasActive = false;
+  static unsigned long guardIdleSince = 0;
+  if (inActiveWork && !guardWasActive) {
+    guardIdleSince = millis();
+    tprint("[GUARD] activity start, idle timer reset");
+  } else if (!inActiveWork && guardWasActive) {
+    guardIdleSince = millis();
+    tprint("[GUARD] activity ended, idle window begins");
+  }
+  guardWasActive = inActiveWork;
+
   if (!otaRequest && !serverIsRunning() && !inActiveWork &&
-      (millis() - bootMillis) > MAX_AWAKE_MS) {
-    tprint("[GUARD] max-awake timeout (%lus), forcing sleep",
-           (unsigned long)((millis() - bootMillis) / 1000UL));
+      guardIdleSince > 0 &&
+      (millis() - guardIdleSince) > MAX_AWAKE_MS) {
+    tprint("[GUARD] idle timeout (%lus), forcing sleep",
+           (unsigned long)((millis() - guardIdleSince) / 1000UL));
     goToSleep();
   }
 

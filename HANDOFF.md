@@ -1,6 +1,6 @@
 # Bike-Mate — Chat Handoff
 
-Generated: 2026-10-05
+Generated: 2026-10-06
 
 The rules below are non-negotiable. Read them first.
 
@@ -8,32 +8,82 @@ The rules below are non-negotiable. Read them first.
 
 ## RULES (non-negotiable)
 
+### Tone
+
 - Be direct. No lectures. No explaining basic git concepts I already know.
-- When I say "fully commit" or "complete the commit" I mean: `git add -A`,
-  commit, push to origin, and tag if I mentioned a version.
-- Never ask me to re-check things I already pasted output for.
-- Never say "working tree clean" unless I specifically ask for status.
+- Talk like a competent senior dev, not a tutorial.
 - If you're about to explain something obvious, shut up and just give the
   command.
-- Talk like a competent senior dev, not a tutorial.
-
-### Working with Nick's shell
-
-- zsh. Multi-line pastes and long heredocs break. `#` triggers history
-  expansion.
-- Write patches as Python scripts to `/tmp/` and run with `python3
-  /tmp/patch.py`. Never paste heredocs directly.
-- Read the file before patching. Never guess anchors or regex.
-- One patch at a time. Stop after each, test, next.
-- Version bump is part of every patch.
-- Bike-Mate compile requires
-  `:PartitionScheme=min_spiffs` — default partition is too small.
-
-### Behaviour
-
 - No time-of-day references. No "it's late", no "go to bed".
 - No sleep/rest/break suggestions.
 - Nick decides when to work and when to stop.
+
+### Commit semantics
+
+- "fully commit" / "complete the commit" = `git add -A`, commit, push to
+  origin, tag if I mentioned a version.
+- Never say "working tree clean" unless I ask for status.
+- Never ask me to re-check output I already pasted.
+
+### Shell — zsh, and the paste rules exist for a reason
+
+- Multi-line pastes break. `#` triggers history expansion.
+- **Write patches as Python scripts to `/tmp/` and run with `python3
+  /tmp/patch.py`.** Never paste heredocs directly into the shell.
+- Every patch script must exit non-zero on anchor miss. Silent no-ops are
+  worse than crashes.
+- Bike-Mate compile requires
+  `:PartitionScheme=min_spiffs` — the default partition is too small.
+
+### Patch discipline — this is where every session loses time
+
+- **Never patch a file you haven't seen the current contents of.** The
+  version in `bike.txt` or an earlier paste may be several commits stale.
+  If the last paste was more than one exchange ago, ask for the file again.
+- **Never guess anchors or regex.** Read the file. Grep for the exact line.
+  If the anchor misses, that is information — the file changed. Stop and
+  ask for the current contents. Do not guess a looser anchor.
+- **One patch. One file when possible. Test before the next patch.**
+  Chaining three unverified patches means when the fourth fails you don't
+  know which of the first three broke.
+- **Version bump is part of every patch.** The version tells you which
+  binary is on the board. `[BOOT] BIKE-MATE V4.XX` is the ground truth.
+  Never trust a paste that says one version when the log says another.
+- **After every patch, state how to verify it worked.** A specific log
+  line, a specific OLED state, a specific endpoint response. "Compile and
+  flash" is not verification.
+
+### Diagnosing — the biggest time sink
+
+- **Never patch a theory.** Propose it, propose the cheapest way to
+  confirm or refute it, get the answer, then patch.
+- **The git history is the answer more often than the code is.** When
+  something regressed, `git log --oneline -- <file>` and `git log -L` show
+  when. Read that before reasoning about what "should" have changed.
+- **If a subsystem has a comment like "proven 72/72" or "two days and four
+  AIs", do not touch it on a theory.** The comment is a warning that the
+  current shape is load-bearing. Ask why it's that shape first.
+- **Intermittent ≠ broken.** If a subsystem works sometimes, the fix is
+  usually a retry or a pre-condition, not a rewrite. Rewriting working-
+  sometimes code loses the cases that were working.
+
+### Communication
+
+- Answer, then stop. Do not explain three things at once.
+- Do not write nine scripts at once. One file, one patch, one command.
+- The user edits files himself. Ask before assuming he wants automation.
+- "Cages" = cars.
+
+### Session hygiene — the failure modes that repeat
+
+- Do not treat each reply as self-contained. This is one stateful session.
+  Track what's been established, what's been tried, what failed.
+- Before proposing a fix, ask: "have I confirmed the current state, or am
+  I assuming it?"
+- Before saying "this is a bug", ask: "could this be load-bearing for a
+  reason I don't see?"
+- When I paste output, read all of it. The answer is usually in the line
+  you skimmed.
 
 ---
 
@@ -73,12 +123,13 @@ The rules below are non-negotiable. Read them first.
 
 - Triggered by BLE `{"maint":"on"}` from the GUI.
 - Firmware sets `maintRequest = true` (RTC flag), ACKs, sleeps.
-- On next wake, `doStateWork` sees the flag, brings WiFi up (which stops
+- On next wake, the maint block in `loop()` brings WiFi up (which stops
   BLE), starts an HTTP server, enters maint for up to `MAINT_MAX_MS`
-  (15 min).
+  (15 min). If the wake was maint-bound, BLE is never brought up.
 - During maint: BLE off, WiFi up, serial page live, OTA available via
-  HTTP POST.
-- Exit: HTTP `/maint/off`, or 15-min timeout.
+  HTTP POST. OLED stays lit. Sensors sampled at 500 ms.
+- Exit: HTTP `/maint/off`, engine start detected (voltage crosses
+  `runningEnter_mv`), or 15-min timeout.
 - See `MAINTENANCE.md` for full detail.
 
 ### HTTP endpoints (only during maint)
@@ -90,11 +141,15 @@ The rules below are non-negotiable. Read them first.
 | `/maint/off` | POST | Exit maint |
 | `/ota` | POST | Firmware upload |
 | `/version` | GET | Current firmware version |
+| `/ota-progress` | GET | OTA progress JSON (stage, bytes, total, countdown) |
 
 ### OTA
 
 OTA is HTTP, only available in maint mode. GUI POSTs the compiled `.bin`
-to `/ota`. Firmware streams it into `Update.h` and reboots.
+to `/ota?ver=X.YZ`. Firmware streams it into `Update.h` and reboots.
+During the POST the GUI polls `/ota-progress` for stage transitions and
+prints total elapsed time. (Percent-complete not available — the Arduino
+`WebServer` strips `Content-Length` during multipart upload.)
 
 The old BLE-URL OTA path is retired. `OtaManager.cpp` is legacy.
 
@@ -108,7 +163,10 @@ The old BLE-URL OTA path is retired. `OtaManager.cpp` is legacy.
 - **WiFi bring-up** — TX power must stay 8.5 dBm on this board
 - **Upload pipeline** — 302 handling, URL-encoded POST format
 - **Maintenance mode** — flag pattern (BLE set, next-wake consume),
-  `MAINT_MAX_MS` cap, server lifecycle
+  `MAINT_MAX_MS` cap, server lifecycle, skip-BLE-on-maint-wake
+- **WiFi coexistence on C3** — 8.5 dBm TX, BLE teardown before WiFi init,
+  do not touch `wifiBringUp()` sequence blindly. Two days and four AIs
+  went into getting this stable.
 
 Any change to these must be tested end-to-end on real hardware.
 
@@ -120,11 +178,10 @@ See `TODO.md` for the full ranked list. Short version:
 
 1. Set `BENCH_MODE 0` before deployment
 2. Fix `readSensors()` early-return
-3. Raise panic threshold to 12.2V
-4. Measure sleep current (MP1584EN swap if needed)
-5. Wire GPS, test outdoors
-6. Complete the switched 12V rail
-7. Field install + 4-week baseline
+3. Measure sleep current (MP1584EN swap if needed)
+4. Wire GPS, test outdoors
+5. Complete the switched 12V rail
+6. Field install + 4-week baseline
 
 ---
 
@@ -132,12 +189,14 @@ See `TODO.md` for the full ranked list. Short version:
 
 - `BENCH_MODE 1` compiled in for dev — do not deploy
 - `readSensors()` early-return leaves stale voltage on fault
-- `V_PANIC_ENTER 12.0` below stated crank floor 12.2V
 - MP1584EN quiescent current unmeasured
 - GPS not wired
 - WiFi NTP is a hard gate on maint entry — if NTP fails, maint fails
 - `_mailFailCount` has no decay
 - 302 handled as success without body check
+- GUI maint state doesn't auto-flip to OFF when bike exits via engine-start bail
+- GUI ride pull races service discovery — `[RIDE] pull err: Service Discovery`
+- HTTP OTA percent progress not available (Content-Length stripped)
 
 ---
 

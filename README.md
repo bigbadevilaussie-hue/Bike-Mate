@@ -88,6 +88,7 @@ external pull-downs or large capacitors to this line.
 | `/maint/off` | POST | Exit maintenance mode |
 | `/ota` | POST | Firmware upload (multipart) |
 | `/version` | GET | Current BIKE_MATE_VERSION as text |
+| `/ota-progress` | GET | OTA progress JSON (stage, bytes, total, countdown) |
 
 ---
 
@@ -105,11 +106,22 @@ Quick version:
   the flag triggers WiFi + HTTP server.
 - **Exit:** click **End Maintenance** on the serial page, or GUI menu →
   Deactivate. Firmware POSTs `/maint/off` to itself, tears WiFi down, sleeps.
+  Also exits early if the engine starts (voltage crosses `runningEnter_mv`).
 - **Safety cap:** `MAINT_MAX_MS` (15 min) — firmware force-exits maint and
   sleeps even if nobody tells it to.
+- **OLED:** stays lit during maint, shows `MAINT / MODE / <wifi state> / Ns left`.
+  During OTA shows `Firmware Update / Ver X.YZ / Downloading… Flashing…`
+  then a 5..1 reboot countdown.
+- **Boot:** if the wake was triggered by a maint request, BLE is not brought
+  up at all. The radio goes straight to WiFi — cleaner coexistence on the C3.
 
 OTA happens inside maint mode. The GUI POSTs the compiled binary to
-`/ota`; the firmware streams it into `Update.h` and reboots.
+`/ota?ver=X.YZ`; the firmware streams it into `Update.h` and reboots. The
+GUI polls `/ota-progress` during the POST and reports elapsed time.
+
+Note: Arduino `WebServer` strips `Content-Length` during multipart upload,
+so percent-complete is not available. The poller reports stage transitions
+and total elapsed, not a progress bar.
 
 ---
 

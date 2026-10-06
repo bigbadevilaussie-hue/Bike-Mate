@@ -25,13 +25,9 @@ Ranked by verifiability, not by AI consensus. Categories:
 - **Done when:** Disconnecting the divider makes firmware report fault,
   not stale data.
 
-### 3. Raise panic threshold to 12.2V
+### 3. Raise panic threshold to 12.2V — DONE
 - **Cat:** A
-- **Effort:** 2 lines in `Config.h`
-- **What:** `V_PANIC_ENTER 12.0` is below the stated 12.2V crank floor.
-  Panic fires after the prime directive is already violated.
-- **Also:** raise `WARN_EMAIL_VOLTAGE` from 12.50 → 12.60
-- **Done when:** Config updated, tested at PSU 12.3V.
+- **What:** `V_PANIC_ENTER 12.2` is now in `Config.h`. Done in a prior session.
 
 ---
 
@@ -189,6 +185,43 @@ Ranked by verifiability, not by AI consensus. Categories:
 ### 24. `setRideStartLocation()` never called
 - **Cat:** A (grep shows zero calls)
 - **What:** GPS start location is always 0 in ride summaries.
+
+---
+
+## Session findings — 2026-10-06 (V4.86-4.91)
+
+Fixed and shipped:
+
+- `bleStop()` waits for BT controller to go idle before returning (V4.86)
+- Maint OLED stays lit, shows MAINT/MODE/wifiMessage/Ns left (V4.87)
+- Maint loop bails on engine start (V4.87)
+- HTTP OTA drives the OLED OTA screen with 5..1 countdown (V4.88)
+- Skip `bleInit()` on maint-bound wakes (V4.89)
+- `/ota-progress` endpoint + `?ver=` param (V4.90)
+- `wifiBringUp()` retry wrapper — 2 attempts, 3 s settle (V4.91)
+- Guard hard-exempt while logging/riding (V4.87)
+- GUI OTA progress poller + elapsed timer (GUI 4.24)
+- `maintStartMs` non-static for OLED access
+
+Outstanding from this session:
+
+### S1. GUI maint state doesn't auto-flip on engine-start bail
+- **Cat:** A
+- **What:** when the bike exits maint via engine-start bail, the GUI never
+  notices. It stays `ON` until the user clicks Deactivate or the GUI restarts.
+- **Fix:** start the off-poll on every maint entry, not just user-triggered deactivate.
+
+### S2. GUI ride pull races service discovery
+- **Cat:** A
+- **What:** `[RIDE] pull err: Service Discovery has not been performed yet`
+- **Fix:** `await client.get_services()` before the first `start_notify`.
+
+### S3. HTTP OTA percent progress
+- **Cat:** B
+- **What:** Arduino `WebServer` strips `Content-Length` on multipart upload.
+  `otaProgressTotal` is always 0.
+- **Fix:** chunked upload from GUI, or a second server on another port.
+  Deferred — Fan-Mate has the same limitation.
 
 ---
 

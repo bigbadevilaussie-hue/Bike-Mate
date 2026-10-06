@@ -34,9 +34,13 @@ it ends.
    - Notifies `0x01` back to the GUI
    - Returns. Does **not** touch WiFi. The bike continues its normal loop.
 4. Bike sleeps as usual when `shouldSleep()` returns true.
-5. On the next wake, `doStateWork` sees `maintRequest`:
+5. On the next wake, if `maintRequest` is already set at `setup()` time,
+   `bleInit()` is skipped entirely — the radio goes straight to WiFi. This
+   is the fix for intermittent association failures on the C3 in core
+   2.0.17 after a BLE session.
+6. The maint block in `loop()` sees `maintRequest`:
    - Prints `[MAINT] ====== ENTERING MAINTENANCE MODE ======`
-   - Calls `wifiBringUp()` — this calls `bleStop()` inside it
+   - Calls `wifiBringUp()` — two attempts with a 3 s settle between them
    - Calls `serverSetup()`
    - Records `maintStartMs`
    - Enters the maint loop
@@ -56,11 +60,17 @@ Bike is awake. `doStateWork` is not called (the maint loop is a blocking
 
 - `serverLoop()` — HTTP request handling
 - `delay(20)` between iterations
+- OLED redraw once per second — `drawMaintScreen()` shows `MAINT / MODE /
+  <wifiMessage> / Ns left`. During HTTP OTA, `drawFwUpdateScreen()` takes
+  over and shows `Ver X.YZ / Downloading… Flashing… Rebooting…`
+- Voltage sample every 500 ms — if V crosses `runningEnter_mv`, the loop
+  bails immediately and WiFi drops. Protects the prime directive against
+  an unattended maint session racing a ride start.
 - Checks for `/maint/off` signal (`maintOffRequested`)
 - Checks `MAINT_MAX_MS` elapsed
 
-Everything else (BLE, sensors, ride state machine) is paused. Wake logging
-is paused via `wakeLoggerPause()`.
+BLE and the ride state machine are paused. Wake logging is paused via
+`wakeLoggerPause()`.
 
 ### Serial page
 
@@ -74,9 +84,15 @@ Top of the page has an **End Maintenance** button that POSTs to `/maint/off`.
 
 ### OTA
 
-`POST /ota` with a multipart body containing `firmware=@bike_mate.ino.bin`.
-Firmware streams the upload into `Update.h`, and on success reboots into
-the new image.
+`POST /ota?ver=X.YZ` with a multipart body containing
+`firmware=@bike_mate.ino.bin`. Firmware streams the upload into `Update.h`,
+runs a 5..1 countdown on the OLED, and reboots.
+
+`GET /ota-progress` returns stage/bytes/total/countdown JSON. The GUI
+polls it every 500 ms during the POST and prints stage transitions. Note:
+Arduino `WebServer` strips `Content-Length` on multipart upload, so
+`total` is always 0 — the GUI reports stage transitions and total elapsed
+time, not a percent bar.
 
 No auth. LAN only. See "Safety" below.
 
@@ -89,7 +105,7 @@ the OTA dialog when BLE is unavailable (which it is during maint).
 
 ## Exit
 
-Three ways maintenance mode ends:
+Four ways maintenance mode ends:
 
 ### 1. User clicks End Maintenance on the serial page
 
@@ -108,7 +124,15 @@ GUI POSTs `/maint/off` directly (does not need the browser). Same code path
 as above. GUI then polls `/serial-raw` until it fails, at which point state
 flips to OFF in the GUI.
 
-### 3. Safety timeout
+### 3. Engine start detected
+
+The maint loop samples voltage every 500 ms. If V crosses `runningEnter_mv`
+(default 13.8 V), it prints `[MAINT] engine start detected (X.XXV), exiting`,
+stops the HTTP server, drops WiFi, and hands control back to the normal
+state machine. Protects the prime directive: an unattended maint session
+must not hold WiFi up for 15 min while the engine runs.
+
+### 4. Safety timeout
 
 If nothing else ends it, the maint loop checks:
 
@@ -168,7 +192,7 @@ State variables:
 
     maintRequest — RTC, set by BLE, consumed by loop
 
-    maintStartMs — file-scope in bike_mate.ino, timer for the safety cap
+    maintStartMs — non-static global in bike_mate.ino, read by the OLED for the countdown
 
     maintOffRequested — volatile, set by /maint/off handler
 

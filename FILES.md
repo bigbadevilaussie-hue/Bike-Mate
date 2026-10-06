@@ -10,7 +10,7 @@ One entry per file. Purpose, key vars, key funcs, notes.
 - **Purpose:** Main coordinator — setup, loop, state machine, sleep, upload trigger, maint loop.
 - **Key vars:** macTimeEpoch, totalSeconds, engineWasRunning, accState, inPanic, wifiActive, uploadRequested, maintRequest, maintStartMs.
 - **Key funcs:** setup, loop, updateStateTransitions, doStateWork, shouldSleep, goToSleep, currentEpoch, currentWakeMs, currentWakeMode, currentStateString, tprint, tprint_verbose.
-- **Notes:** Owns RTC state. Cold boot resets. Consumes maintRequest on wake — see MAINTENANCE.md.
+- **Notes:** Owns RTC state. Cold boot resets. Consumes maintRequest on wake — see MAINTENANCE.md. Maint block lives in loop() and runs the HTTP server inline.
 
 ### Config.h
 - **Purpose:** Single source of truth — pins, UUIDs, thresholds, structs, feature flags, version.
@@ -47,7 +47,7 @@ One entry per file. Purpose, key vars, key funcs, notes.
 
 ### DisplayManager.cpp / DisplayManager.h
 - **Purpose:** OLED rendering.
-- **Key funcs:** drawOLED, updateOLED_EdgeTriggered, drawUploadScreen, drawFwUpdateScreen, drawPanicScreen, drawRunningScreen.
+- **Key funcs:** drawOLED, updateOLED_EdgeTriggered, drawMaintScreen, drawUploadScreen, drawFwUpdateScreen, drawPanicScreen, drawRunningScreen.
 
 ### WifiManager.cpp / WifiManager.h
 - **Purpose:** Unified WiFi bring-up. IDF teardown + re-init. Explicit SSID/password.
@@ -87,7 +87,7 @@ One entry per file. Purpose, key vars, key funcs, notes.
 ### WebServer.cpp / WebServer.h
 - **Purpose:** HTTP server for maintenance mode.
 - **Key funcs:** serverSetup, serverLoop, serverStop, serverIsRunning.
-- **Routes:** /serial, /serial-raw, /maint/off, /ota, /version.
+- **Routes:** /serial, /serial-raw, /maint/off, /ota, /version, /ota-progress.
 - **Key vars:** maintOffRequested.
 - **Notes:** Only live during maintenance mode.
 

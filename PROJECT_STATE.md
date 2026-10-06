@@ -1,6 +1,6 @@
 # Bike-Mate — Project State
 
-Snapshot date: 2026-10-05
+Snapshot date: 2026-10-06
 Firmware: see `Config.h` → `BIKE_MATE_VERSION`
 GUI: see `bikemate.py` → `GUI_VERSION`
 Repo: https://github.com/bigbadevilaussie-hue/Bike-Mate
@@ -95,6 +95,7 @@ Note: GPIO9 is a boot-strapping pin on the ESP32-C3.
 | `/maint/off` | POST | Exit maintenance mode |
 | `/ota` | POST | Firmware upload (multipart) |
 | `/version` | GET | Current firmware version |
+| `/ota-progress` | GET | OTA progress JSON (stage, bytes, total, countdown) |
 
 ---
 
@@ -121,11 +122,16 @@ See `MAINTENANCE.md` for full architecture.
 
 Summary:
 - **Enter:** BLE `{"maint":"on"}` → firmware sets `maintRequest = true`, ACKs, sleeps.
-  On next wake, `doStateWork` sees the flag, brings WiFi up, starts HTTP server,
-  enters maint for `MAINT_MAX_MS` (15 min).
-- **Exit:** HTTP `/maint/off`, or 15-min timeout.
+  On next wake, the maint block in `loop()` brings WiFi up, starts HTTP server,
+  enters maint for `MAINT_MAX_MS` (15 min). If the wake was maint-bound, BLE is
+  never brought up — cleaner radio coexistence on the C3.
+- **Exit:** HTTP `/maint/off`, engine start detected, or 15-min timeout.
 - **During maint:** BLE off, WiFi up, serial page live, OTA available.
+  OLED stays lit and shows maint state. Sensors sampled every 500 ms for the
+  engine-start bail.
 - **Safety:** `MAINT_MAX_MS` in `Config.h`.
+- **WiFi:** `wifiBringUp()` retries twice with a 3 s settle. The C3 in core
+  2.0.17 fails association intermittently after an active BLE session.
 
 ---
 

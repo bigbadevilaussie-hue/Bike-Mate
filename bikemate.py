@@ -1,3 +1,4 @@
+# === BEGIN config ===
 """
 BIKE-MATE GUI V3.11
 Paired with firmware V3.64+.
@@ -20,11 +21,15 @@ from bleak import BleakScanner, BleakClient
 
 GUI_VERSION = "4.27"
 
+# === END config ===
+# === BEGIN state ===
 # Maintenance mode state. "OFF" | "PENDING" | "ON"
 # Firmware doesn't implement the command yet, so PENDING will
 # currently time out back to OFF. Once firmware ACKs, PENDING
 # flips to ON and stays until "off" ACK.
 maintenance_state = "OFF"
+# === END state ===
+# === BEGIN config ===
 maintenance_lock = threading.RLock()
 MAINTENANCE_ACK_TIMEOUT_MS = 5000
 MAINTENANCE_BROWSER_DELAY_MS = 3000
@@ -45,6 +50,8 @@ OTA_PORT = 8000
 OTA_HOSTNAME = "192.168.8.187"
 OTA_TIMEOUT_SEC = 40
 OTA_WAIT_SEC = 900
+# === END config ===
+# === BEGIN config ===
 BUILD_DIR = os.path.expanduser("~/Documents/Arduino/bike_mate/build/esp32.esp32.esp32c3")
 BUILD_BIN = os.path.join(BUILD_DIR, "bike_mate.ino.bin")
 CONFIG_H  = os.path.expanduser("~/Documents/Arduino/bike_mate/Config.h")
@@ -86,6 +93,8 @@ RED = THEME_NIGHT["red"]
 FILL_GREEN = THEME_NIGHT["fill"]
 FILL_BLUE  = THEME_NIGHT["fill"]
 
+# === END config ===
+# === BEGIN helpers ===
 
 def is_daytime():
     return DAY_START_HOUR <= datetime.now().hour < DAY_END_HOUR
@@ -96,6 +105,8 @@ def current_theme():
 
 HIST_LEN = 60
 volt_hist = deque([None] * HIST_LEN, maxlen=HIST_LEN)
+# === END helpers ===
+# === BEGIN state ===
 temp_hist = deque([None] * HIST_LEN, maxlen=HIST_LEN)
 latest_data = {"v": None, "t": None, "a": 0, "e": 0, "w": 0, "s": "--", "p": 0, "fv": "?"}
 latest_seen_time = 0.0
@@ -112,6 +123,8 @@ drive_server_proc = None
 
 SSL_CTX = ssl._create_unverified_context()
 
+# === END state ===
+# === BEGIN helpers ===
 
 def get_lan_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -122,6 +135,8 @@ def get_lan_ip():
         s.close()
     return ip
 
+# === END helpers ===
+# === BEGIN ota ===
 
 def start_ota_server():
     global ota_server_proc
@@ -150,6 +165,8 @@ def stop_ota_server():
             pass
         ota_server_proc = None
 
+# === END ota ===
+# === BEGIN drive ===
 
 def start_drive_server():
     global drive_server_proc
@@ -178,6 +195,8 @@ def stop_drive_server():
             pass
         drive_server_proc = None
 
+# === END drive ===
+# === BEGIN helpers ===
 
 def read_firmware_version():
     try:
@@ -201,6 +220,8 @@ def compute_md5(path):
         print(f"[OTA] md5 failed: {e}")
         return None
 
+# === END helpers ===
+# === BEGIN drive ===
 
 def fetch_drive_list():
     try:
@@ -284,6 +305,8 @@ def backup_firmware_to_drive():
         print(f"[BACKUP] failed: {e}")
         return False
 
+# === END drive ===
+# === BEGIN helpers ===
 
 def local_time_str():
     n = datetime.now()
@@ -297,6 +320,8 @@ def time_emoji():
             else "🌞" if h < 14 else "🌤" if h < 17 else "🌇" if h < 19
             else "🌆" if h < 21 else "🌙")
 
+# === END helpers ===
+# === BEGIN weather ===
 
 def weather_code_to_emoji(code, is_day):
     if code == 0:
@@ -339,6 +364,8 @@ def weather_thread_loop():
         fetch_weather()
         time.sleep(WEATHER_REFRESH_SEC)
 
+# === END weather ===
+# === BEGIN helpers ===
 
 def set_status(m):
     global status_msg
@@ -393,6 +420,8 @@ def parse_row(data):
     r = struct.unpack("<IHbB", bytes(data[:8]))
     return {"epoch": r[0], "volt": r[1] / 100.0, "temp": r[2], "state": r[3]}
 
+# === END helpers ===
+# === BEGIN ble ===
 
 class BLEWorker(threading.Thread):
     def __init__(self):
@@ -625,6 +654,8 @@ class BLEWorker(threading.Thread):
                 print(f"[BLE] loop err: {e}")
                 await asyncio.sleep(3)
 
+# === END ble ===
+# === BEGIN widgets ===
 
 class Graph(tk.Canvas):
     def __init__(self, parent, app, color_key="blue", fill_key=None,
@@ -694,6 +725,8 @@ class Graph(tk.Canvas):
         self.create_oval(lx - 3, ly - 3, lx + 3, ly + 3,
                          fill=t[self.color_key], outline="")
 
+# === END widgets ===
+# === BEGIN app ===
 
 class App:
     def __init__(self, root):
@@ -1613,6 +1646,8 @@ class App:
         self.temp_graph.set_data(temp_hist)
         self.root.after(1000, self.tick)
 
+# === END app ===
+# === BEGIN reports ===
 
 class BikeReport(tk.Toplevel):
     """Report window — reads local wakes_*.csv, plots V and T."""
@@ -2131,3 +2166,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     App(root)
     root.mainloop()
+# === END reports ===

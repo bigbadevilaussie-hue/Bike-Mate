@@ -77,6 +77,7 @@ static bool opalClockSync() {
   http.collectHeaders(hdrs, 1);
 
   int code = http.GET();
+  tprint("[CLOCK] HTTP code=%d", code);
   bool ok = false;
   if (code > 0) {
     String d = http.header("Date");

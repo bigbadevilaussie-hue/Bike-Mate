@@ -53,7 +53,7 @@ static bool ntpSync() {
   return false;
 }
 
-bool wifiBringUp(unsigned long perAttemptTimeoutMs) {
+static bool _wifiBringUpOnce(unsigned long perAttemptTimeoutMs) {
   tprint("[WIFI] bring-up start");
 
   bleStop();
@@ -133,6 +133,28 @@ bool wifiBringUp(unsigned long perAttemptTimeoutMs) {
   }
 
   return true;
+}
+
+// V4.91: retry wrapper. On the C3 (core 2.0.17, bad antenna) WiFi
+// bring-up after an active BLE session fails intermittently — the
+// association never progresses and status stays WL_IDLE_STATUS. A
+// second attempt after a full teardown + settle usually succeeds.
+// Two attempts total, then give up (bike sleeps, retries next wake).
+bool wifiBringUp(unsigned long perAttemptTimeoutMs) {
+  for (int attempt = 1; attempt <= 2; attempt++) {
+    tprint("[WIFI] attempt %d/2", attempt);
+    if (_wifiBringUpOnce(perAttemptTimeoutMs)) {
+      return true;
+    }
+    if (attempt < 2) {
+      tprint("[WIFI] attempt %d failed, settling 3s before retry", attempt);
+      WiFi.disconnect(true);
+      WiFi.mode(WIFI_OFF);
+      delay(3000);
+    }
+  }
+  tprint("[WIFI] all attempts failed");
+  return false;
 }
 
 void wifiBringDown() {

@@ -1,6 +1,8 @@
 #include "WebServer.h"
 #include "Config.h"
 #include "SerialBuffer.h"
+#include "DisplayManager.h"
+#include "OtaManager.h"
 
 #include <WebServer.h>
 #include <Update.h>
@@ -64,8 +66,38 @@ static void handleOtaUpload() {
   if (upload.status == UPLOAD_FILE_START) {
     tprint("[OTA] start %s", upload.filename.c_str());
     otaStarted = false;
+    // V4.88: drive the same OLED state the BLE OTA path used, so
+    // the display shows Downloading -> Flashing -> Rebooting.
+    extern volatile bool otaRequest;
+    extern volatile uint8_t  otaStage;
+    extern volatile uint32_t otaProgressBytes;
+    extern volatile uint32_t otaProgressTotal;
+    extern char otaVersion[16];
+    otaRequest = true;
+    otaStage = OTA_STAGE_DOWNLOAD;
+    otaProgressBytes = 0;
+    otaProgressTotal = 0;
+    // V4.90: read Content-Length so /ota-progress has a total.
+    {
+      String cl = server.header("Content-Length");
+      if (cl.length() > 0) {
+        otaProgressTotal = (uint32_t)cl.toInt();
+      }
+      tprint("[OTA] content-length=%lu", (unsigned long)otaProgressTotal);
+    }
+    // V4.90: GUI passes target version as ?ver=X.YZ so the OLED can
+    // show it. HTTP OTA has no other source for the incoming version.
+    if (server.hasArg("ver")) {
+      String v = server.arg("ver");
+      strncpy(otaVersion, v.c_str(), 15);
+      otaVersion[15] = 0;
+      tprint("[OTA] target ver=%s", otaVersion);
+    } else {
+      otaVersion[0] = 0;
+    }
     if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
       tprint("[OTA] begin FAILED: %s", Update.errorString());
+      otaRequest = false;
     } else {
       otaStarted = true;
     }
@@ -74,14 +106,23 @@ static void handleOtaUpload() {
       if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
         tprint("[OTA] write FAILED: %s", Update.errorString());
         otaStarted = false;
+        extern volatile bool otaRequest;
+        otaRequest = false;
+      } else {
+        extern volatile uint32_t otaProgressBytes;
+        otaProgressBytes += upload.currentSize;
       }
     }
   } else if (upload.status == UPLOAD_FILE_END) {
     if (otaStarted) {
       if (Update.end(true)) {
         tprint("[OTA] OK %u bytes", upload.totalSize);
+        extern volatile uint8_t otaStage;
+        otaStage = OTA_STAGE_FLASH;
       } else {
         tprint("[OTA] end FAILED: %s", Update.errorString());
+        extern volatile bool otaRequest;
+        otaRequest = false;
       }
     }
   }
@@ -89,6 +130,8 @@ static void handleOtaUpload() {
 
 static void handleOtaDone() {
   if (Update.hasError()) {
+    extern volatile bool otaRequest;
+    otaRequest = false;
     server.send(500, "text/plain",
                 "FAIL: " + String(Update.errorString()));
   } else {
@@ -103,12 +146,42 @@ static void handleOtaDone() {
     bool verifyPending = prefs.getBool("pending", false);
     prefs.end();
     tprint("[OTA] NVS verify pending=%d", verifyPending ? 1 : 0);
-    delay(500);
+    delay(200);
 
     server.send(200, "text/plain", "OK, rebooting");
-    delay(500);
+    delay(200);
+
+    // V4.88: show "Rebooting in Ns" on the OLED before reset.
+    extern volatile uint8_t otaStage;
+    extern volatile uint8_t otaRebootCountdown;
+    otaStage = OTA_STAGE_REBOOT;
+    for (int i = 5; i > 0; i--) {
+      otaRebootCountdown = (uint8_t)i;
+      tprint("[OTA] reboot in %d...", i);
+      drawOLED();
+      delay(1000);
+    }
+
+    display.clearDisplay();
+    display.display();
+    display.ssd1306_command(SSD1306_DISPLAYOFF);
     ESP.restart();
   }
+}
+
+static void handleOtaProgress() {
+  extern volatile uint8_t  otaStage;
+  extern volatile uint32_t otaProgressBytes;
+  extern volatile uint32_t otaProgressTotal;
+  extern volatile uint8_t  otaRebootCountdown;
+  char buf[128];
+  snprintf(buf, sizeof(buf),
+           "{\"stage\":%u,\"bytes\":%lu,\"total\":%lu,\"countdown\":%u}",
+           (unsigned)otaStage,
+           (unsigned long)otaProgressBytes,
+           (unsigned long)otaProgressTotal,
+           (unsigned)otaRebootCountdown);
+  server.send(200, "application/json", buf);
 }
 
 static void handleVersion() {
@@ -128,6 +201,7 @@ void serverSetup() {
   server.on("/maint/off",  HTTP_POST, handleMaintOff);
   server.on("/ota",        HTTP_POST, handleOtaDone, handleOtaUpload);
   server.on("/version",    HTTP_GET,  handleVersion);
+  server.on("/ota-progress", HTTP_GET, handleOtaProgress);
   server.onNotFound([](){ server.send(404, "text/plain", "404"); });
   server.begin();
   running = true;

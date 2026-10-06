@@ -2,6 +2,9 @@
 #include "Config.h"
 #include "OtaManager.h"
 
+// V4.90: forward-declare to avoid pulling <WiFi.h> in via WebServer.h
+bool serverIsRunning();
+
 extern float latestBatteryVoltage;
 extern float latestTemperatureC;
 extern bool inPanic;
@@ -66,6 +69,49 @@ void drawUploadScreen() {
   int bw = strlen(big) * 12;
   display.setCursor((SCREEN_W - bw) / 2, 34);
   display.print(big);
+
+  display.display();
+}
+
+static void drawMaintScreen() {
+  extern unsigned long maintStartMs;
+  display.setTextColor(SSD1306_WHITE);
+
+  display.setTextSize(2);
+  const char* big = "MAINT";
+  int bw = strlen(big) * 12;
+  display.setCursor((SCREEN_W - bw) / 2, 4);
+  display.print(big);
+
+  display.setTextSize(1);
+  const char* sub = "MODE";
+  int sw = strlen(sub) * 6;
+  display.setCursor((SCREEN_W - sw) / 2, 24);
+  display.print(sub);
+
+  // V4.89: show wifiMessage, not WiFi.localIP(). Including <WiFi.h>
+  // here initialises the netif before wifiBringUp() can tear it down,
+  // which broke association on the C3. wifiMessage is set by
+  // WifiManager during bring-up.
+  extern char wifiMessage[24];
+  char msg[24];
+  snprintf(msg, sizeof(msg), "%s", wifiMessage);
+  int iw = strlen(msg) * 6;
+  if (iw > SCREEN_W - 4) iw = SCREEN_W - 4;
+  display.setCursor((SCREEN_W - iw) / 2, 36);
+  display.print(msg);
+
+  // remaining
+  unsigned long now = millis();
+  unsigned long elapsed = (now >= maintStartMs) ? (now - maintStartMs) : 0;
+  unsigned long cap = 900000UL;
+  long rem = (long)((cap - elapsed) / 1000UL);
+  if (rem < 0) rem = 0;
+  char rb[20];
+  snprintf(rb, sizeof(rb), "%lds left", rem);
+  int rw = strlen(rb) * 6;
+  display.setCursor((SCREEN_W - rw) / 2, 52);
+  display.print(rb);
 
   display.display();
 }
@@ -216,7 +262,11 @@ void drawOLED() {
 
   if (wifiActive) {
     display.ssd1306_command(SSD1306_DISPLAYON);
-    drawUploadScreen();
+    if (serverIsRunning() && !otaRequest) {
+      drawMaintScreen();
+    } else {
+      drawUploadScreen();
+    }
     return;
   }
 

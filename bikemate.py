@@ -1035,9 +1035,43 @@ class App:
         threading.Thread(target=_backup, daemon=True).start()
 
         def _upload():
-            url = f"http://{BIKE_IP}/ota"
+            url = f"http://{BIKE_IP}/ota?ver={src_ver}"
             print(f"[OTA] POST {url} ({size} bytes)")
             set_status("uploading firmware...")
+
+            # V4.90: progress poller
+            _upload_done = threading.Event()
+            _stage_names = {0:"idle", 1:"Downloading", 2:"Verifying",
+                            3:"Flashing", 4:"Rebooting"}
+            def _poll():
+                last_stage = None
+                last_pct = -1
+                while not _upload_done.is_set():
+                    try:
+                        pr = requests.get(
+                            f"http://{BIKE_IP}/ota-progress", timeout=2)
+                        d = pr.json()
+                        stage = d.get("stage", 0)
+                        b = d.get("bytes", 0)
+                        tot = d.get("total", 0)
+                        cd = d.get("countdown", 0)
+                        if stage != last_stage:
+                            print(f"[OTA] >>> stage={_stage_names.get(stage, stage)}")
+                            last_stage = stage
+                        if stage == 1 and tot > 0:
+                            pct = int(b * 100 / tot)
+                            if pct != last_pct:
+                                print(f"[OTA] {b}/{tot} ({pct}%)")
+                                last_pct = pct
+                        elif stage == 4:
+                            print(f"[OTA] reboot countdown {cd}")
+                    except Exception:
+                        pass
+                    _upload_done.wait(0.5)
+            _poll_thread = threading.Thread(target=_poll, daemon=True)
+            _poll_thread.start()
+
+            _ota_t0 = time.time()
             try:
                 with open(BUILD_BIN, "rb") as f:
                     r = requests.post(
@@ -1045,7 +1079,9 @@ class App:
                         files={"firmware": ("bike_mate.ino.bin", f,
                                             "application/octet-stream")},
                         timeout=120)
-                print(f"[OTA] HTTP {r.status_code}: {r.text[:80]}")
+                _upload_done.set()
+                _ota_dt = time.time() - _ota_t0
+                print(f"[OTA] HTTP {r.status_code} ({_ota_dt:.1f}s): {r.text[:80]}")
                 if r.status_code == 200:
                     set_status("firmware uploaded, device rebooting")
                     # Bike is about to reboot. Cold boot wipes maintRequest.
@@ -1062,8 +1098,10 @@ class App:
                     self.root.after(0, lambda b=body: messagebox.showerror(
                         "OTA", f"Device rejected upload:\n{b}"))
             except Exception as e:
+                _upload_done.set()
+                _ota_dt = time.time() - _ota_t0
                 err = str(e)
-                print(f"[OTA] EXCEPTION: {err}")
+                print(f"[OTA] EXCEPTION after {_ota_dt:.1f}s: {err}")
                 set_status(f"OTA failed: {err}")
                 self.root.after(0, lambda m=err: messagebox.showerror(
                     "OTA", f"Upload failed:\n{m}"))

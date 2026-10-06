@@ -74,7 +74,7 @@ unsigned long lastAdvRestart = 0;
 unsigned long lastSecondMark = 0;
 
 static unsigned long bootMillis = 0;
-static unsigned long maintStartMs = 0;
+unsigned long maintStartMs = 0;  // V4.88: non-static, read by OLED
 unsigned long lastDisconnectMillis = 0;
 
 static bool firstTick = false;
@@ -664,9 +664,20 @@ void setup() {
   tprint("[ADC] raw=%d battery=%.2fV ntc=%d temp=%.1fC",
          latestRawVoltage, latestBatteryVoltage,
          latestNtcRaw, latestTemperatureC);
-  bleInit();
-  pServer->getAdvertising()->start();
-  tprint_verbose("BLE advertising started");
+  // V4.88: if this wake is going to enter maintenance mode, do NOT
+  // bring BLE up. V4.84 made the BLE link sticky across sleep, and on
+  // the C3 (core 2.0.17, bad antenna) a BLE session that survives a
+  // wake leaves the coexistence arbiter holding the radio — WiFi init
+  // succeeds but association never progresses (status stuck at 0).
+  // Skipping bleInit() entirely on maint-bound wakes gives WiFi a
+  // clean radio, matching the pre-V4.84 flow.
+  if (!maintRequest) {
+    bleInit();
+    pServer->getAdvertising()->start();
+    tprint_verbose("BLE advertising started");
+  } else {
+    tprint("[MAINT] maint-bound wake: BLE skipped, radio free for WiFi");
+  }
   lastPublish = 0;
   lastAdvRestart = millis();
   lastSecondMark = millis();
@@ -795,9 +806,22 @@ void loop() {
       serverSetup();
       maintStartMs = millis();
       tprint("[MAINT] active, cap %lus", MAINT_MAX_MS / 1000UL);
+      bool engineStartBail = false;
+      static unsigned long lastMaintOled = 0;
       while (serverIsRunning()) {
         serverLoop();
         delay(20);
+
+        // V4.87: keep the OLED awake for the whole maint session.
+        // Without this the screen stays blank after the prior
+        // goToSleep() powered it down, so an unattended bike in
+        // maint looks identical to a sleeping bike.
+        if (millis() - lastMaintOled >= 1000UL) {
+          lastMaintOled = millis();
+          display.ssd1306_command(SSD1306_DISPLAYON);
+          drawOLED();
+        }
+
         if (maintOffRequested) {
           tprint("[MAINT] exiting (user)");
           break;
@@ -806,13 +830,35 @@ void loop() {
           tprint("[MAINT] exiting (timeout)");
           break;
         }
+
+        // V4.87: sample voltage every 500 ms. If the engine is
+        // starting, bail out immediately so WiFi drops and the
+        // normal state machine takes over. Protects the prime
+        // directive: an unattended maint session must not race a
+        // ride start and hold WiFi up for 15 min.
+        static unsigned long lastMaintSense = 0;
+        if (millis() - lastMaintSense >= 500UL) {
+          lastMaintSense = millis();
+          readSensors();
+          float mv = latestBatteryVoltage;
+          if (mv >= (config.runningEnter_mv / 1000.0f)) {
+            tprint("[MAINT] engine start detected (%.2fV), exiting",
+                   mv);
+            engineStartBail = true;
+            break;
+          }
+        }
       }
       maintOffRequested = false;
       serverStop();
       wifiBringDown();
       wakeLoggerResume();
       wifiActive = false;
-      tprint("[MAINT] ====== MAINTENANCE ENDED ======");
+      if (engineStartBail) {
+        tprint("[MAINT] ====== MAINTENANCE ENDED (engine start) ======");
+      } else {
+        tprint("[MAINT] ====== MAINTENANCE ENDED ======");
+      }
     } else {
       tprint("[MAINT] wifi bring-up FAILED");
       wifiBringDown();
@@ -848,8 +894,12 @@ void loop() {
   }
   guardWasActive = inActiveWork;
 
+  // V4.87: hard exempt - even if inActiveWork misclassifies for one
+  // iteration, never force-sleep mid-ride.
+  bool hardExempt = isLogging || engineWasRunning || accState;
+
   if (!otaRequest && !serverIsRunning() && !inActiveWork &&
-      guardIdleSince > 0 &&
+      !hardExempt && guardIdleSince > 0 &&
       (millis() - guardIdleSince) > MAX_AWAKE_MS) {
     tprint("[GUARD] idle timeout (%lus), forcing sleep",
            (unsigned long)((millis() - guardIdleSince) / 1000UL));

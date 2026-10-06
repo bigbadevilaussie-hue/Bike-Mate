@@ -18,7 +18,7 @@ from datetime import datetime
 from tkinter import messagebox
 from bleak import BleakScanner, BleakClient
 
-GUI_VERSION = "4.25"
+GUI_VERSION = "4.27"
 
 # Maintenance mode state. "OFF" | "PENDING" | "ON"
 # Firmware doesn't implement the command yet, so PENDING will
@@ -708,20 +708,32 @@ class App:
         self.worker = BLEWorker()
         mb = tk.Menu(root)
         am = tk.Menu(mb, tearoff=0)
-        am.add_command(label="About")
+        drive_menu = tk.Menu(am, tearoff=0)
+        drive_menu.add_command(label="☁️  Open Cloud Drive",
+                               command=self.open_drive)
+        drive_menu.add_command(label="💾  Open Local Drive",
+                               command=self.open_local_drive)
+        drive_menu.add_separator()
+        drive_menu.add_command(label="⬇️  Sync from Drive",
+                               command=self.menu_sync)
+        am.add_cascade(label="☁️ Drive", menu=drive_menu)
         am.add_separator()
-        am.add_command(label="☁️  Open Cloud Drive", command=self.open_drive)
-        am.add_command(label="💾  Open Local Drive", command=self.open_local_drive)
-        am.add_command(label="⬇️  Sync from Drive", command=self.menu_sync)
-        am.add_separator()
-        am.add_command(label="⚙️  Settings", command=self.open_settings)
-        am.add_separator()
-        am.add_command(label="🔧  Activate Maintenance Mode",
-                       command=self.activate_maintenance)
-        am.add_command(label="🛑  Deactivate Maintenance Mode",
-                       command=self.deactivate_maintenance)
-        am.add_separator()
-        am.add_command(label="📤 Update Firmware", command=self.menu_ota)
+        # V4.26: maint actions consolidated under one submenu.
+        maint_menu = tk.Menu(am, tearoff=0)
+        maint_menu.add_command(label="🔧  Activate",
+                               command=self.activate_maintenance)
+        maint_menu.add_command(label="🛑  Deactivate",
+                               command=self.deactivate_maintenance)
+        maint_menu.add_separator()
+        maint_menu.add_command(label="📤  Update Firmware",
+                               command=self.menu_ota)
+        maint_menu.add_command(label="⚙️  Settings",
+                               command=self.open_settings)
+        maint_menu.add_separator()
+        maint_menu.add_command(label="📟  Open Serial Page",
+                               command=self._open_serial_page)
+        am.add_cascade(label="🔧 Maintenance", menu=maint_menu)
+        self.maint_menu = maint_menu
         am.add_separator()
         reports_menu = tk.Menu(am, tearoff=0)
         reports_menu.add_command(label="Last Ride",    command=self.open_last_ride_report)
@@ -1108,6 +1120,31 @@ class App:
 
         threading.Thread(target=_upload, daemon=True).start()
 
+    def _update_maint_menu(self):
+        # V4.28: enable/disable maint submenu items based on state.
+        # Indices in the maint submenu:
+        #   0 = Activate
+        #   1 = Deactivate
+        #   2 = separator
+        #   3 = Update Firmware
+        #   4 = Settings
+        #   5 = separator
+        #   6 = Open Serial Page
+        if not hasattr(self, "maint_menu"):
+            return
+        with maintenance_lock:
+            m = maintenance_state
+        on = (m == "ON")
+        off = (m == "OFF")
+        self.maint_menu.entryconfig(0, state=("normal" if off else "disabled"))
+        self.maint_menu.entryconfig(1, state=("normal" if on  else "disabled"))
+        st = "normal" if on else "disabled"
+        for idx in (3, 4, 6):
+            try:
+                self.maint_menu.entryconfig(idx, state=st)
+            except Exception:
+                pass
+
     def activate_maintenance(self):
         global maintenance_state
         with maintenance_lock:
@@ -1212,9 +1249,8 @@ class App:
                         print(f"[MAINT] poll: bike is live after {int(elapsed)}s")
                         with maintenance_lock:
                             maintenance_state = "ON"
-                        self.root.after(
-                            MAINTENANCE_BROWSER_DELAY_MS,
-                            self._ask_open_serial_page)
+                        # V4.26: no auto-open serial page prompt.
+                        # Use the Maintenance menu to open it on demand.
                         return
             except Exception:
                 pass
@@ -1241,13 +1277,8 @@ class App:
 
         threading.Thread(target=probe, daemon=True).start()
 
-    def _ask_open_serial_page(self):
-        ok = messagebox.askyesno(
-            "Maintenance",
-            f"Device is in maintenance mode.\n\n"
-            f"Open the serial page?\nhttp://{BIKE_IP}/serial")
-        if ok:
-            self._open_serial_page()
+    # V4.26: _ask_open_serial_page removed. Serial page opens from the
+    # Maintenance menu only.
 
     def _open_serial_page(self):
         import webbrowser
@@ -1518,6 +1549,7 @@ class App:
         if not hasattr(self, "_last_maint_log") or self._last_maint_log != m:
             self._last_maint_log = m
             print(f"[MAINT] tick sees state={m}")
+        self._update_maint_menu()
         if m == "OFF":
             if self.maint_lbl.winfo_ismapped():
                 self.maint_lbl.pack_forget()

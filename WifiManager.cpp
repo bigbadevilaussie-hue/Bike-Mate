@@ -8,6 +8,7 @@
 #include "BleManager.h"
 
 #include <WiFi.h>
+#include <HTTPClient.h>
 #include <WiFiClient.h>
 #include <esp_wifi.h>
 #include <time.h>
@@ -28,6 +29,84 @@ bool wifiPingTest() {
   test.setTimeout(5000);
   bool ok = test.connect("www.google.com", 443);
   test.stop();
+  return ok;
+}
+
+// V4.92: fetch the router's Date header over LAN. The Opal
+// (GL-SFT1200) is always up — even when the phone uplink is gone — so
+// its clock is the fastest and most reliable source on the network.
+// LAN RTT is ~5 ms, vs 60-100 ms for internet NTP. Falls back to NTP
+// if this fails.
+// V5.00: timegm() is not exposed by the ESP32 newlib headers.
+// Convert a UTC struct tm to a Unix epoch manually. Standard
+// days-from-civil algorithm (Howard Hinnant).
+static time_t _utcToEpoch(int year, int mon, int day,
+                          int hour, int min, int sec) {
+  int y = year;
+  unsigned m = (unsigned)mon;
+  unsigned d = (unsigned)day;
+  y -= m <= 2;
+  const int era = (y >= 0 ? y : y - 399) / 400;
+  const unsigned yoe = (unsigned)(y - era * 400);
+  const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+  const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  const long long days = (long long)era * 146097LL + (long long)doe - 719468LL;
+  return (time_t)(days * 86400LL + hour * 3600LL + min * 60LL + sec);
+}
+
+static bool opalClockSync() {
+  IPAddress gw = WiFi.gatewayIP();
+  if ((uint32_t)gw == 0) {
+    tprint("[CLOCK] no gateway");
+    return false;
+  }
+  char url[48];
+  snprintf(url, sizeof(url), "http://%u.%u.%u.%u/",
+           (unsigned)gw[0], (unsigned)gw[1],
+           (unsigned)gw[2], (unsigned)gw[3]);
+  tprint("[CLOCK] querying %s", url);
+
+  HTTPClient http;
+  http.setTimeout(3000);
+  http.setReuse(false);
+  if (!http.begin(url)) {
+    tprint("[CLOCK] begin failed");
+    return false;
+  }
+  const char* hdrs[] = { "Date" };
+  http.collectHeaders(hdrs, 1);
+
+  int code = http.GET();
+  bool ok = false;
+  if (code > 0) {
+    String d = http.header("Date");
+    if (d.length() > 0) {
+      // "Tue, 06 Oct 2026 07:33:19 GMT"
+      struct tm tmv = {};
+      if (strptime(d.c_str(), "%a, %d %b %Y %H:%M:%S GMT", &tmv)) {
+        time_t t = _utcToEpoch(
+            tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday,
+            tmv.tm_hour, tmv.tm_min, tmv.tm_sec);
+        if (t > 1700000000) {
+          macTimeEpoch = (uint32_t)t;
+          secondsAtSync = totalSeconds;
+          tprint("[CLOCK] Opal Date=%s -> %lu",
+                 d.c_str(), (unsigned long)t);
+          setMsg("Clock OK");
+          ok = true;
+        } else {
+          tprint("[CLOCK] Opal time out of range: %lu", (unsigned long)t);
+        }
+      } else {
+        tprint("[CLOCK] Date parse failed: %s", d.c_str());
+      }
+    } else {
+      tprint("[CLOCK] no Date header (code=%d)", code);
+    }
+  } else {
+    tprint("[CLOCK] HTTP GET failed: %d", code);
+  }
+  http.end();
   return ok;
 }
 
@@ -124,12 +203,15 @@ static bool _wifiBringUpOnce(unsigned long perAttemptTimeoutMs) {
   tprint("[WIFI] ping OK");
   setMsg("Ping OK");
 
-  if (!ntpSync()) {
-    tprint("[WIFI] NTP failed");
-    setMsg("NTP fail");
-    WiFi.disconnect(true);
-    WiFi.mode(WIFI_OFF);
-    return false;
+  // V4.92: try the LAN router clock first. Opal is always up, even
+  // with no upstream, and its Date header is ~20x faster than NTP.
+  if (opalClockSync()) {
+    tprint("[WIFI] clock from LAN");
+  } else if (ntpSync()) {
+    tprint("[WIFI] clock from NTP");
+  } else {
+    tprint("[WIFI] no clock source, continuing with stale clock");
+    setMsg("Clock stale");
   }
 
   return true;

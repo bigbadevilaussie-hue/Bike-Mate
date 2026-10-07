@@ -16,6 +16,7 @@
 #include <HTTPClient.h>
 #include <LittleFS.h>
 #include <Preferences.h>
+#include <base64.h>
 #include <time.h>
 
 extern void tprint(const char* fmt, ...);
@@ -74,6 +75,33 @@ static void stripSealed(const char* in, char* out, size_t n) {
 }
 
 // ---- POST one file ----
+// ---- routing: prefix -> subfolder ----
+static const char* ghSubfolder(const char* name) {
+  if (strncmp(name, "wakes_", 6) == 0) return "WAKES";
+  if (strncmp(name, "ride_",  5) == 0) return "RIDES";
+  if (strncmp(name, "dyna_",  5) == 0) return "DYNA";
+  if (strncmp(name, "bike_mate_", 10) == 0) return "BIN";
+  return "";
+}
+
+// ---- URL-encode a single path segment ----
+static String urlEncSegment(const String& s) {
+  String out;
+  out.reserve(s.length() * 3);
+  for (size_t i = 0; i < s.length(); i++) {
+    char c = s[i];
+    if (isalnum((unsigned char)c) || c == '-' || c == '_' || c == '.' || c == '~') {
+      out += c;
+    } else {
+      char b[4];
+      snprintf(b, sizeof(b), "%%%02X", (unsigned char)c);
+      out += b;
+    }
+  }
+  return out;
+}
+
+// ---- POST one file to GitHub Contents API ----
 static bool postFile(const char* localPath, const char* uploadName) {
   char fullPath[64];
   makeFullPath(localPath, fullPath, sizeof(fullPath));
@@ -85,164 +113,90 @@ static bool postFile(const char* localPath, const char* uploadName) {
   }
 
   size_t fileSize = f.size();
-
   if (fileSize == 0) {
     tprint("[UPLOAD] %s empty, skipping", fullPath);
     f.close();
     return true;
   }
 
-  bool isGz = (String(uploadName).endsWith(".gz"));
-
-  if (isGz) {
-    // V5.14: raw binary POST for .gz. No base64, no form body.
-    String qs = String(UPLOAD_URL);
-    qs += (qs.indexOf('?') < 0) ? "?filename=" : "&filename=";
-    qs += urlEncode(String(uploadName));
-
-    tprint("[UPLOAD] POST %s size=%u (binary)",
-           uploadName, (unsigned)fileSize);
-
-    HTTPClient http;
-    http.setReuse(false);
-    http.setTimeout(UPLOAD_HTTP_TIMEOUT_MS);
-    http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
-    http.begin(qs);
-    http.addHeader("Content-Type", "application/octet-stream");
-    http.addHeader("Content-Length", String((unsigned)fileSize));
-
-    int code = -1;
-    for (int attempt = 1; attempt <= 3; attempt++) {
-      if (attempt > 1) {
-        http.end();
-        delay(1000);
-        f.seek(0);
-        http.begin(qs);
-        http.addHeader("Content-Type", "application/octet-stream");
-        http.addHeader("Content-Length", String((unsigned)fileSize));
-      }
-      code = http.sendRequest("POST", &f, (size_t)fileSize);
-      if (code > 0) break;
-      tprint("[UPLOAD] %s attempt %d failed (http=%d)",
-             uploadName, attempt, code);
-    }
-
+  // Read the whole file. Max sizes here are a few KB.
+  uint8_t* buf = (uint8_t*)malloc(fileSize);
+  if (!buf) {
+    tprint("[UPLOAD] malloc %u failed", (unsigned)fileSize);
     f.close();
-
-    bool ok = false;
-
-    if (code == 302) {
-      String resp = http.getString();
-      ok = true;
-      tprint("[UPLOAD] %s OK (302)", uploadName);
-      http.end();
-    } else if (code == 200) {
-      String resp = http.getString();
-      resp.trim();
-      ok = resp.startsWith("OK");
-      tprint("[UPLOAD] %s code=200 resp=%s",
-             uploadName, resp.c_str());
-      http.end();
-    } else if (code > 0) {
-      String resp = http.getString();
-      resp.trim();
-      tprint("[UPLOAD] %s code=%d resp=%s",
-             uploadName, code, resp.c_str());
-      http.end();
-    } else {
-      tprint("[UPLOAD] %s http=%d", uploadName, code);
-      http.end();
-    }
-
-    return ok;
+    return false;
   }
-
-  String body;
-  body.reserve(fileSize * 2 + 128);
-  body = "filename=";
-  body += urlEncode(String(uploadName));
-  body += "&data=";
-
-  while (f.available()) {
-    char c = (char)f.read();
-    if (isalnum((unsigned char)c) || c == '-' || c == '_' || c == '.' || c == '~') {
-      body += c;
-    } else {
-      char enc[4];
-      snprintf(enc, sizeof(enc), "%%%02X", (unsigned char)c);
-      body += enc;
-    }
-  }
-
+  size_t got = f.read(buf, fileSize);
   f.close();
+  if (got != fileSize) {
+    tprint("[UPLOAD] short read %u/%u", (unsigned)got, (unsigned)fileSize);
+    free(buf);
+    return false;
+  }
 
-  tprint("[UPLOAD] POST %s size=%u body=%u",
-         uploadName,
-         (unsigned)fileSize,
-         (unsigned)body.length());
+  String b64 = base64::encode(buf, fileSize);
+  free(buf);
+
+  String name(uploadName);
+  const char* sub = ghSubfolder(name.c_str());
+  String path = (sub[0] ? String(sub) + "/" : String("")) + name;
+
+  String json;
+  json.reserve(b64.length() + 200);
+  json  = "{\"message\":\"upload ";
+  json += name;
+  json += "\",\"content\":\"";
+  json += b64;
+  json += "\",\"branch\":\"";
+  json += GH_BRANCH;
+  json += "\"}";
+
+  String url = "https://api.github.com/repos/";
+  url += GH_REPO;
+  url += "/contents/";
+  url += urlEncSegment(path);
+
+  tprint("[UPLOAD] PUT %s size=%u b64=%u",
+         path.c_str(), (unsigned)fileSize, (unsigned)b64.length());
 
   HTTPClient http;
   http.setReuse(false);
   http.setTimeout(UPLOAD_HTTP_TIMEOUT_MS);
   http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
-  http.begin(UPLOAD_URL);
-  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-  http.addHeader("Content-Length", String(body.length()));
+  http.begin(url);
+  http.addHeader("Authorization", String("Bearer ") + GH_TOKEN);
+  http.addHeader("Accept", "application/vnd.github+json");
+  http.addHeader("X-GitHub-Api-Version", "2022-11-28");
+  http.addHeader("User-Agent", "bike-mate-esp32");
+  http.addHeader("Content-Type", "application/json");
 
   int code = -1;
   for (int attempt = 1; attempt <= 3; attempt++) {
-    code = http.POST((uint8_t*)body.c_str(), body.length());
-    if (code > 0) break;
-    tprint("[UPLOAD] %s attempt %d failed (http=%d), retrying", uploadName, attempt, code);
+    code = http.PUT((uint8_t*)json.c_str(), json.length());
+    if (code == 201 || code == 200) break;
+    tprint("[UPLOAD] %s attempt %d code=%d", path.c_str(), attempt, code);
+    if (code > 0) {
+      String resp = http.getString();
+      resp.trim();
+      tprint("[UPLOAD] %s resp=%s", path.c_str(), resp.c_str());
+    }
     http.end();
     delay(1000);
-    http.begin(UPLOAD_URL);
-    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-    http.addHeader("Content-Length", String(body.length()));
-  }
-  bool ok = false;
-
-  if (code == 302) {
-    String resp = http.getString();
-    ok = true;
-
-    tprint("[UPLOAD] %s OK (302)", uploadName);
-
-    http.end();
-
-  } else if (code == 200) {
-    String resp = http.getString();
-    resp.trim();
-
-    ok = resp.startsWith("OK");
-
-    tprint("[UPLOAD] %s code=200 resp=%s",
-           uploadName,
-           resp.c_str());
-
-    http.end();
-
-  } else if (code > 0) {
-    String resp = http.getString();
-    resp.trim();
-
-    tprint("[UPLOAD] %s code=%d resp=%s",
-           uploadName,
-           code,
-           resp.c_str());
-
-    http.end();
-
-  } else {
-    tprint("[UPLOAD] %s http=%d",
-           uploadName,
-           code);
-
-    http.end();
+    http.begin(url);
+    http.addHeader("Authorization", String("Bearer ") + GH_TOKEN);
+    http.addHeader("Accept", "application/vnd.github+json");
+    http.addHeader("X-GitHub-Api-Version", "2022-11-28");
+    http.addHeader("User-Agent", "bike-mate-esp32");
+    http.addHeader("Content-Type", "application/json");
   }
 
+  bool ok = (code == 201 || code == 200);
+  tprint("[UPLOAD] %s %s (code=%d)",
+         path.c_str(), ok ? "OK" : "FAIL", code);
+  http.end();
   return ok;
 }
+
 
 // ---- wake enumeration ----
 static bool isCurrentWakeFile(const char* name, const char* current) {

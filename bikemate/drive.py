@@ -17,7 +17,7 @@ def start_drive_server():
         return drive_server_proc
     try:
         os.makedirs(DRIVE_DIR, exist_ok=True)
-        for sub in ("wakes", "rides", "other"):
+        for sub in ("wakes", "rides", "bin", "dyna", "other"):
             os.makedirs(os.path.join(DRIVE_DIR, sub), exist_ok=True)
         drive_server_proc = subprocess.Popen(
             ["python3", "-m", "http.server", str(DRIVE_PORT),
@@ -39,14 +39,46 @@ def stop_drive_server():
         drive_server_proc = None
 
 
+GH_FOLDERS = ("WAKES", "RIDES", "BIN", "DYNA")
+
+
+def _gh_headers():
+    return {
+        "Authorization": f"Bearer {GH_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "bike-mate-gui",
+    }
+
+
 def fetch_drive_list():
-    try:
-        r = urllib.request.urlopen(UPLOAD_URL + "?action=list",
-                                   timeout=30, context=state.SSL_CTX)
-        return json.loads(r.read().decode())
-    except Exception as e:
-        print(f"[SYNC] list failed: {e}")
-        return None
+    # GitHub Contents API: one call per subfolder.
+    out = []
+    for folder in GH_FOLDERS:
+        url = f"{GH_API}/repos/{GH_REPO}/contents/{folder}?ref={GH_BRANCH}"
+        try:
+            req = urllib.request.Request(url, headers=_gh_headers())
+            with urllib.request.urlopen(req, timeout=30, context=state.SSL_CTX) as r:
+                items = json.loads(r.read().decode())
+            for it in items:
+                if it.get("type") != "file":
+                    continue
+                out.append({
+                    "name":   it["name"],
+                    "folder": folder,
+                    "size":   it.get("size", 0),
+                    "url":    it.get("download_url"),
+                })
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                # Folder does not exist yet on GitHub — skip.
+                continue
+            print(f"[SYNC] list {folder} failed: {e}")
+            return None
+        except Exception as e:
+            print(f"[SYNC] list {folder} failed: {e}")
+            return None
+    return out
 
 
 def categorize(name):
@@ -54,6 +86,10 @@ def categorize(name):
         return "wakes"
     if name.startswith("ride_"):
         return "rides"
+    if name.startswith("dyna_"):
+        return "dyna"
+    if name.startswith("bike_mate_") and name.endswith(".bin"):
+        return "bin"
     return "other"
 
 
@@ -63,18 +99,20 @@ def sync_from_drive():
         return -1, 0
 
     local = set()
-    for sub in ("wakes", "rides", "other"):
+    for sub in ("wakes", "rides", "bin", "dyna", "other"):
         d = os.path.join(DRIVE_DIR, sub)
         if os.path.isdir(d):
             for n in os.listdir(d):
                 local.add(n)
-                # V4.34: a .gz on Drive is stored locally under its
-                # decompressed name. Treat both as present so we don't
-                # re-download every sync.
-                if n.endswith(".gz"):
-                    local.add(n[:-3])
+                # V4.35: .gz files are stored locally verbatim, name
+                # preserved. No decode, no rename.
 
-    missing = [f for f in files if f.get("name") and f["name"] not in local]
+    # V4.35: skip firmware .bin files on sync. They already live in
+    # the OTA archive on the Mac and in BIN/ on GitHub; no need for a
+    # third copy. BIN/ is still versioned and browsable on GitHub.
+    missing = [f for f in files if f.get("name")
+               and not f["name"].endswith(".bin")
+               and f["name"] not in local]
 
     print(f"[SYNC] {len(files)} in Drive, {len(local)} local, {len(missing)} new")
 
@@ -90,30 +128,14 @@ def sync_from_drive():
         name = f["name"]
         sub = categorize(name)
         dest = os.path.join(DRIVE_DIR, sub, name)
-        url = UPLOAD_URL + "?action=download&name=" + urllib.parse.quote(name)
+        url = f.get("url")
+        if not url:
+            print(f"[SYNC] no download_url for {name}")
+            continue
         try:
-            r = urllib.request.urlopen(url, timeout=60, context=state.SSL_CTX)
-            data = r.read()
-            # V4.34: Apps Script returns binary as "B64:<base64>".
-            if data.startswith(b"B64:"):
-                data = base64.b64decode(data[4:])
-            # V4.34: the bike base64-encodes the gzipped payload before
-            # POST. Drive stores that text verbatim, so a .csv.gz on
-            # Drive is base64 text whose decoded form is gzip whose
-            # decompressed form is CSV. Unwrap both on sync so local
-            # files are always plain CSV.
-            if name.endswith(".gz"):
-                try:
-                    # V4.34: strip whitespace/non-b64 chars before decode
-                    # (Apps Script inserts spaces into long payloads).
-                    import re as _re
-                    cleaned = _re.sub(rb"[^A-Za-z0-9+/=]", b"", data)
-                    decoded = base64.b64decode(cleaned, validate=False)
-                    if decoded[:2] == b"\x1f\x8b":
-                        data = gzip.decompress(decoded)
-                        dest = dest[:-3]  # drop .gz
-                except Exception as e:
-                    print(f"[SYNC] decode failed {name}: {e}")
+            req = urllib.request.Request(url, headers=_gh_headers())
+            with urllib.request.urlopen(req, timeout=60, context=state.SSL_CTX) as r:
+                data = r.read()
             with open(dest, "wb") as fh:
                 fh.write(data)
             dl += 1
@@ -126,22 +148,30 @@ def sync_from_drive():
 
 
 def backup_firmware_to_drive():
+    # GitHub Contents API PUT into BIN/.
     try:
         ver = read_firmware_version() or "unknown"
+        fname = f"bike_mate_{ver}.bin"
         with open(BUILD_BIN, "rb") as f:
             raw = f.read()
         b64 = base64.b64encode(raw).decode()
-        body = urllib.parse.urlencode({
-            "filename": f"bike_mate_{ver}.bin",
-            "binary": "1",
-            "data": b64,
+        payload = json.dumps({
+            "message": f"firmware backup {ver}",
+            "content": b64,
+            "branch":  GH_BRANCH,
         }).encode()
-        req = urllib.request.Request(UPLOAD_URL, data=body,
-                                     headers={"Content-Type": "application/x-www-form-urlencoded"})
-        r = urllib.request.urlopen(req, timeout=120, context=state.SSL_CTX)
-        resp = r.read().decode()
-        print(f"[BACKUP] {resp[:120]}")
-        return resp.startswith("OK")
+        url = f"{GH_API}/repos/{GH_REPO}/contents/BIN/{fname}"
+        req = urllib.request.Request(url, data=payload, method="PUT",
+                                     headers={**_gh_headers(),
+                                              "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=120, context=state.SSL_CTX) as r:
+            resp = json.loads(r.read().decode())
+        print(f"[BACKUP] {resp.get('content', {}).get('path', resp)}")
+        return True
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")[:200]
+        print(f"[BACKUP] HTTP {e.code}: {body}")
+        return False
     except Exception as e:
         print(f"[BACKUP] failed: {e}")
         return False

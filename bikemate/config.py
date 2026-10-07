@@ -24,7 +24,7 @@ from datetime import datetime
 from tkinter import messagebox
 from bleak import BleakScanner, BleakClient
 
-GUI_VERSION = "4.33"
+GUI_VERSION = "4.34"
 
 MAINTENANCE_ACK_TIMEOUT_MS = 5000
 MAINTENANCE_BROWSER_DELAY_MS = 3000
@@ -38,7 +38,26 @@ OTA_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26ae"
 SETTINGS_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26ae"  # reuse OTA char to bypass macOS cache
 
 DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/1I48SYu8vTC4CDTFLUhZh53siI8ULbQ8W"
-UPLOAD_URL = "https://script.google.com/macros/s/AKfycbx758YfZhY4wp_FdWgu6DSoDVn6-k0Wb0hVVDzwauRSZOSbT9zFAsvskeHv4mz5-G59/exec"
+# ---- GitHub upload backend (V4.35) ----
+# Repo, branch and token. Token must match the one in the firmware's
+# Config.local.h or the bike and GUI will fight over different files.
+# V4.35: token lives in Config.local.h (git-ignored), same file the
+# firmware reads. Keeps it out of this repo.
+import re as _re
+import os as _os
+_cfg_local = _os.path.expanduser("~/Documents/Arduino/bike_mate/Config.local.h")
+GH_TOKEN = ""
+try:
+    with open(_cfg_local) as _f:
+        _m = _re.search(r'#define\s+GH_TOKEN\s+"([^"]+)"', _f.read())
+        if _m:
+            GH_TOKEN = _m.group(1)
+except Exception:
+    pass
+GH_REPO   = "bigbadevilaussie-hue/Bike-Mate-Uploads"
+GH_BRANCH = "main"
+GH_API    = "https://api.github.com"
+GH_RAW    = "https://raw.githubusercontent.com"
 
 HIST_LEN = 60
 

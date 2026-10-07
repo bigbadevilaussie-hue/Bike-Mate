@@ -2,6 +2,7 @@
 # auto-extracted, edit here ===
 
 import tkinter as tk
+import tkinter.ttk
 from tkinter import messagebox
 import threading, time, os, requests, webbrowser
 from .config import *
@@ -303,8 +304,11 @@ class App:
         dlg.after(seconds * 1000, dlg.destroy)
 
     def menu_ota(self):
-        # V4.77: OTA runs over HTTP during maintenance mode.
-        # The bike's WiFi is only up in maint, so this is a hard gate.
+        # V4.32: match Fan-Mate's OTA flow. Info dialog with MD5, then
+        # a background thread that archives the local .bin and POSTs
+        # it. No live progress window — the bike's single-threaded
+        # HTTP server can't serve /ota-progress during the upload, so
+        # a progress bar would lie. Console output is the record.
         with state.maintenance_lock:
             m = state.maintenance_state
         if m != "ON":
@@ -318,7 +322,7 @@ class App:
             messagebox.showerror(
                 "OTA",
                 f"Firmware not found:\n{BUILD_BIN}\n\n"
-                f"Run Sketch → Export Compiled Binary in Arduino IDE first.")
+                f"Run Sketch \u2192 Export Compiled Binary in Arduino IDE first.")
             return
 
         src_ver = read_firmware_version() or "?"
@@ -332,8 +336,10 @@ class App:
                 dev_ver = r.read().decode().strip() or "?"
         except Exception:
             dev_ver = state.latest_data.get("fv", "?")
+
         size = os.path.getsize(BUILD_BIN)
         size_mb = size / (1024 * 1024)
+        md5 = compute_md5(BUILD_BIN) or "?"
 
         try:
             bin_mtime = os.path.getmtime(BUILD_BIN)
@@ -345,100 +351,76 @@ class App:
             built_str = "?"
 
         msg = (
-            f"Upload bike_mate.ino.bin to {BIKE_IP}/ota?\n\n"
+            f"File:        bike_mate.ino.bin\n"
             f"Size:        {size:,} bytes ({size_mb:.2f} MB)\n"
+            f"MD5:         {md5[:16]}...\n"
             f"Source ver:  V{src_ver}\n"
+            f"Built:       {built_str}\n"
             f"Device ver:  V{dev_ver}\n"
-            f"Built:       {built_str}"
         )
         if stale:
-            msg += ("\n\n⚠️  Config.h is newer than the .bin.\n"
+            msg += ("\n\u26a0\ufe0f  Config.h is newer than the .bin.\n"
                     "Re-export the binary before updating.")
+        msg += "\n\nProceed with OTA update?"
+
         if not messagebox.askyesno("Bike-Mate OTA", msg):
             return
 
-        # Backup to Drive, background, same as before.
-        def _backup():
-            print(f"[BACKUP] waiting {BACKUP_DELAY_SEC}s before upload")
-            time.sleep(BACKUP_DELAY_SEC)
-            ok = backup_firmware_to_drive()
-            print(f"[BACKUP] {'OK' if ok else 'FAILED'} for V{src_ver}")
+        threading.Thread(target=self._ota_worker,
+                         args=(src_ver,),
+                         daemon=True).start()
 
-        threading.Thread(target=_backup, daemon=True).start()
+    def _ota_worker(self, src_ver):
+        print("=" * 50)
+        print(f"[OTA] starting")
+        print(f"[OTA] version: {src_ver}")
+        print(f"[OTA] size:    {os.path.getsize(BUILD_BIN):,} bytes")
 
-        def _upload():
+        # Archive the local .bin before flashing. Same pattern as
+        # Fan-Mate. Keeps every version that has been pushed to the
+        # bike, plus a rolling 'latest'.
+        try:
+            fw_dir = os.path.join(OTA_DIR, "firmware")
+            os.makedirs(fw_dir, exist_ok=True)
+            ts = datetime.now().strftime("%Y%m%d-%H%M")
+            archived = os.path.join(fw_dir, f"bike_mate-v{src_ver}-{ts}.bin")
+            shutil.copy2(BUILD_BIN, archived)
+            shutil.copy2(BUILD_BIN, os.path.join(fw_dir, "bike_mate-latest.bin"))
+            print(f"[OTA] archived: {archived}")
+        except Exception as e:
+            print(f"[OTA] archive failed: {e}")
+
+        print(f"[OTA] uploading...")
+        t0 = time.time()
+        try:
             url = f"http://{BIKE_IP}/ota?ver={src_ver}"
-            print(f"[OTA] POST {url} ({size} bytes)")
-            set_status("uploading firmware...")
+            with open(BUILD_BIN, "rb") as f:
+                r = requests.post(
+                    url,
+                    files={"firmware": ("bike_mate.ino.bin", f,
+                                        "application/octet-stream")},
+                    timeout=180)
+            dt = time.time() - t0
+            print(f"[OTA] HTTP {r.status_code} ({dt:.1f}s): {r.text[:80]}")
 
-            # V4.90: progress poller
-            _upload_done = threading.Event()
-            _stage_names = {0:"idle", 1:"Downloading", 2:"Verifying",
-                            3:"Flashing", 4:"Rebooting"}
-            def _poll():
-                last_stage = None
-                last_pct = -1
-                while not _upload_done.is_set():
-                    try:
-                        pr = requests.get(
-                            f"http://{BIKE_IP}/ota-progress", timeout=2)
-                        d = pr.json()
-                        stage = d.get("stage", 0)
-                        b = d.get("bytes", 0)
-                        tot = d.get("total", 0)
-                        cd = d.get("countdown", 0)
-                        if stage != last_stage:
-                            print(f"[OTA] >>> stage={_stage_names.get(stage, stage)}")
-                            last_stage = stage
-                        if stage == 1 and tot > 0:
-                            pct = int(b * 100 / tot)
-                            if pct != last_pct:
-                                print(f"[OTA] {b}/{tot} ({pct}%)")
-                                last_pct = pct
-                        elif stage == 4:
-                            print(f"[OTA] reboot countdown {cd}")
-                    except Exception:
-                        pass
-                    _upload_done.wait(0.5)
-            _poll_thread = threading.Thread(target=_poll, daemon=True)
-            _poll_thread.start()
+            if r.status_code != 200:
+                body = r.text[:200]
+                self.root.after(0, lambda b=body: messagebox.showerror(
+                    "OTA", f"Failed: HTTP {r.status_code}\n{b}"))
+            else:
+                with state.maintenance_lock:
+                    state.maintenance_state = "OFF"
+                self.root.after(0, lambda: messagebox.showinfo(
+                    "OTA", f"Uploaded V{src_ver} in {dt:.1f}s.\n"
+                           f"Device is rebooting."))
+        except Exception as e:
+            err = str(e)
+            print(f"[OTA] EXCEPTION: {err}")
+            self.root.after(0, lambda m=err: messagebox.showerror(
+                "OTA", f"Failed:\n{m}"))
 
-            _ota_t0 = time.time()
-            try:
-                with open(BUILD_BIN, "rb") as f:
-                    r = requests.post(
-                        url,
-                        files={"firmware": ("bike_mate.ino.bin", f,
-                                            "application/octet-stream")},
-                        timeout=120)
-                _upload_done.set()
-                _ota_dt = time.time() - _ota_t0
-                print(f"[OTA] HTTP {r.status_code} ({_ota_dt:.1f}s): {r.text[:80]}")
-                if r.status_code == 200:
-                    set_status("firmware uploaded, device rebooting")
-                    # Bike is about to reboot. Cold boot wipes maintRequest.
-                    with state.maintenance_lock:
-                        state.maintenance_state = "OFF"
-                    self.root.after(0, lambda: self._auto_close_dialog(
-                        "OTA",
-                        f"Uploaded {size:,} bytes to {BIKE_IP}.\n"
-                        f"Device is rebooting into V{src_ver}.",
-                        seconds=3))
-                else:
-                    body = r.text[:200]
-                    set_status(f"OTA HTTP {r.status_code}")
-                    self.root.after(0, lambda b=body: messagebox.showerror(
-                        "OTA", f"Device rejected upload:\n{b}"))
-            except Exception as e:
-                _upload_done.set()
-                _ota_dt = time.time() - _ota_t0
-                err = str(e)
-                print(f"[OTA] EXCEPTION after {_ota_dt:.1f}s: {err}")
-                set_status(f"OTA failed: {err}")
-                self.root.after(0, lambda m=err: messagebox.showerror(
-                    "OTA", f"Upload failed:\n{m}"))
-
-        threading.Thread(target=_upload, daemon=True).start()
+        print("[OTA] done")
+        print("=" * 50)
 
     def _update_maint_menu(self):
         # V4.28: enable/disable maint submenu items based on state.
@@ -935,4 +917,3 @@ class App:
         self.volt_graph.set_data(state.volt_hist)
         self.temp_graph.set_data(state.temp_hist)
         self.root.after(1000, self.tick)
-

@@ -61,6 +61,16 @@ static void handleSerialRaw() {
 
 static bool otaStarted = false;
 
+// V5.09: per-64 KB progress for the serial monitor
+static uint32_t _otaBytes = 0;
+static uint32_t _otaLastLoggedKB = 0;
+
+void _otaBlockReset() {
+  _otaBytes = 0;
+  _otaLastLoggedKB = 0;
+}
+
+
 static void handleOtaUpload() {
   HTTPUpload& upload = server.upload();
   if (upload.status == UPLOAD_FILE_START) {
@@ -76,6 +86,12 @@ static void handleOtaUpload() {
     otaRequest = true;
     otaStage = OTA_STAGE_DOWNLOAD;
     otaProgressBytes = 0;
+    // V5.09: reset block logger. We can't reset the static in the
+    // write branch from here directly, so use a sentinel value that
+    // the write branch checks. Simpler: rely on otaProgressBytes
+    // reset and reset the local counters via a file-scope variable.
+    extern void _otaBlockReset();
+    _otaBlockReset();
     otaProgressTotal = 0;
     // V4.90: read Content-Length so /ota-progress has a total.
     {
@@ -111,6 +127,15 @@ static void handleOtaUpload() {
       } else {
         extern volatile uint32_t otaProgressBytes;
         otaProgressBytes += upload.currentSize;
+        // V5.09: log block progress every 64 KB so the serial monitor
+        // shows the rate during upload. Matches Fan-Mate's granularity
+        // candidate for parity — costs nothing, makes the 33 s vs 11 s
+        // question answerable.
+        _otaBytes += upload.currentSize;
+        if (_otaBytes - _otaLastLoggedKB >= 65536) {
+          _otaLastLoggedKB = _otaBytes;
+          tprint("[OTA] %lu KB", (unsigned long)(_otaBytes / 1024));
+        }
       }
     }
   } else if (upload.status == UPLOAD_FILE_END) {

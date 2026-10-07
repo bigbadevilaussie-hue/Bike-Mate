@@ -409,6 +409,14 @@ class App:
             shutil.copy2(BUILD_BIN, archived)
             shutil.copy2(BUILD_BIN, os.path.join(fw_dir, "bike_mate-latest.bin"))
             print(f"[OTA] archived: {archived}")
+            # V4.34: also push the .bin to Drive BIN/ so every
+            # version ever flashed is recoverable without reading
+            # the local archive dir.
+            try:
+                ok = backup_firmware_to_drive()
+                print(f"[OTA] drive backup: {ok}")
+            except Exception as e:
+                print(f"[OTA] drive backup failed: {e}")
         except Exception as e:
             print(f"[OTA] archive failed: {e}")
 

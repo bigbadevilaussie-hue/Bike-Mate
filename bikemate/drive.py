@@ -1,7 +1,7 @@
 # === Bike-Mate GUI: drive ===
 # auto-extracted, edit here ===
 
-import os, subprocess, urllib.request, urllib.parse, ssl, base64, shutil, json
+import os, subprocess, gzip, urllib.request, urllib.parse, ssl, base64, shutil, json
 from tkinter import messagebox
 from .config import *
 from . import state
@@ -68,6 +68,11 @@ def sync_from_drive():
         if os.path.isdir(d):
             for n in os.listdir(d):
                 local.add(n)
+                # V4.34: a .gz on Drive is stored locally under its
+                # decompressed name. Treat both as present so we don't
+                # re-download every sync.
+                if n.endswith(".gz"):
+                    local.add(n[:-3])
 
     missing = [f for f in files if f.get("name") and f["name"] not in local]
 
@@ -89,6 +94,26 @@ def sync_from_drive():
         try:
             r = urllib.request.urlopen(url, timeout=60, context=state.SSL_CTX)
             data = r.read()
+            # V4.34: Apps Script returns binary as "B64:<base64>".
+            if data.startswith(b"B64:"):
+                data = base64.b64decode(data[4:])
+            # V4.34: the bike base64-encodes the gzipped payload before
+            # POST. Drive stores that text verbatim, so a .csv.gz on
+            # Drive is base64 text whose decoded form is gzip whose
+            # decompressed form is CSV. Unwrap both on sync so local
+            # files are always plain CSV.
+            if name.endswith(".gz"):
+                try:
+                    # V4.34: strip whitespace/non-b64 chars before decode
+                    # (Apps Script inserts spaces into long payloads).
+                    import re as _re
+                    cleaned = _re.sub(rb"[^A-Za-z0-9+/=]", b"", data)
+                    decoded = base64.b64decode(cleaned, validate=False)
+                    if decoded[:2] == b"\x1f\x8b":
+                        data = gzip.decompress(decoded)
+                        dest = dest[:-3]  # drop .gz
+                except Exception as e:
+                    print(f"[SYNC] decode failed {name}: {e}")
             with open(dest, "wb") as fh:
                 fh.write(data)
             dl += 1

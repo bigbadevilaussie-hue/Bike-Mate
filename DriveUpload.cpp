@@ -94,35 +94,83 @@ static bool postFile(const char* localPath, const char* uploadName) {
 
   bool isGz = (String(uploadName).endsWith(".gz"));
 
+  if (isGz) {
+    // V5.14: raw binary POST for .gz. No base64, no form body.
+    String qs = String(UPLOAD_URL);
+    qs += (qs.indexOf('?') < 0) ? "?filename=" : "&filename=";
+    qs += urlEncode(String(uploadName));
+
+    tprint("[UPLOAD] POST %s size=%u (binary)",
+           uploadName, (unsigned)fileSize);
+
+    HTTPClient http;
+    http.setReuse(false);
+    http.setTimeout(UPLOAD_HTTP_TIMEOUT_MS);
+    http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+    http.begin(qs);
+    http.addHeader("Content-Type", "application/octet-stream");
+    http.addHeader("Content-Length", String((unsigned)fileSize));
+
+    int code = -1;
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      if (attempt > 1) {
+        http.end();
+        delay(1000);
+        f.seek(0);
+        http.begin(qs);
+        http.addHeader("Content-Type", "application/octet-stream");
+        http.addHeader("Content-Length", String((unsigned)fileSize));
+      }
+      code = http.sendRequest("POST", &f, (size_t)fileSize);
+      if (code > 0) break;
+      tprint("[UPLOAD] %s attempt %d failed (http=%d)",
+             uploadName, attempt, code);
+    }
+
+    f.close();
+
+    bool ok = false;
+
+    if (code == 302) {
+      String resp = http.getString();
+      ok = true;
+      tprint("[UPLOAD] %s OK (302)", uploadName);
+      http.end();
+    } else if (code == 200) {
+      String resp = http.getString();
+      resp.trim();
+      ok = resp.startsWith("OK");
+      tprint("[UPLOAD] %s code=200 resp=%s",
+             uploadName, resp.c_str());
+      http.end();
+    } else if (code > 0) {
+      String resp = http.getString();
+      resp.trim();
+      tprint("[UPLOAD] %s code=%d resp=%s",
+             uploadName, code, resp.c_str());
+      http.end();
+    } else {
+      tprint("[UPLOAD] %s http=%d", uploadName, code);
+      http.end();
+    }
+
+    return ok;
+  }
+
   String body;
   body.reserve(fileSize * 2 + 128);
   body = "filename=";
   body += urlEncode(String(uploadName));
-  body += isGz ? "&gz=1&data=" : "&data=";
+  body += "&data=";
 
-  if (isGz) {
-    static const char b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    int val = 0, bits = -6;
-    while (f.available()) {
-      val = (val << 8) + (uint8_t)f.read();
-      bits += 8;
-      while (bits >= 0) {
-        body += b64[(val >> bits) & 0x3F];
-        bits -= 6;
-      }
-    }
-    if (bits > -6) body += b64[((val << 8) >> (bits + 8)) & 0x3F];
-    while (body.length() % 4) body += '=';
-  } else {
-    while (f.available()) {
-      char c = (char)f.read();
-      if (isalnum((unsigned char)c) || c == '-' || c == '_' || c == '.' || c == '~') {
-        body += c;
-      } else {
-        char enc[4];
-        snprintf(enc, sizeof(enc), "%%%02X", (unsigned char)c);
-        body += enc;
-      }
+  while (f.available()) {
+    char c = (char)f.read();
+    if (isalnum((unsigned char)c) || c == '-' || c == '_' || c == '.' || c == '~') {
+      body += c;
+    } else {
+      char enc[4];
+      snprintf(enc, sizeof(enc), "%%%02X", (unsigned char)c);
+      body += enc;
     }
   }
 

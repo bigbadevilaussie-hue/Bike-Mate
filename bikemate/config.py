@@ -38,7 +38,7 @@ OTA_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26ae"
 SETTINGS_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26ae"  # reuse OTA char to bypass macOS cache
 
 DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/1I48SYu8vTC4CDTFLUhZh53siI8ULbQ8W"
-UPLOAD_URL = "https://script.google.com/macros/s/AKfycbzDVMS5o5TSlW4H99B8fxv4CjwQ2iBDpMt0MPpyKiryXuIDkyDoRiw4E5TTso6Ag7U/exec"
+UPLOAD_URL = "https://script.google.com/macros/s/AKfycbx758YfZhY4wp_FdWgu6DSoDVn6-k0Wb0hVVDzwauRSZOSbT9zFAsvskeHv4mz5-G59/exec"
 
 HIST_LEN = 60
 

@@ -169,6 +169,12 @@ class BLEWorker(threading.Thread):
                 return
             if not hasattr(on_data, "buf"):
                 on_data.buf = b""
+            # V4.34: a new JSON object starting means the previous
+            # cycle's partial never completed (fragment dropped).
+            # Discard the stale buffer rather than concatenating two
+            # half-payloads from different cycles.
+            if payload.lstrip().startswith(b"{") and on_data.buf:
+                on_data.buf = b""
             on_data.buf += payload
             try:
                 d = json.loads(on_data.buf.decode())

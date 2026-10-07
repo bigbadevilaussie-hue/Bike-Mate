@@ -3,6 +3,7 @@
 #include "SerialBuffer.h"
 #include "DisplayManager.h"
 #include "OtaManager.h"
+#include "Settings.h"
 
 #include <WebServer.h>
 #include <Update.h>
@@ -209,6 +210,24 @@ static void handleOtaProgress() {
   server.send(200, "application/json", buf);
 }
 
+static void handleSettingsGet() {
+  char buf[128];
+  settingsToJson(buf, sizeof(buf));
+  server.send(200, "application/json", buf);
+}
+
+static void handleSettingsPost() {
+  if (!server.hasArg("plain")) {
+    server.send(400, "text/plain", "reject: no body");
+    return;
+  }
+  if (settingsApplyJson(server.arg("plain").c_str())) {
+    server.send(200, "text/plain", "OK");
+  } else {
+    server.send(400, "text/plain", "reject: see serial log");
+  }
+}
+
 static void handleVersion() {
   server.send(200, "text/plain", BIKE_MATE_VERSION);
 }
@@ -226,6 +245,8 @@ void serverSetup() {
   server.on("/maint/off",  HTTP_POST, handleMaintOff);
   server.on("/ota",        HTTP_POST, handleOtaDone, handleOtaUpload);
   server.on("/version",    HTTP_GET,  handleVersion);
+  server.on("/settings",   HTTP_GET,  handleSettingsGet);
+  server.on("/settings",   HTTP_POST, handleSettingsPost);
   server.on("/ota-progress", HTTP_GET, handleOtaProgress);
   server.onNotFound([](){ server.send(404, "text/plain", "404"); });
   server.begin();

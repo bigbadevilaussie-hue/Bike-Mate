@@ -1,7 +1,8 @@
 # === Bike-Mate GUI: drive ===
 # auto-extracted, edit here ===
 
-import os, subprocess, urllib.request, urllib.parse, ssl, base64, shutil
+import os, subprocess, urllib.request, urllib.parse, ssl, base64, shutil, json
+from tkinter import messagebox
 from .config import *
 from . import state
 from .helpers import *
@@ -41,7 +42,7 @@ def stop_drive_server():
 def fetch_drive_list():
     try:
         r = urllib.request.urlopen(UPLOAD_URL + "?action=list",
-                                   timeout=30, context=SSL_CTX)
+                                   timeout=30, context=state.SSL_CTX)
         return json.loads(r.read().decode())
     except Exception as e:
         print(f"[SYNC] list failed: {e}")
@@ -86,7 +87,7 @@ def sync_from_drive():
         dest = os.path.join(DRIVE_DIR, sub, name)
         url = UPLOAD_URL + "?action=download&name=" + urllib.parse.quote(name)
         try:
-            r = urllib.request.urlopen(url, timeout=60, context=SSL_CTX)
+            r = urllib.request.urlopen(url, timeout=60, context=state.SSL_CTX)
             data = r.read()
             with open(dest, "wb") as fh:
                 fh.write(data)
@@ -112,7 +113,7 @@ def backup_firmware_to_drive():
         }).encode()
         req = urllib.request.Request(UPLOAD_URL, data=body,
                                      headers={"Content-Type": "application/x-www-form-urlencoded"})
-        r = urllib.request.urlopen(req, timeout=120, context=SSL_CTX)
+        r = urllib.request.urlopen(req, timeout=120, context=state.SSL_CTX)
         resp = r.read().decode()
         print(f"[BACKUP] {resp[:120]}")
         return resp.startswith("OK")

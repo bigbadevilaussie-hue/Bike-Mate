@@ -4,7 +4,8 @@
 import tkinter as tk
 import tkinter.ttk
 from tkinter import messagebox
-import threading, time, os, sys, requests, webbrowser
+import threading, time, os, sys, json, asyncio, shutil, requests, webbrowser
+from datetime import datetime
 from .config import *
 from . import state
 from .helpers import *
@@ -401,7 +402,7 @@ class App:
         # Fan-Mate. Keeps every version that has been pushed to the
         # bike, plus a rolling 'latest'.
         try:
-            fw_dir = os.path.join(OTA_DIR, "firmware")
+            fw_dir = os.path.join(OTA_ARCHIVE_DIR, "firmware")
             os.makedirs(fw_dir, exist_ok=True)
             ts = datetime.now().strftime("%Y%m%d-%H%M")
             archived = os.path.join(fw_dir, f"bike_mate-v{src_ver}-{ts}.bin")

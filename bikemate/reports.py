@@ -1,7 +1,7 @@
 # === Bike-Mate GUI: reports ===
 # auto-extracted, edit here ===
 
-import os, glob
+import os, glob, gzip
 import tkinter as tk
 from datetime import datetime
 from .config import *
@@ -52,7 +52,8 @@ class BikeReport(tk.Toplevel):
     def _find_files(self):
         import glob
         base = os.path.join(DRIVE_DIR, "wakes")
-        all_files = sorted(glob.glob(os.path.join(base, "wakes_*.csv")))
+        all_files = sorted(glob.glob(os.path.join(base, "wakes_*.csv")) +
+                          glob.glob(os.path.join(base, "wakes_*.csv.gz")))
 
         if not all_files:
             return []
@@ -84,7 +85,8 @@ class BikeReport(tk.Toplevel):
             return sorted(files) if files else all_files[-7:]
 
         elif self.mode == "ride":
-            rides = sorted(glob.glob(os.path.join(DRIVE_DIR, "rides", "ride_*.csv")))
+            rides = sorted(glob.glob(os.path.join(DRIVE_DIR, "rides", "ride_*.csv")) +
+                           glob.glob(os.path.join(DRIVE_DIR, "rides", "ride_*.csv.gz")))
             if not rides:
                 return all_files[-1:]
             return rides[-1:]
@@ -95,7 +97,14 @@ class BikeReport(tk.Toplevel):
         import csv
         rows = []
         try:
-            with open(path) as f:
+            # V4.34: support .csv.gz — the firmware gzips large rides
+            # and (pre-V5.12) mislabelled the wake uploads, so some
+            # files on Drive are gzip bytes under a .csv name.
+            # Sniff the magic bytes so both cases work.
+            with open(path, "rb") as probe:
+                is_gz = probe.read(2) == b"\x1f\x8b"
+            opener = gzip.open if is_gz else open
+            with opener(path, "rt") as f:
                 for r in csv.reader(f):
                     if not r or r[0].startswith("#") or r[0] == "epoch":
                         continue

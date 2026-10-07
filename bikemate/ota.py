@@ -1,7 +1,7 @@
 # === Bike-Mate GUI: ota ===
 # auto-extracted, edit here ===
 
-import os, subprocess, time, hashlib
+import os, subprocess, time, hashlib, shutil
 from datetime import datetime
 import requests
 from .config import *

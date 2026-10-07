@@ -1,7 +1,7 @@
 # === Bike-Mate GUI: helpers ===
 # auto-extracted, edit here ===
 
-import os, re, socket, hashlib
+import os, re, socket, hashlib, struct, time
 from datetime import datetime
 import requests
 from .config import *

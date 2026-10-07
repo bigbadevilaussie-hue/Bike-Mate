@@ -60,7 +60,17 @@ static void stripSealed(const char* in, char* out, size_t n) {
   strncpy(out, in, n - 1);
   out[n - 1] = 0;
   char* dot = strstr(out, ".sealed");
-  if (dot) *dot = 0;
+  if (!dot) return;
+  // V5.12: keep ".gz" so the upload name matches the content.
+  // Previously "wakes_X.csv.sealed.gz" was truncated to "wakes_X.csv"
+  // and the gzipped payload landed on Drive under a plain .csv name,
+  // breaking the reports which expect text in .csv files.
+  char* tail = dot + 7;  // strlen(".sealed")
+  if (strcmp(tail, ".gz") == 0) {
+    strcpy(dot, ".gz");
+  } else {
+    *dot = 0;
+  }
 }
 
 // ---- POST one file ----

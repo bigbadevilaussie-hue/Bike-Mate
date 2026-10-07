@@ -43,6 +43,9 @@ UPLOAD_URL = "https://script.google.com/macros/s/AKfycbzDVMS5o5TSlW4H99B8fxv4Cjw
 HIST_LEN = 60
 
 OTA_DIR = os.path.expanduser("~/bike-mate-ota")
+# V4.34: separate archive dir. ota.py wipes OTA_DIR on GUI start
+# (rmtree + makedirs), which was destroying the archived .bins.
+OTA_ARCHIVE_DIR = os.path.expanduser("~/bike-mate-ota-archive")
 OTA_PORT = 8000
 OTA_HOSTNAME = "192.168.8.187"
 OTA_TIMEOUT_SEC = 40

@@ -104,7 +104,7 @@ static void drawMaintScreen() {
   // remaining
   unsigned long now = millis();
   unsigned long elapsed = (now >= maintStartMs) ? (now - maintStartMs) : 0;
-  unsigned long cap = 900000UL;
+  unsigned long cap = MAINT_MAX_MS;
   long rem = (long)((cap - elapsed) / 1000UL);
   if (rem < 0) rem = 0;
   char rb[20];

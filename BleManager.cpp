@@ -676,10 +676,13 @@ void publishBLE() {
 
   char buf[240];
 
+  // V5.11: fv travels with every telemetry notify so the GUI has the
+  // firmware version on the first connect, not on the third or fourth.
+  // The onConnect one-shot notify was racing the next publishBLE().
   snprintf(
       buf,
       sizeof(buf),
-      "{\"v\":%.2f,\"t\":%.1f,\"a\":%d,\"e\":%d,\"w\":%d,\"s\":\"%s\",\"p\":%d,\"ll\":\"%ld.%04ld,%ld.%04ld\",\"lg\":%d,\"gs\":%d}",
+      "{\"v\":%.2f,\"t\":%.1f,\"a\":%d,\"e\":%d,\"w\":%d,\"s\":\"%s\",\"p\":%d,\"ll\":\"%ld.%04ld,%ld.%04ld\",\"lg\":%d,\"gs\":%d,\"fv\":\"%s\"}",
       latestBatteryVoltage,
       latestTemperatureC,
       accState ? 1 : 0,
@@ -692,7 +695,8 @@ void publishBLE() {
       (long)(lon / 10000000),
       (long)(labs((lon % 10000000) / 1000)),
       isLogging ? 1 : 0,
-      (int)gpsSats());
+      (int)gpsSats(),
+      BIKE_MATE_VERSION);
 
   pDataChar->setValue(
       (uint8_t*)buf,

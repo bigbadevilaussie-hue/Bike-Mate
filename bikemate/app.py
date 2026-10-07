@@ -410,9 +410,7 @@ class App:
             else:
                 with state.maintenance_lock:
                     state.maintenance_state = "OFF"
-                self.root.after(0, lambda: messagebox.showinfo(
-                    "OTA", f"Uploaded V{src_ver} in {dt:.1f}s.\n"
-                           f"Device is rebooting."))
+                print(f"[OTA] uploaded V{src_ver} in {dt:.1f}s, device rebooting")
         except Exception as e:
             err = str(e)
             print(f"[OTA] EXCEPTION: {err}")
@@ -600,6 +598,24 @@ class App:
             seconds=3)
 
     def open_settings(self):
+        # V4.33: during maint, BLE is off. Read settings over HTTP.
+        with state.maintenance_lock:
+            _maint = state.maintenance_state
+        if _maint == "ON":
+            def _http_read():
+                import urllib.request
+                try:
+                    with urllib.request.urlopen(
+                            f"http://{BIKE_IP}/settings", timeout=5) as r:
+                        js = json.loads(r.read().decode())
+                    print(f"[SET-DBG] http read: {js}")
+                    self.root.after(0, lambda: self._show_settings_dialog(js))
+                except Exception as exc:
+                    print(f"[SET-DBG] http read failed: {exc}")
+                    msg = f"Read failed:\n{exc}"
+                    self.root.after(0, lambda m=msg: messagebox.showerror("Settings", m))
+            threading.Thread(target=_http_read, daemon=True).start()
+            return
         def _read():
             print("[SET-DBG] open_settings triggered")
             t0 = time.time()
@@ -746,6 +762,28 @@ class App:
                 messagebox.showerror("Settings", "Invalid number"); return
             js = json.dumps(payload, separators=(",", ":"))
             def _write():
+                # V4.33: during maint, BLE is off. POST settings over HTTP.
+                with state.maintenance_lock:
+                    _maint = state.maintenance_state
+                if _maint == "ON":
+                    try:
+                        r = requests.post(
+                            f"http://{BIKE_IP}/settings",
+                            data=js,
+                            headers={"Content-Type": "text/plain"},
+                            timeout=5)
+                        print(f"[SET-DBG] http write: HTTP {r.status_code} {r.text[:80]}")
+                        if r.status_code == 200:
+                            set_status("Settings applied (HTTP)")
+                            print("[SET-DBG] settings applied, closing dialog")
+                            self.root.after(0, dlg.destroy)
+                        else:
+                            body = r.text[:200]
+                            self.root.after(0, lambda b=body: messagebox.showerror("Settings", f"Device rejected settings.\n{b}"))
+                    except Exception as exc:
+                        msg = f"Write failed:\n{exc}"
+                        self.root.after(0, lambda m=msg: messagebox.showerror("Settings", m))
+                    return
                 async def _do():
                     c = self.worker.client
                     ack_event = asyncio.Event()
@@ -776,7 +814,7 @@ class App:
                     status, code = fut.result(timeout=10)
                     if status == "ok":
                         set_status("Settings applied (ACK)")
-                        self.root.after(0, lambda: messagebox.showinfo("Settings", "Applied. Device confirmed (ACK)."))
+                        print("[SET-DBG] settings applied (BLE ACK), closing dialog")
                         self.root.after(0, dlg.destroy)
                     elif status == "fail":
                         self.root.after(0, lambda: messagebox.showerror("Settings", "Device rejected settings (0x%02X). Check ranges — Exit must be < Enter." % code))
@@ -818,6 +856,40 @@ class App:
         theme_walk(dlg)
 
     def tick(self):
+        # V4.33: auto-detect maint from the bike side. Covers entering
+        # maint by any path (post-OTA boot, engine-start bail recovery,
+        # GUI restart mid-maint) without restarting the GUI.
+        if not hasattr(self, "_maint_probe_fail"):
+            self._maint_probe_fail = 0
+            self._maint_probe_last = 0
+        now = time.time()
+        if now - self._maint_probe_last > 15:
+            self._maint_probe_last = now
+            def _probe():
+                import urllib.request
+                try:
+                    with urllib.request.urlopen(
+                            f"http://{BIKE_IP}/version", timeout=2) as r:
+                        up = (r.status == 200)
+                except Exception:
+                    up = False
+                def _apply():
+                    with state.maintenance_lock:
+                        cur = state.maintenance_state
+                        if up and cur == "OFF":
+                            state.maintenance_state = "ON"
+                            print("[MAINT] probe: server up, state -> ON")
+                            self._maint_probe_fail = 0
+                        elif not up and cur == "ON":
+                            self._maint_probe_fail += 1
+                            if self._maint_probe_fail >= 2:
+                                state.maintenance_state = "OFF"
+                                print("[MAINT] probe: server down twice, state -> OFF")
+                                self._maint_probe_fail = 0
+                        else:
+                            self._maint_probe_fail = 0
+                self.root.after(0, _apply)
+            threading.Thread(target=_probe, daemon=True).start()
         d = state.latest_data
         v = d.get("v"); t = d.get("t"); st = d.get("s", "--")
         stale = (time.time() - state.latest_seen_time) > BLE_STALE_SEC

@@ -4,7 +4,7 @@
 import tkinter as tk
 import tkinter.ttk
 from tkinter import messagebox
-import threading, time, os, requests, webbrowser
+import threading, time, os, sys, requests, webbrowser
 from .config import *
 from . import state
 from .helpers import *
@@ -151,6 +151,27 @@ class App:
 
     def apply_theme(self):
         t = self.theme
+        # V4.34: legacy colour aliases (BG, FG, GREEN, ...) are
+        # snapshotted into every module via `from .config import *`.
+        # Rebinding them in config.py alone is not enough - we have to
+        # re-set each name in each module's namespace or widgets keep
+        # drawing with the night palette after the theme flips.
+        _alias = {
+            "BG": t["bg"], "CARD": t["card"], "GRID": t["grid"],
+            "FG": t["fg"], "BLUE": t["blue"], "GREEN": t["green"],
+            "YELLOW": t["yellow"], "ORANGE": t["orange"],
+            "MUTED": t["muted"], "RED": t["red"],
+            "FILL_GREEN": t["fill"], "FILL_BLUE": t["fill"],
+        }
+        for _modname in ("bikemate.app", "bikemate.widgets", "bikemate.reports",
+                         "bikemate.helpers", "bikemate.ble", "bikemate.ota",
+                         "bikemate.drive", "bikemate.weather"):
+            _mod = sys.modules.get(_modname)
+            if _mod is None:
+                continue
+            for _k, _v in _alias.items():
+                if hasattr(_mod, _k):
+                    setattr(_mod, _k, _v)
         self.root.configure(bg=t["bg"])
 
         # Widgets whose bg/fg are driven by special logic, not just theme
@@ -467,30 +488,41 @@ class App:
                     "Already off.",
                     seconds=2)
                 return
-            state.maintenance_state = "PENDING"
 
-        # Off path is HTTP, not BLE. BLE is dead while maint is up.
-        # POST /maint/off, then poll until the serial server stops
-        # responding (bike has left maint).
+        # V4.34: off path is HTTP, not BLE. BLE is dead while maint is up.
+        # Keep state ON until the off-poll confirms the server has gone
+        # away. Do NOT set PENDING here - PENDING is for activate, and
+        # flipping to it during deactivate confuses the UI. Only start
+        # the off-poll AFTER the POST returns, so a failed POST doesn't
+        # leave us polling a bike that never got the command.
         import urllib.request
 
         def _post():
+            ok = False
             try:
                 req = urllib.request.Request(
                     f"http://{BIKE_IP}/maint/off",
                     method="POST")
                 with urllib.request.urlopen(req, timeout=5) as r:
                     print(f"[MAINT] /maint/off -> HTTP {r.status}")
+                    ok = True
             except Exception as e:
                 print(f"[MAINT] /maint/off failed: {e}")
+            if ok:
+                self.root.after(0, self._start_maint_off_poll)
 
         threading.Thread(target=_post, daemon=True).start()
-        self._start_maint_off_poll()
 
     def _start_maint_off_poll(self):
+        # V4.34: require 2 consecutive unreachable responses before
+        # flipping state to OFF. A single dropped request during the
+        # firmware's WiFi teardown is normal - the old code bounced
+        # OFF on the first miss, then the HTTP probe saw the server
+        # still up and flipped it back to ON, causing UI flicker.
         import urllib.request
         started = time.time()
         url = f"http://{BIKE_IP}/serial-raw"
+        misses = {"n": 0}
 
         def poll():
             elapsed = time.time() - started
@@ -499,16 +531,22 @@ class App:
                 with state.maintenance_lock:
                     state.maintenance_state = "OFF"
                 return
+            up = False
             try:
                 with urllib.request.urlopen(url, timeout=2) as r:
-                    if r.status == 200:
-                        # still up, keep polling
-                        pass
+                    up = (r.status == 200)
             except Exception:
-                print(f"[MAINT] off poll: server unreachable, state -> OFF")
-                with state.maintenance_lock:
-                    state.maintenance_state = "OFF"
-                return
+                up = False
+            if up:
+                misses["n"] = 0
+            else:
+                misses["n"] += 1
+                print(f"[MAINT] off poll: miss {misses['n']}/2")
+                if misses["n"] >= 2:
+                    print("[MAINT] off poll: server down twice, state -> OFF")
+                    with state.maintenance_lock:
+                        state.maintenance_state = "OFF"
+                    return
             self.root.after(2000, poll)
 
         self.root.after(2000, poll)

@@ -254,8 +254,8 @@ class WaitingForRide(tk.Toplevel):
         self.after(1000, self._poll)
 
     def _poll(self):
-        with latest_ride_lock:
-            r = latest_ride
+        with state.latest_ride_lock:
+            r = state.latest_ride
         if r and r.get("summary"):
             self.destroy()
             LastRideReport(self.app.root, self.app)
@@ -282,8 +282,8 @@ class LastRideReport(tk.Toplevel):
         self.resizable(False, False)
         self.transient(parent)
 
-        with latest_ride_lock:
-            ride = latest_ride
+        with state.latest_ride_lock:
+            ride = state.latest_ride
         if not ride or not ride.get("summary"):
             tk.Label(self, text="No ride data", font=("Helvetica", 14)).pack(padx=40, pady=40)
             tk.Button(self, text="Close", command=self.destroy).pack(pady=(0, 20))
@@ -335,10 +335,24 @@ class LastRideReport(tk.Toplevel):
         tcf = tk.Frame(tc, bg=t["card"]); tcf.pack(fill="x", pady=10)
         self._stat(tcf, "TEMP MIN", f"{s['minTemp']}C", t["fg"])
         self._stat(tcf, "TEMP MAX", f"{s['maxTemp']}C", t["fg"])
+        # V4.34: decode flags to a human label and match the graph
+        # colour convention (green=OK, yellow=UNDER, red=OVER).
         flags = s.get("flags", 0)
-        flag_str = "OK" if flags == 0 else f"0x{flags:02X}"
-        self._stat(tcf, "FLAGS", flag_str,
-                   t["muted"] if flags == 0 else t["yellow"])
+        FLAG_UNDER = 0x01
+        FLAG_OVER  = 0x02
+        FLAG_WARN  = 0x04 | 0x08 | 0x10 | 0x20   # freezing/hot/storage
+        FLAG_PANIC = 0x40
+        if flags & FLAG_PANIC:
+            flag_str, flag_col = "PANIC", t["red"]
+        elif flags & FLAG_OVER:
+            flag_str, flag_col = "OVER", t["red"]
+        elif flags & FLAG_UNDER:
+            flag_str, flag_col = "UNDER", t["yellow"]
+        elif flags & FLAG_WARN:
+            flag_str, flag_col = "WARN", t["yellow"]
+        else:
+            flag_str, flag_col = "OK", t["green"]
+        self._stat(tcf, "FLAGS", flag_str, flag_col)
 
         # Voltage graph - auto-scaled, coloured by status
         tk.Label(self, text="VOLTAGE (green=OK, yellow=UNDER, red=OVER)",

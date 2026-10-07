@@ -159,29 +159,48 @@ class BLEWorker(threading.Thread):
     async def _loop(self):
 
         def on_data(sender, data):
+            # V4.34: reassemble BLE fragments. macOS bleak splits any
+            # notify larger than the negotiated MTU into multiple
+            # callbacks. The firmware sends ~130 bytes of JSON; that
+            # crosses the ~100-byte effective MTU and arrives in 2
+            # pieces. Buffer until the JSON parses, then dispatch.
             payload = bytes(data)
-
             if not payload:
                 return
+            if not hasattr(on_data, "buf"):
+                on_data.buf = b""
+            on_data.buf += payload
             try:
-                d = json.loads(payload.decode())
-                state.latest_data.update(d)
-                state.latest_seen_time = time.time()
-                if "fv" in d:
-                    if state.device_version != d["fv"]:
-                        state.device_version = d["fv"]
-                        print(f"[DEVICE] firmware version: {d['fv']}")
-                if "v" in d and "t" in d:
-                    v = float(d["v"])
-                    t = float(d["t"])
-                    if t < 24.0:
-                        print(f"[TSPIKE] raw={payload.decode()}")
-                    state.volt_hist.append(v)
-                    state.temp_hist.append(t)
+                d = json.loads(on_data.buf.decode())
+            except json.JSONDecodeError:
+                # Not complete yet. Cap the buffer so a genuinely bad
+                # payload can't grow without bound.
+                if len(on_data.buf) > 512:
+                    if time.time() - state.last_parse_fail > 10:
+                        state.last_parse_fail = time.time()
+                        print(f"[NOTIFY] parse fail (buf reset) raw={on_data.buf[:100]}")
+                    on_data.buf = b""
+                return
             except Exception as e:
+                on_data.buf = b""
                 if time.time() - state.last_parse_fail > 10:
                     state.last_parse_fail = time.time()
                     print(f"[NOTIFY] parse fail: {e} raw={payload[:100]}")
+                return
+            on_data.buf = b""
+            state.latest_data.update(d)
+            state.latest_seen_time = time.time()
+            if "fv" in d:
+                if state.device_version != d["fv"]:
+                    state.device_version = d["fv"]
+                    print(f"[DEVICE] firmware version: {d['fv']}")
+            if "v" in d and "t" in d:
+                v = float(d["v"])
+                t = float(d["t"])
+                if t < 24.0:
+                    print(f"[TSPIKE] raw={json.dumps(d)}")
+                state.volt_hist.append(v)
+                state.temp_hist.append(t)
 
         while self.running:
             try:

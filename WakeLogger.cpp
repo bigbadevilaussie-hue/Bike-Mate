@@ -38,6 +38,19 @@ static void buildFilename(uint32_t epoch, char* buf, size_t n) {
            ti->tm_year + 1900, ti->tm_mon + 1, ti->tm_mday);
 }
 
+// V5.17: sealed files get HHMMSS so each seal is a unique upload
+// path. GitHub Contents API rejects a PUT without "sha" when the
+// target path already exists; unique names avoid the probe-GET.
+static void buildSealedName(uint32_t epoch, char* buf, size_t n) {
+  setenv("TZ", "AEST-10", 1);
+  tzset();
+  time_t t = epoch;
+  struct tm* ti = localtime(&t);
+  snprintf(buf, n, "/wakes_%04d-%02d-%02d_%02d%02d%02d.csv",
+           ti->tm_year + 1900, ti->tm_mon + 1, ti->tm_mday,
+           ti->tm_hour, ti->tm_min, ti->tm_sec);
+}
+
 static void writeHeader(File& f, uint32_t epoch) {
   f.print("# fw=");
   f.println(BIKE_MATE_VERSION);
@@ -237,14 +250,40 @@ bool wakeLoggerForceRotate(uint32_t triggerEpoch) {
     return openCurrentFile(triggerEpoch);
   }
 
-  // V3.32: check for pending sealed file FIRST
-  char sealed[64];
-  snprintf(sealed, sizeof(sealed), "%s.sealed", _currentPath);
+  // V5.17: unique sealed name includes HHMMSS so each seal is a
+  // distinct upload path on GitHub (avoids 422 "sha" required).
+  char sealedBase[64];
+  buildSealedName(triggerEpoch, sealedBase, sizeof(sealedBase));
+  char sealed[80];
+  snprintf(sealed, sizeof(sealed), "%s.sealed", sealedBase);
 
-  if (LittleFS.exists(sealed)) {
-    // Previous seal never uploaded. Do NOT rotate — that would destroy it.
-    tprint("[WAKE] pending seal exists, skipping rotate: %s", sealed);
-    return false;
+  // V5.17: scan for any pending .sealed file. With unique HHMMSS
+  // names, checking a single constructed path won't catch a seal
+  // from a prior cycle that failed to upload. If any wake file
+  // ends in .sealed, skip this rotation rather than risk losing it.
+  {
+    File root = LittleFS.open("/");
+    if (root && root.isDirectory()) {
+      File e = root.openNextFile();
+      while (e) {
+        const char* n = e.name();
+        if (n && strstr(n, "wakes_")) {
+          // Match ".sealed" as a suffix only. A substring test would
+          // also match ".sealed.gz", which is a successful gzip — not
+          // a stuck seal — and would block rotation forever.
+          size_t nlen = strlen(n);
+          if (nlen > 7 && strcmp(n + nlen - 7, ".sealed") == 0) {
+            tprint("[WAKE] pending seal exists, skipping rotate: %s", n);
+            e.close();
+            root.close();
+            return false;
+          }
+        }
+        e.close();
+        e = root.openNextFile();
+      }
+      root.close();
+    }
   }
 
   // Rename current to .sealed

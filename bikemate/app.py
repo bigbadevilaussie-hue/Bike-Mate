@@ -65,6 +65,8 @@ class App:
         reports_menu.add_command(label="Weekly",       command=lambda: self.open_report("week"))
         am.add_cascade(label="📊 Reports", menu=reports_menu)
         am.add_separator()
+        am.add_command(label="🛠️  Dyna Tune", command=self.open_dynatune)
+        am.add_separator()
         am.add_command(label="🌗 Toggle Day/Night", command=self.toggle_theme)
         am.add_separator()
         am.add_command(label="Quit", command=self.on_quit)
@@ -901,6 +903,49 @@ class App:
             for c in w.winfo_children():
                 theme_walk(c)
         theme_walk(dlg)
+
+    def open_dynatune(self):
+        fake = {
+            "ride": {
+                "charge_delta":     {"status": "PASS", "metric": "1.32 V", "detail": "avg running 14.21 - pre-ride 12.89"},
+                "crank_sag":        {"status": "PASS", "metric": "10.8 V", "detail": "min in first 30 s"},
+                "sag_recovery":     {"status": "PASS", "metric": "1.4 s"},
+                "charge_high":      {"status": "PASS", "metric": "14.31 V"},
+                "charge_stability": {"status": "PASS", "metric": "0.09 V"},
+                "under_duration":   {"status": "PASS", "metric": "0 s"},
+                "over_duration":    {"status": "PASS", "metric": "0 s"},
+            },
+            "data": {
+                "clock_validity": {"status": "PASS"},
+                "upload_success": {"status": "PASS"},
+                "gps_fix_rate":   {"status": "IDLE"},
+            },
+            "device": {
+                "panic_count":    {"status": "PASS"},
+                "storage_usage":  {"status": "PASS"},
+            },
+            "hardware": {
+                "ntc_plausible":     {"status": "PASS"},
+                "divider_plausible": {"status": "PASS"},
+            },
+            "config": {
+                "run_order":     {"status": "PASS"},
+                "monitor_order": {"status": "PASS"},
+                "sag_floor":     {"status": "PASS"},
+            },
+        }
+        meta = {
+            "fw": state.latest_data.get('fv', '?'),
+            "time_range": "—",
+            "hours": "—",
+            "samples": "—",
+            "rest_rate": "43 mV/day",
+            "pre_ride_v": "12.89",
+            "avg_running_v": "14.21",
+            "runway_note": "placeholder - real analysis pending",
+        }
+        from .dynatune_window import DynaTuneWindow
+        DynaTuneWindow(self.root, self, fake, meta)
 
     def tick(self):
         # V4.33: auto-detect maint from the bike side. Covers entering

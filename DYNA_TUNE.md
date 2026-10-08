@@ -10,15 +10,16 @@ Post-ride diagnostics and Settings History. Two connected features:
   recommendation, the change is tracked to see whether it actually
   improved the target KPI.
 
-Together they close the loop: `analyse → recommend → apply → measure →
-validate or revert`.
+The closed loop: `analyse → recommend → apply → measure → validate or
+revert`.
 
 The prime directive is unchanged — do not drain the bike battery past
 crank. Dyna Tune is how the trend gets seen before the cliff.
 
 ## Status
 
-Specification only. No code yet.
+Specification v2. `bikemate/dynatune_window.py` exists as a mock window.
+`bikemate/dynatune.py` (the analysis engine) is not yet written.
 
 ---
 
@@ -67,8 +68,13 @@ Specification only. No code yet.
 | 7 days later | 12.6 V |
 | Running, idle | 14.2 V |
 
-Decay rate observed: **~43 mV/day** over 7 days. Consistent with ~2 mA
-average draw on a 10.5 Ah battery.
+**Rest-rate note:** the 12.9 → 12.6 V drop over 7 days is not all
+parasitic drain. The first few hours after engine-off are surface charge
+bleed-off, not real current. A meaningful parasitic-drain estimate needs
+readings taken at least 4–6 h after engine-off, and preferably overnight.
+Early drafts of this spec computed ~2 mA draw from the 7-day figure;
+that number is wrong. The real drain is much lower, and the check that
+uses it (`rest_rate`) requires the corrected method to be meaningful.
 
 ### 1.3 AGM voltage → state of charge
 
@@ -107,7 +113,8 @@ may not crank on a cold morning.
 **Climate implications for diagnostics:**
 
 - **Winter:** battery capacity 70–80% of nominal at 6 °C. Resting V
-  reads lower. Cranking sag deeper.
+  reads lower. Cranking sag deeper. Thresholds need seasonal baselines
+  so a cold morning doesn't false-WARN.
 - **Summer:** heat soak in engine bay. R/R output drops slightly.
   Resting V reads artificially low for 30–60 min after a hot ride.
 - **Humidity:** electronics need conformal coating or sealed enclosure.
@@ -119,9 +126,9 @@ may not crank on a cold morning.
 | R/R open (no charging) | Running V = resting V | `charge_delta` |
 | R/R short (overcharging) | Running V > 14.8 V | `charge_high` |
 | Weak battery | Cranking sag deepens | `crank_sag` |
-| Parasitic drain | Resting V decay steepens | `rest_rate` |
-| Aging battery | Resting V trend downward over months | `rest_trend` |
-| Connector heat | Intermittent running V drop | `charge_stability` |
+| Parasitic drain | Resting V decay steepens | `rest_rate` (v2) |
+| Aging battery | Resting V trend downward over months | `rest_trend` (v2) |
+| Connector heat | Intermittent running V drop | `charge_dropout` |
 | Ground corrosion | Running V lower than expected | `charge_delta` |
 
 ---
@@ -135,68 +142,198 @@ Three layers, built in order:
   section → check → `{status, metric, detail}`.
 - **History** — `bikemate/history.py`. Reads/writes `~/.bikemate/`.
   Pure Python, no GUI.
-- **Presentation** — `bikemate/dynatune_window.py`,
-  `bikemate/settings_history_window.py`. Tk.
+- **Presentation** — `bikemate/dynatune_window.py` (exists as a mock),
+  `bikemate/settings_history_window.py` (to be built).
 
 Statuses: `PASS` / `WARN` / `FAIL` / `IDLE`. IDLE means "no evidence
 either way" — not a failure.
 
+**Read-only by design.** Dyna Tune never changes bike settings. It
+analyses and recommends. Application of a recommendation is a user
+action through the existing Settings dialog, and that action is logged
+by the History layer.
+
+**Hard boundary.** `dynatune.py` takes rows and config, returns
+structured results. No filesystem, no HTTP/BLE, no Tk. That makes it
+unit-testable against synthetic ride CSVs.
+
 ---
 
-## 3. Checks — `ride` section
+## 3. Checks — `ride` section (v1)
 
 Ride CSV rows: `epoch, lat, lon, volt, temp, state`.
 
-| Check | Measurement | Rule | Healthy baseline |
-|---|---|---|---|
-| `duration` | row count vs time span | expected rows ≈ span / 5 s; gap > 2× → WARN | matches |
-| `charge_delta` | avg running V − pre-ride resting V | ≥ 1.3 V → PASS; ≥ 1.0 V → WARN; < 1.0 V → FAIL | 14.2 − 12.9 = 1.3 V |
-| `charge_high` | max running V | > 14.8 V sustained > 5 s → FAIL | ≤ 14.4 V |
-| `charge_stability` | running V std dev over ride | > 0.3 V → WARN | ≤ 0.15 V |
-| `crank_sag` | min V in first 30 s | ≥ 10.5 V → PASS; 9.5–10.5 → WARN; < 9.5 → FAIL | ~10.5–11 V observed |
-| `sag_recovery` | seconds from min V back to running V | ≤ 3 s → PASS; ≤ 8 s → WARN | < 2 s |
-| `under_duration` | seconds below `runUnder_mv` | 0 → PASS; ≤ 30 → WARN; > 30 → FAIL | 0 |
-| `over_duration` | seconds above `runOver_mv` | 0 → PASS; ≤ 10 → WARN; > 10 → FAIL | 0 |
-| `temp_range` | min/max temp | within plausible range (climate-adjusted) | 25–35 °C |
-| `temp_trend` | temp slope over ride | rising fast → WARN | gentle |
-| `end_clean` | last row V vs `runningExit_mv` | clean stop | yes |
+### 3.1 `charge_delta` — the primary charging check
 
-## 4. Checks — `data` section
+The critical check that would have caught the R/R failure. Two signals:
+
+- **Primary: absolute average running V.**
+  - PASS: ≥ 13.8 V
+  - WARN: 13.4–13.8 V
+  - FAIL: < 13.4 V
+- **Secondary: delta (avg running V − pre-ride resting V).**
+  - PASS: ≥ 1.3 V
+  - WARN: 1.0–1.3 V
+  - FAIL: < 1.0 V
+
+The primary signal catches the failure mode directly. The secondary
+signal is context: a healthy bike after a long sit has low pre-ride
+resting V (surface charge dissipated), so a healthy delta reads higher
+than on a recently-charged battery. Using delta alone produces false
+WARNs; using absolute V alone misses subtle degradation. Together they
+cover both.
+
+Additional sub-metrics for the detail popup, not separately
+status-scored:
+
+- `charge_min` — lowest running V
+- `charge_max` — highest running V
+- `charge_range` — charge_max − charge_min
+
+### 3.2 `charge_high`
+
+Max sustained running V over any 5 s window.
+
+- PASS: < 14.6 V
+- WARN: 14.6–14.8 V
+- FAIL: > 14.8 V sustained > 5 s
+
+**Overcharge is a hardware fault, not a config problem.** A FAIL here
+produces an informational recommendation ("investigate regulator"), never
+a "raise `runOver`" recommendation.
+
+### 3.3 `crank_sag`
+
+Minimum V in the first 30 s of the ride.
+
+- Rolling baseline: median of the last 10 cold starts (once that history
+  exists). PASS if within 0.5 V of the median.
+- Fixed backstop until the baseline exists:
+  - PASS: ≥ 10.5 V
+  - WARN: 9.5–10.5 V
+  - FAIL: < 9.5 V
+
+Temperature compensation: subtract 3 mV/°C per cell (≈ 20 mV/°C on a
+12 V battery) for readings below 20 °C. Prevents winter false WARNs.
+
+### 3.4 `sag_recovery`
+
+Seconds from min V during cranking back to running V (within 0.2 V of
+the ride's average running V).
+
+- PASS: ≤ 3 s
+- WARN: 3–8 s
+- FAIL: > 8 s
+
+### 3.5 `charge_stability`
+
+Standard deviation of running V over the ride.
+
+- PASS: ≤ 0.15 V
+- WARN: 0.15–0.30 V
+- FAIL: > 0.30 V
+
+Companion to `charge_dropout` (see v2 below). Stability catches
+sustained noise; dropout catches brief dips.
+
+### 3.6 `under_duration`
+
+Seconds below `runUnder_mv`.
+
+- PASS: 0
+- WARN: 1–30 s
+- FAIL: > 30 s
+
+### 3.7 `over_duration`
+
+Seconds above `runOver_mv`.
+
+- PASS: 0
+- WARN: 1–10 s
+- FAIL: > 10 s
+
+### 3.8 `end_clean`
+
+Comparison of last row V against `runningExit_mv`.
+
+- PASS: last V ≤ `runningExit_mv` + 0.3 V (ride ended as engine stopped)
+- WARN: last V within 0.5 V of `runningEnter_mv` (ambiguous)
+- FAIL: last V above `runningEnter_mv` (ride ended mid-run)
+
+### 3.9 `min_data`
+
+Sanity gate for the whole `ride` section. If any of these is true,
+every check in the section returns IDLE:
+
+- Row count < 10
+- Time span < 60 s
+- Fewer than 5 rows with a parseable voltage
+- Any clock discontinuity > 30 s between consecutive rows
+
+Prevents a 30 s ride from generating false PASS or FAIL results.
+
+### 3.10 Pre-ride resting V source
+
+`charge_delta` needs a reliable pre-ride resting V. Options, in order
+of preference:
+
+1. Last resting row in the wake log before the ride start epoch, if it
+   was recorded ≥ 30 min before the ride began.
+2. First row of the ride minus 0.3 V (assumes surface-charge
+   dissipation at ride start).
+3. The ride summary's `preRideVolt` field, if present.
+
+If none are available, `charge_delta` returns IDLE with a note.
+
+---
+
+## 4. Checks — `data` section (v1, wake log)
 
 Wake CSV rows: `epoch, lat, lon, volt, temp, state, flags, sats`.
 
 | Check | Measurement | Rule |
 |---|---|---|
-| `boot_count` | wake rows per 24 h | ≤ expected → PASS; > 2× → WARN |
 | `clock_validity` | `no epoch` wake rows / total | 0 → PASS; ≤ 5% → WARN; > 5% → FAIL |
-| `upload_success` | UPLOAD rows in wake log | at least 1 OK/day; any FAIL → FAIL |
-| `upload_latency` | time from seal to OK | ≤ 5 min → PASS; > 30 min → WARN |
-| `gps_fix_rate` | fix=1 rows / total | context-dependent |
-| `wake_cadence` | gap between wake rows | > 2× expected → WARN; > 5× → FAIL |
+| `upload_success` | UPLOAD rows | at least 1 OK/day; any FAIL → FAIL |
 
-## 5. Checks — `device` section
+Other checks in this section (`boot_count`, `upload_latency`,
+`wake_cadence`, `gps_fix_rate`) render as IDLE in v1 — rules stubbed,
+not enforced.
+
+---
+
+## 5. Checks — `device` section (v1)
 
 | Check | Measurement | Rule |
 |---|---|---|
 | `panic_count` | rows with `FLAG_PANIC` | 0 → PASS; any → FAIL |
-| `under_flag` | rows with `FLAG_UNDER_VOLT` | 0 → PASS; any → WARN |
-| `over_flag` | rows with `FLAG_OVER_VOLT` | 0 → PASS; any → WARN |
 | `storage_usage` | LittleFS % used | < 75% → PASS; < 90% → WARN; ≥ 90% → FAIL |
-| `maint_sessions` | maint start/end pairs | 0 → IDLE; ≥ 5/week → WARN |
-| `sleep_balance` | SLEEP vs WAKE events | balanced → PASS |
 
-## 6. Checks — `hardware` section
+`under_flag`, `over_flag`, `sleep_balance`, `maint_sessions` render
+IDLE in v1.
+
+---
+
+## 6. Checks — `hardware` section (v1)
 
 | Check | Measurement | Rule |
 |---|---|---|
-| `ntc_plausible` | temp range | 5–45 °C → PASS; edge → WARN |
+| `ntc_plausible` | temp range | 5–45 °C → PASS; edge → WARN; outside → FAIL |
 | `divider_plausible` | resting V range | 12.0–13.2 V → PASS |
-| `acc_transitions` | ACC on/off pairs in wake rows | balanced → PASS |
-| `sensor_noise` | V std dev across adjacent wakes | ≤ 20 mV → PASS; > 50 mV → WARN |
 
-## 7. Checks — `config` section
+`acc_transitions`, `sensor_noise` render IDLE in v1.
 
-Operates on the current settings snapshot (from `/settings` over HTTP).
+**`ntc_plausible` climate note:** 45 °C upper bound is fine for the
+sensor itself but an enclosure in engine-bay heat or direct sun after a
+hot ride can exceed that legitimately. Threshold is a starting point;
+widen after observing summer readings.
+
+---
+
+## 7. Checks — `config` section (v1)
+
+Operates on the current settings snapshot (from `/settings` over HTTP,
+cached to `~/.bikemate/live_config.json`).
 
 | Check | Rule |
 |---|---|
@@ -208,150 +345,332 @@ Operates on the current settings snapshot (from `/settings` over HTTP).
 | `charge_ceiling` | `runOver` between 14.5–15.0 V |
 | `panic_floor` | `monitorPanic ≥ 11.8 V` |
 
-## 8. Nice-to-have checks (v2+)
+---
 
-Require either additional hardware or long observation windows.
+## 8. Deferred checks (v2+)
 
-| Check | Needs | Value |
+Require either additional hardware, long observation windows, or
+firmware-side data that doesn't exist yet.
+
+| Check | Needs |
+|---|---|
+| `charge_dropout` | Second-by-second V tracking (current spec is 5 s cadence) |
+| `rest_rate` | Resting readings ≥ 4–6 h post-engine-off, rolling buffer |
+| `rest_runway` | `rest_rate` + current resting V |
+| `rest_trend` | 3+ months of resting readings |
+| `charge_curve` | Running V vs RPM |
+| `charge_regulation` | Run V over 10+ rides |
+| `temp_correlation` | Ride temp vs running V |
+| `crank_trend` | Crank sag over 10+ cold starts |
+| `parasitic_drain_estimate` | Known Ah + corrected `rest_rate` |
+| `climate_compensation` | Seasonal baselines in v1, live weather API v2 |
+| `boot_count` | Rule needs definition |
+| `upload_latency` | Rule needs definition |
+| `wake_cadence` | Rule needs definition |
+| `gps_fix_rate` | Rule needs definition |
+| `under_flag`, `over_flag` | Flag bits in wake rows need verifying |
+| `sleep_balance` | Rule needs definition |
+| `maint_sessions` | Rule needs definition |
+| `acc_transitions` | Rule needs definition |
+| `sensor_noise` | Rule needs definition |
+
+---
+
+## 9. Recommendations
+
+Recommendations are produced only for checks where the fix is a
+**settings change**, and only when there is enough evidence.
+
+### 9.1 v1 recommendation list
+
+| Source check | Recommendation | Notes |
 |---|---|---|
-| `rest_rate` | 2+ resting readings days apart | mV/day decay rate |
-| `rest_runway` | `rest_rate` + current resting V | days until 12.2 V |
-| `rest_trend` | 3+ months of resting readings | months-level aging slope |
-| `charge_curve` | Running V vs RPM | R/R health across rev band |
-| `charge_regulation` | Run V over 10+ rides | R/R output stability |
-| `temp_correlation` | Ride temp vs running V | R/R thermal behaviour |
-| `crank_trend` | Crank sag over 10+ cold starts | Battery aging |
-| `parasitic_drain_estimate` | Known Ah + rest_rate | average mA draw |
-| `climate_compensation` | Weather API or seasonal baselines | Widen thresholds in cold |
+| `charge_delta` FAIL | Investigate charging system (no setting change) | Hardware fault |
+| `charge_high` FAIL | Investigate regulator (no setting change) | Hardware fault |
+| `under_duration` FAIL | Consider raising `runUnder_mv` | Only if repeated over 4+ rides |
+| `over_duration` FAIL | Consider raising `runOver_mv` | Only if repeated over 4+ rides |
+| `config` any FAIL | Fix the specific setting | Immediate, no evidence wait |
+| `crank_sag` WARN/FAIL | Note battery age / CCA concern (informational) | No setting change |
 
----
+### 9.2 Confidence levels
 
-## 9. Settings History
+Every recommendation carries a confidence based on evidence count:
 
-### 9.1 Data files
+- **observation** — 1 ride. Displayed but not actionable.
+- **weak** — 2–3 rides. Suggest manual review.
+- **strong** — 4+ consistent rides. Actionable, has a Validate button.
 
-    ~/.bikemate/
-      settings_history.json
-      recommendations.json
+A single weird ride cannot generate a strong recommendation.
 
-### 9.2 Change entry
+### 9.3 Persistence before FAIL
 
-    {
-      "ts": 1791445000,
-      "key": "monitorWarning",
-      "old": 12.4,
-      "new": 12.5,
-      "source": "manual" | "recommended",
-      "rec_id": "r_..." | null,
-      "transport": "HTTP" | "BLE",
-      "note": ""
-    }
+For any check except `charge_high`, a single bad ride produces WARN,
+not FAIL. FAIL requires the condition to hold in 2 of the last 3 rides.
 
-### 9.3 Recommendation entry
+`charge_high` fails immediately — overcharge damages the battery
+quickly and cannot wait for confirmation.
 
-    {
-      "id": "r_20261008_120000_charge_delta",
-      "created": 1791445000,
-      "source_check": "charge_delta",
-      "target_setting": "monitorWarning",
-      "current_value": 12.4,
-      "suggested_value": 12.5,
-      "reason": "avg charge deficit 120 mV over 3 rides",
-      "status": "proposed",
-      "validated_at": null,
-      "result": null
-    }
+### 9.4 Recommendation schema
 
-Status lifecycle: `proposed` → `accepted` / `rejected` → `validated` /
-`regressed` / `neutral`.
+```json
+{
+  "id": "r_20261008_120000_charge_delta",
+  "confidence": "strong",
+  "evidence_rides": [1791445000, 1791448600, 1791452200, 1791455800],
+  "created": 1791445000,
+  "source_check": "charge_delta",
+  "target_setting": null,
+  "current_value": null,
+  "suggested_value": null,
+  "reason": "avg running V = 13.42 over 4 rides, was 14.18 previous week",
+  "why": {
+    "avg_running": 13.42,
+    "pre_ride_resting": 12.91,
+    "delta": 0.51,
+    "observed_over": 4
+  },
+  "status": "proposed",
+  "validated_at": null,
+  "result": null
+}
+The why field carries the numbers behind the recommendation. The
+detail popup in the window reads them directly — no recomputation, no
+hidden math.
+9.5 Recommendation lifecycle
 
-### 9.4 Where changes are logged
+proposed → accepted / rejected → validated / regressed /
+neutral.
 
-- `bikemate/app.py`, `apply()` HTTP branch — after `200 OK`
-- `bikemate/app.py`, `apply()` BLE branch — after ACK `0x01`
-- Firmware untouched; the log is a GUI artifact
+    proposed — produced by analyse(), shown in the Dyna Tune window.
 
-### 9.5 Validation
+    accepted — user applied the recommendation through the Settings
+    dialog. Recorded in settings_history.json with rec_id linking back.
 
-Manual for v1. User selects an `accepted` recommendation → clicks
-**Validate**. The GUI:
+    rejected — user dismissed it. Stored for posterity.
 
-1. Runs `analyse()` over rides since the recommendation's change entry
-   timestamp
-2. Compares `source_check` metric before vs after
-3. Writes `validated` / `regressed` / `neutral` back
+    validated — after ≥ 3 post-change rides in comparable conditions
+    (similar temp band, similar ride length), the target KPI improved.
 
-Auto-validation on GUI start is v2.
+    regressed — the KPI got worse.
 
----
+    neutral — no measurable change.
 
-## 10. Firmware-side companions (separate work)
+9.6 Validation UX
 
-### 10.1 Charge-failure email alert
+When the user clicks Validate, the window shows:
+
+    Before / after metric values
+
+    Rides used
+
+    Temperature and ride-length comparison (to show conditions matched)
+
+    A one-click Revert button on regressed entries
+
+Revert logs a new change entry with reverted_from set to the original
+change's id. The bike's settings are written back through the normal
+Settings apply path.
+~/.bikemate/
+  settings_history.json     schema: 1
+  recommendations.json      schema: 1
+  live_config.json          schema: 1
+  baselines.json            schema: 1
+  last_good.json            schema: 1
+9.5 Recommendation lifecycle
+
+proposed → accepted / rejected → validated / regressed /
+neutral.
+
+    proposed — produced by analyse(), shown in the Dyna Tune window.
+
+    accepted — user applied the recommendation through the Settings
+    dialog. Recorded in settings_history.json with rec_id linking back.
+
+    rejected — user dismissed it. Stored for posterity.
+
+    validated — after ≥ 3 post-change rides in comparable conditions
+    (similar temp band, similar ride length), the target KPI improved.
+
+    regressed — the KPI got worse.
+
+    neutral — no measurable change.
+
+9.6 Validation UX
+
+When the user clicks Validate, the window shows:
+
+    Before / after metric values
+
+    Rides used
+
+    Temperature and ride-length comparison (to show conditions matched)
+
+    A one-click Revert button on regressed entries
+
+Revert logs a new change entry with reverted_from set to the original
+change's id. The bike's settings are written back through the normal
+Settings apply path.
+10. Settings History
+10.1 Data files
+text
+
+~/.bikemate/
+  settings_history.json     schema: 1
+  recommendations.json      schema: 1
+  live_config.json          schema: 1
+  baselines.json            schema: 1
+  last_good.json            schema: 1
+
+Every JSON file has a schema field. Bumping it later requires a
+migration path.
+10.2 Change entry
+json
+
+{
+  "schema": 1,
+  "bike_id": "sprint-st-1050",
+  "ts": 1791445000,
+  "key": "monitorWarning",
+  "old": 12.4,
+  "new": 12.5,
+  "source": "manual" | "recommended",
+  "rec_id": "r_..." | null,
+  "reverted_from": "s_..." | null,
+  "transport": "HTTP" | "BLE",
+  "note": ""
+}
+
+bike_id is a short string so multi-bike is not a migration later. v1
+only ever has one value.
+10.3 Where changes are logged
+
+    bikemate/app.py, apply() HTTP branch — after 200 OK
+
+    bikemate/app.py, apply() BLE branch — after ACK 0x01
+
+    Firmware untouched; the log is a GUI artifact
+
+10.4 Config snapshot per ride
+
+Every ride summary stored in NVS gains a compact config snapshot:
+the seven settings values active at ride start. This kills the
+live_config open question — "what settings were active for this
+ride" is never a guess.
+
+Implementation: add a cfg blob to the RideSummary struct or write
+a sidecar. Firmware change required. Tracked as v2 firmware work.
+10.5 Default ride selection
+
+Dyna Tune analyses the newest file in ~/bike-mate-drive/rides/
+by default, with a picker for older files. Not state.latest_ride
+from memory — that disappears when the app closes and is harder to
+unit-test.
+11. Firmware-side companions (deferred)
+11.1 Charge-failure email alert
 
 The prime directive demands advance warning before stranding. The
-GUI-side `charge_delta` check catches failure after it happens, on the
+GUI-side charge_delta check catches failure after it happens, on the
 next GUI sync. Firmware can catch it during the ride that detected it.
 
-- On ride close, compute running V average
-- If avg < `runUnder_mv` for > 30 s during the ride → set `chargeFail`
-  RTC flag
-- On next wake with WiFi available, send alert email
+    On ride close, compute running V average
 
-### 10.2 Rest-rate RTC log
+    If avg < runUnder_mv for > 30 s during the ride → set chargeFail
+    RTC flag
 
-- Every wake without engine running: record `(epoch, resting_v)` into a
-  rolling 7-entry buffer
-- On upload cycle, flush buffer to a sidecar file
-- GUI reads sidecar to compute mV/day trend
+    On next wake with WiFi available, send alert email
 
----
+    Next-wake mail, not mid-ride. A mid-ride WiFi cost isn't worth
+    saving one wake cycle.
 
-## 11. Build order
+11.2 Rest-rate RTC log
 
-| # | Deliverable | Depends on | Verify |
-|---|---|---|---|
-| 1 | `history.py` — logging only | — | Change setting, restart GUI, see entry |
-| 2 | `settings_history_window.py` | 1 | Window shows current + changes |
-| 3 | `dynatune.py` — checks, no recs | — | Run `analyse()`, see grid |
-| 4 | `dynatune_window.py` | 3 | Window renders sections |
-| 5 | Recommendations in `dynatune.py` | 3 | Trigger FAIL, see rec |
-| 6 | Rec → change linkage | 1, 5 | Apply rec, see `rec_id` in history |
-| 7 | Manual validate | 6 | Change setting, ride, validate |
-| 8 | Firmware `chargeFail` + mail | — | Simulated ride, next wake sends mail |
-| 9 | Firmware rest-rate RTC log | — | Two days apart, sidecar has two rows |
+    Every wake without engine running: record (epoch, resting_v) into a
+    rolling 7-entry buffer
 
-Steps 1, 3, 8, 9 independent. Steps 2, 4, 5 depend on foundations.
-Steps 6, 7 depend on both branches.
+    On upload cycle, flush buffer to a sidecar file
 
----
+    GUI reads sidecar to compute mV/day trend
 
-## 12. Out of scope for v1
+Both deferred until the PC-side Dyna Tune and History are demonstrated
+against existing CSVs.
+12. Build order
+#	Deliverable	Depends on	Verify
+1	bikemate/history.py — logging only	—	Change setting, restart GUI, see entry
+2	bikemate/settings_history_window.py	1	Window shows current + changes
+3	bikemate/dynatune.py — ride section only	—	Run on real ride CSV, see results
+4	Wire open_dynatune to real analyse()	3	Window shows real ride data
+5	dynatune.py — data / device / hardware / config sections	3	Full grid populates
+6	Recommendations in dynatune.py	3	Trigger a FAIL, see rec
+7	Rec → change linkage	1, 6	Apply rec, see rec_id in history
+8	Manual validate + revert	7	Change setting, ride, validate
+9	Firmware chargeFail + mail	—	Simulated ride, next wake sends mail
+10	Firmware rest-rate RTC log	—	Two days apart, sidecar has two rows
 
-- Firmware writes `dyna_*` to `DYNA/`
-- Auto-run at ride-close
-- Auto-validate on GUI start
-- Fleet / multi-bike
-- Export / import of history JSON
-- ML / anomaly detection
-- OBD-II integration
-- Any change to flash layout, NVS schema, or upload path
-- Any new HTTP endpoint or BLE characteristic
-- Automatic application of recommendations
+Steps 1, 3, 9, 10 independent. Steps 2, 4-8 depend on foundations.
 
----
+Mock state today: dynatune_window.py exists with placeholder
+analysis from open_dynatune(). Data is fake until step 3 and 4.
+13. Out of scope for v1
 
-## 13. Open questions
+    Firmware writes dyna_* to DYNA/
 
-1. **Source of `live_config` offline** — read from bike during maint and
-   cache to `~/.bikemate/live_config.json`; or mirror NVS on every
-   `/settings` read.
-2. **Which ride Dyna Tune analyses by default** — in-memory
-   `state.latest_ride` or newest file in `~/bike-mate-drive/rides/`.
-3. **v1 recommendation list** — the checks in section 7 each imply a
-   suggestion rule; confirm or trim.
-4. **Climate context** — pass current weather into Dyna Tune for
-   threshold adjustment, or keep climate baked into seasonal baselines.
-5. **Where Settings History lives** — Reports menu vs Maintenance.
-6. **Firmware `chargeFail` timing** — mail mid-ride (WiFi during engine
-   running, battery cost) or next wake (safer, one wake delay).
+    Auto-run at ride-close
+
+    Auto-validate on GUI start
+
+    Fleet / multi-bike
+
+    Export / import of history JSON
+
+    ML / anomaly detection
+
+    OBD-II integration
+
+    Any change to flash layout, NVS schema, or upload path (except 10.4)
+
+    Any new HTTP endpoint or BLE characteristic
+
+    Automatic application of recommendations
+
+    Live weather API (seasonal baselines first)
+
+14. Open questions
+
+    live_config offline — resolve by caching on every /settings
+    read to ~/.bikemate/live_config.json with a fetched_at
+    timestamp. Stale config (> 24 h) marks the config section WARN.
+
+    Default ride — resolved: newest file on disk (section 10.5).
+
+    v1 recommendation list — trimmed in section 9.1.
+
+    Climate — seasonal baselines baked in for v1; live weather API
+    deferred to v2.
+
+    Where Settings History lives — Maintenance menu (operational,
+    not a report).
+
+    Firmware chargeFail timing — resolved: next wake
+    (section 11.1).
+
+15. Review history
+
+Three external reviews of the v1 spec landed 2026-10-08. Their
+suggestions are folded into this document.
+
+    Claude — flagged rest-rate math error, charge_delta baseline
+    problem, temperature compensation, rolling baselines, persistence
+    rules, charge_dropout, validation evidence requirements.
+
+    ChatGPT — read-only design, dynatune.py hard boundary, trimmed
+    recommendation surface, confidence levels, "why" field on
+    recommendations, firmware companions later.
+
+    Grok — pre-ride resting V source, tight recommendation list,
+    seasonal baselines, disk-file default ride, bike_id, schema
+    versioning, validation UX.
+
+Where the three diverged on charge_delta, the resolution is
+absolute-primary + delta-secondary + companions (section 3.1). Where
+they diverged on temperature, seasonal baselines ship in v1 and live
+compensation is deferred (section 1.4, section 8).

@@ -135,6 +135,31 @@ uint32_t currentEpoch() {
   return macTimeEpoch + (totalSeconds - secondsAtSync);
 }
 
+// V5.18: persist the clock to NVS so a cold boot doesn't lose
+// the epoch. Without this, a ride started after a cold boot has
+// currentEpoch()==0, startRideLog() bails, and the ride is lost.
+static void clockSave() {
+  if (macTimeEpoch == 0) return;
+  Preferences p;
+  p.begin("clock", false);
+  p.putUInt("epoch", macTimeEpoch);
+  p.putUInt("at_total", secondsAtSync);
+  p.end();
+}
+
+static bool clockRestore() {
+  Preferences p;
+  p.begin("clock", true);
+  uint32_t e = p.getUInt("epoch", 0);
+  uint32_t t = p.getUInt("at_total", 0);
+  p.end();
+  if (e < 1700000000UL || e > 4102444800UL) return false;
+  macTimeEpoch = e;
+  secondsAtSync = t;
+  tprint("[CLOCK] restored from NVS epoch=%lu", (unsigned long)e);
+  return true;
+}
+
 void formatTime12h_buf(uint32_t e, char* out, size_t n) {
   if (e == 0) { snprintf(out, n, "--:--"); return; }
   time_t t = e;
@@ -245,6 +270,8 @@ static void goToSleep() {
     tprint("[SLEEP] abort - maint requested during sleep prep");
     return;
   }
+
+  clockSave();
 
   const char* mode = currentWakeMode();
   uint32_t wakeMs = currentWakeMs();
@@ -567,9 +594,11 @@ void setup() {
   tprint("[BOOT] cycleCount = %lu", cycleCount);
   bool coldBoot = (cause == ESP_SLEEP_WAKEUP_UNDEFINED);
   if (coldBoot) {
-    macTimeEpoch = 0;
-    totalSeconds = 0;
-    secondsAtSync = 0;
+    if (!clockRestore()) {
+      macTimeEpoch = 0;
+      totalSeconds = 0;
+      secondsAtSync = 0;
+    }
     engineWasRunning = false;
     accState = false;
     inPanic = false;

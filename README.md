@@ -10,73 +10,49 @@ AGM, the practical cranking floor is ~12.2 V rested.
 
 ## Current state
 
-- **Firmware:** see `Config.h` → `BIKE_MATE_VERSION`
-- **GUI:** see `bikemate/config.py` → `GUI_VERSION`
+- **Firmware:** `Config.h` → `BIKE_MATE_VERSION`
+- **GUI:** `bikemate/config.py` → `GUI_VERSION`
 - **Repo:** https://github.com/bigbadevilaussie-hue/Bike-Mate
 - **Local:** `~/Documents/Arduino/bike_mate/`
-- **Hardware:** breadboard (perfboard pending)
-- **Bike:** Triumph Sprint ST 1050
+- **Bike:** Triumph Sprint ST 1050 (breadboard build)
 
 ---
 
 ## Hardware
 
-### Bench
-- XCW ESP32-C3 SuperMini (no onboard OLED)
-- External 0.96" SSD1306 128x64 OLED (I2C, addr 0x3C)
-- MP1584EN buck module (12 V → 5 V)
-- 12 V bench PSU (30 V / 3 A)
-- 12 V divider 98.8k / 9.98k on GPIO 0
-- MF52AT NTC 10k (Beta 3950) on GPIO 3, with 100 nF ceramic
-- PN2222A + IRF4905 switched 12 V rail (breadboard, LED sim)
-- GY-NEO6M V2 NEO-6M GPS wired on bench
+- ESP32-C3 SuperMini + 0.96" SSD1306 OLED (I2C, 0x3C)
+- MP1584EN 12→5 V buck, 12 V bench PSU
+- Divider 98.8k/9.98k on GPIO 0, MF52AT NTC 10k on GPIO 3
+- NEO-6M GPS (RX/TX GPIO 2/21)
 
-### Pin map
-| Function | GPIO |
-|---|---|
-| Voltage sense | 0 |
-| ACC LED / MOSFET gate | 1 |
-| Thermistor | 3 |
-| Buzzer | 4 |
-| OLED SDA | 6 |
-| OLED SCL | 9 |
-| Status LED | 10 |
-| GPS RX / TX | 2 / 21 |
+**Pin map:** 0=voltage, 1=ACC LED, 3=thermistor, 4=buzzer, 6=SDA, 9=SCL,
+10=status LED.
 
-Note: GPIO 9 is an ESP32-C3 boot-strapping pin. Do not add strong external
-pull-downs or large capacitors.
+GPIO 9 is a boot-strapping pin — no strong pull-downs or caps.
 
 ---
 
 ## What it does
 
-- Wakes on a timer (30 s bench, 300/600 s field), reads voltage and temp,
-  runs a state machine, logs a wake row.
-- Detects engine start/stop by voltage (engine start >13.8 V, stop <13.0 V)
-  and logs a full ride CSV while the engine is running.
-- Advertises over BLE. GUI connects, reads live telemetry, pulls the newest
-  ride summary and rows.
-- Uploads wake and ride CSVs to GitHub (Contents API) at 04:00 local, or on
-  demand via GUI → Maintenance → Sync Bike-Mate (HTTP POST `/upload` during
-  maint). Compressed `.gz` deleted after successful upload; raw `.csv` /
-  `.sealed` kept on the bike. Newest completed ride held back (Rule 7) so the
-  GUI can pull it over BLE.
-- Sends Gmail SMTP alerts on low battery and PANIC.
-- Deep sleeps between wakes. Target sleep current is the whole point of the
-  design — see the Prime directive.
-- Maintenance mode (see below) brings WiFi up on demand for serial and OTA.
+- Timer wake (30 s bench, 300/600 s field) → read V/T → state machine → log row.
+- Engine start >13.8 V, stop <13.0 V. Ride CSV while engine is running.
+- BLE telemetry + newest-ride pull for the GUI.
+- Uploads wake + ride logs to GitHub at 04:00 local, or on-demand via
+  `/upload` during maint. Every file gzipped; raw deleted after gzip.
+  Newest ride held back (Rule 7) for GUI pull over BLE.
+- Gmail SMTP alerts on low battery / PANIC.
+- Deep sleeps between wakes. Prime directive: never drain the battery.
+- Maint mode brings WiFi up on demand for serial + OTA.
 
 ---
 
 ## Firmware
 
-- **Framework:** Arduino IDE 2.x, ESP32 core **2.0.17** (3.x not supported)
-- **Partition:** Minimal SPIFFS — the default partition is too small
-- **Build:** `arduino-cli compile --fqbn "esp32:esp32:esp32c3:PartitionScheme=min_spiffs" .`
-- **Serial:** 115200
-- **BENCH_MODE** in `Config.h` selects wake interval:
-  - 1 = 30 s wakes (bench only — do not deploy)
-  - 0 = 300 s day / 600 s night (field)
+- Arduino IDE 2.x, ESP32 core **2.0.17** (3.x unsupported)
+- Partition: **Minimal SPIFFS**
+- Build: `arduino-cli compile --fqbn "esp32:esp32:esp32c3:PartitionScheme=min_spiffs" .`
+- Serial: 115200
+- `BENCH_MODE` in `Config.h`: 1 = 30 s wakes (bench), 0 = 300/600 s (field)
 
 ### Firmware modules
 | File | Purpose |
@@ -118,67 +94,34 @@ pull-downs or large capacitors.
 
 ## Maintenance mode
 
-The bike sleeps most of the time. To do anything interactive — read serial,
-flash firmware, change settings — the bike must be woken into **maintenance
-mode**: WiFi up, HTTP server running, BLE off, awake for a bounded window.
+Bike must be woken into maint for interactive work: WiFi up, HTTP server,
+BLE off, bounded window.
 
-- **Enter:** GUI menu → Maintenance → Activate. GUI writes `{"maint":"on"}`
-  to the bike over BLE. Firmware sets `maintRequest = true` (RTC flag),
-  ACKs, sleeps. On the next wake, `bleInit()` is skipped and WiFi comes up.
-- **Exit:** `/maint/off` from the serial page or GUI, engine start detected
-  (voltage crosses `runningEnter_mv`), or the 5-min timeout.
-- **Safety cap:** `MAINT_MAX_MS` (5 min) in `Config.h`.
-- **During maint:** BLE off, WiFi up, serial page live, OTA and settings
-  available over HTTP. OLED shows `MAINT / MODE / <wifi state> / Ns left`.
-- **Clock:** Opal LAN (GL-SFT1200) is primary — fetch the Date header from
-  `http://<gateway>/`. NTP is fallback. No hard gate. Can be overridden via
-  `POST /clock` during maint.
-- **WiFi:** static IP `192.168.8.196`, gateway `192.168.8.1`, reserved on
-  the Opal. DHCP was unreliable and is disabled.
-- **TX power:** 8.5 dBm (`esp_wifi_set_max_tx_power(34)`). Mandatory on
-  this board — default TX breaks association.
-- **Coexistence:** the C3 in core 2.0.17 fails WiFi association after BLE
-  sometimes. `wifiBringUp()` retries 2× with a 3 s settle. `bleStop()` waits
-  for the BT controller to reach IDLE before WiFi init.
+- **Enter:** GUI → Maintenance → Activate. BLE writes `{"maint":"on"}`.
+- **Exit:** `/maint/off`, engine start, or `MAINT_MAX_MS` (5 min).
+- **Clock:** Opal LAN Date header (`http://<gateway>/`), NTP fallback.
+  Overridable via `POST /clock`. Never hard-gate on NTP.
+- **WiFi:** static IP `192.168.8.196`, gateway `192.168.8.1`.
+- **TX:** 8.5 dBm (`esp_wifi_set_max_tx_power(34)`) — mandatory.
+- **Coex:** C3 core 2.0.17 fails WiFi after BLE sometimes.
+  `wifiBringUp()` retries 2× with a 3 s settle.
 
-OTA is HTTP only. GUI POSTs the compiled `.bin` to `/ota?ver=X.YZ`.
-Firmware streams into `Update.h` and reboots. The old BLE-URL OTA path
-(`OtaManager.cpp`) is retired.
+OTA is HTTP only. GUI POSTs `.bin` to `/ota?ver=X.YZ`. Old BLE-URL path
+retired.
 
 ---
 
 ## GUI
 
-Python/Tk, modular package:
+Python/Tk package `bikemate/`: `config`, `state`, `helpers`, `weather`,
+`widgets`, `ota`, `drive`, `ble`, `reports`, `app`. Launcher is
+`bikemate.py`. Edit modules, not the launcher.
 
-    bikemate/
-      __init__.py
-      config.py    — constants, themes, UUIDs, IPs, timeouts
-      state.py     — mutable globals, deques, locks
-      helpers.py   — utility funcs, time/emoji helpers
-      weather.py   — weather fetch + background loop
-      widgets.py   — Graph
-      ota.py       — HTTP OTA servers
-      drive.py     — Drive sync + backup + local server
-      ble.py       — BLEWorker
-      reports.py   — BikeReport, LastRideReport, WaitingForRide
-      app.py       — App class (menu, tick, main window)
-    bikemate.py    — 10-line launcher
+Requires: `bleak`, `requests`, Python 3.8+, Tk.
 
-Edit modules in `bikemate/`, not the launcher.
-
-**Requires:** `bleak`, `requests`, Python 3.8+. Tk is stdlib.
-
-**Features:**
-- Live telemetry over BLE (v, t, acc, engine, warn, state, stor %, fw ver)
-- Ride pull over BLE (STREAM + REQUEST characteristics)
-- Maintenance mode control (activate/deactivate, state-aware menu)
-- Serial page (HTTP, during maint)
-- OTA over HTTP with progress stage polling
-- Settings read/write over HTTP during maint
-- Storage % badge (`💾 Stor`) in the Temp/Time row
-- Drive sync (pull from GitHub repo via `bikemate/drive.py`)
-- Two local HTTP servers on ports 8000 (OTA staging) + 8001 (Drive mirror)
+Features: BLE telemetry + ride pull, maint control, serial page, HTTP OTA
+with progress, settings, storage badge, Drive sync, local servers 8000
+(OTA) + 8001 (Drive).
 
 ---
 

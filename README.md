@@ -56,8 +56,11 @@ pull-downs or large capacitors.
   and logs a full ride CSV while the engine is running.
 - Advertises over BLE. GUI connects, reads live telemetry, pulls the newest
   ride summary and rows.
-- Uploads wake and ride CSVs to Google Drive via Apps Script at 04:00 local
-  (or on demand in bench mode). Deletes local file on success.
+- Uploads wake and ride CSVs to GitHub (Contents API) at 04:00 local, or on
+  demand via GUI → Maintenance → Sync Bike-Mate (HTTP POST `/upload` during
+  maint). Compressed `.gz` deleted after successful upload; raw `.csv` /
+  `.sealed` kept on the bike. Newest completed ride held back (Rule 7) so the
+  GUI can pull it over BLE.
 - Sends Gmail SMTP alerts on low battery and PANIC.
 - Deep sleeps between wakes. Target sleep current is the whole point of the
   design — see the Prime directive.
@@ -90,7 +93,7 @@ pull-downs or large capacitors.
 | `DisplayManager.cpp` | OLED rendering, edge-triggered updates |
 | `WifiManager.cpp` | WiFi bring-up, clock fetch (Opal LAN + NTP fallback) |
 | `WifiMail.cpp` | Gmail SMTP alerts |
-| `DriveUpload.cpp` | Wake + ride CSV upload to Drive via Apps Script |
+| `DriveUpload.cpp` | Wake + ride CSV upload to GitHub via Contents API |
 | `OtaManager.cpp` | Legacy BLE-URL OTA. Retired, still compiled |
 | `Settings.cpp` | Runtime settings in NVS `bikeset` |
 | `GpsModule.cpp` | NMEA parser for NEO-6M, no external library |
@@ -108,6 +111,8 @@ pull-downs or large capacitors.
 | `/version` | GET | `BIKE_MATE_VERSION` as text |
 | `/settings` | GET | Settings JSON |
 | `/settings` | POST | Apply settings JSON |
+| `/upload` | POST | Force upload now (maint only, returns immediately) |
+| `/clock` | POST | Set clock (decimal epoch string or 4 raw LE bytes) |
 
 ---
 
@@ -121,12 +126,13 @@ mode**: WiFi up, HTTP server running, BLE off, awake for a bounded window.
   to the bike over BLE. Firmware sets `maintRequest = true` (RTC flag),
   ACKs, sleeps. On the next wake, `bleInit()` is skipped and WiFi comes up.
 - **Exit:** `/maint/off` from the serial page or GUI, engine start detected
-  (voltage crosses `runningEnter_mv`), or the 15-min timeout.
-- **Safety cap:** `MAINT_MAX_MS` (15 min) in `Config.h`.
+  (voltage crosses `runningEnter_mv`), or the 5-min timeout.
+- **Safety cap:** `MAINT_MAX_MS` (5 min) in `Config.h`.
 - **During maint:** BLE off, WiFi up, serial page live, OTA and settings
   available over HTTP. OLED shows `MAINT / MODE / <wifi state> / Ns left`.
 - **Clock:** Opal LAN (GL-SFT1200) is primary — fetch the Date header from
-  `http://<gateway>/`. NTP is fallback. No hard gate.
+  `http://<gateway>/`. NTP is fallback. No hard gate. Can be overridden via
+  `POST /clock` during maint.
 - **WiFi:** static IP `192.168.8.196`, gateway `192.168.8.1`, reserved on
   the Opal. DHCP was unreliable and is disabled.
 - **TX power:** 8.5 dBm (`esp_wifi_set_max_tx_power(34)`). Mandatory on
@@ -164,13 +170,14 @@ Edit modules in `bikemate/`, not the launcher.
 **Requires:** `bleak`, `requests`, Python 3.8+. Tk is stdlib.
 
 **Features:**
-- Live telemetry over BLE (v, t, acc, engine, warn, state)
+- Live telemetry over BLE (v, t, acc, engine, warn, state, stor %, fw ver)
 - Ride pull over BLE (STREAM + REQUEST characteristics)
 - Maintenance mode control (activate/deactivate, state-aware menu)
 - Serial page (HTTP, during maint)
 - OTA over HTTP with progress stage polling
 - Settings read/write over HTTP during maint
-- Drive sync (pull from Apps Script)
+- Storage % badge (`💾 Stor`) in the Temp/Time row
+- Drive sync (pull from GitHub repo via `bikemate/drive.py`)
 - Two local HTTP servers on ports 8000 (OTA staging) + 8001 (Drive mirror)
 
 ---

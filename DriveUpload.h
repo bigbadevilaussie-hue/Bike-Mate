@@ -20,4 +20,4 @@ bool driveUploadShouldRun();
 
 // Performs the upload. Blocks until done.
 // Returns true if all files uploaded successfully.
-bool driveUploadPerform();
+bool driveUploadPerform(bool fromMaint = false);

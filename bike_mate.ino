@@ -80,7 +80,6 @@ unsigned long lastDisconnectMillis = 0;
 static bool firstTick = false;
 
 volatile bool wifiActive = false;
-volatile bool uploadRequested = false;
 
 unsigned long lastUploadAttempt = 0;
 
@@ -225,7 +224,6 @@ static bool shouldSleep() {
 
   if (otaRequest) return false;
   if (wifiActive) return false;
-  if (uploadRequested) return false;
   if (serverIsRunning()) return false;
   if (maintRequest) return false;
   if (millis() - bootMillis < 5000UL) return false;
@@ -519,12 +517,7 @@ void doStateWork(unsigned long now, bool wasWake) {
 #if UPLOAD_ENABLED
   bool uploadDue = false;
 
-  if (uploadRequested) {
-    uploadDue = true;
-    uploadRequested = false;
-    tprint("[UPLOAD] force trigger consumed");
-  }
-  else if (driveUploadShouldRun() && currentEpoch() > 0 &&
+  if (driveUploadShouldRun() && currentEpoch() > 0 &&
            (lastUploadAttempt == 0 ||
             millis() - lastUploadAttempt > UPLOAD_COOLDOWN_MS)) {
     uploadDue = true;
@@ -539,11 +532,6 @@ void doStateWork(unsigned long now, bool wasWake) {
 
     wifiActive = true;
     wakeLoggerPause();
-
-    uint32_t nowEp = currentEpoch();
-    if (nowEp > 0) {
-      wakeLoggerForceRotate(nowEp);
-    }
 
     driveUploadPerform();
 
@@ -599,7 +587,6 @@ void setup() {
     lowVoltLoops = 0;
     lowBattMailLatched = false;
     panicLatchCount = 0;
-    tprint("cold boot: state reset");
   } else {
     totalSeconds += currentWakeMs() / 1000;
     tprint_verbose("timer wake: totalSeconds = %lu", (unsigned long)totalSeconds);
@@ -610,7 +597,6 @@ void setup() {
   prefs.end();
   tprint("[OTA] boot read pending=%d", otaPending ? 1 : 0);
   if (otaPending) {
-    tprint("[OTA] ====== POST-UPDATE COLD BOOT DETECTED ======");
     prefs.begin("ota", false);
     prefs.putBool("pending", false);
     prefs.end();
@@ -681,7 +667,6 @@ void setup() {
   display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR);
   display.clearDisplay(); display.display();
   if (coldBoot) {
-    tprint("splash...");
     display.setTextColor(SSD1306_WHITE);
     display.setTextSize(2);
     display.setCursor(16, 12); display.print("Bike-Mate");
@@ -693,9 +678,6 @@ void setup() {
     display.clearDisplay(); display.display();
   }
   readSensors();
-  tprint("[ADC] raw=%d battery=%.2fV ntc=%d temp=%.1fC",
-         latestRawVoltage, latestBatteryVoltage,
-         latestNtcRaw, latestTemperatureC);
   // V4.88: if this wake is going to enter maintenance mode, do NOT
   // bring BLE up. V4.84 made the BLE link sticky across sleep, and on
   // the C3 (core 2.0.17, bad antenna) a BLE session that survives a
@@ -740,7 +722,7 @@ void loop() {
   static unsigned long lastGpsPrint = 0;
   if (millis() - lastGpsPrint > 5000) {
     lastGpsPrint = millis();
-    tprint("[GPS] fix=%d sats=%d spd=%.1f lat=%ld lon=%ld",
+    tprint_verbose("[GPS] fix=%d sats=%d spd=%.1f lat=%ld lon=%ld",
            gpsHasFix() ? 1 : 0, gpsSats(), gpsSpeed_kmh(),
            (long)gpsLat_x1e7(), (long)gpsLon_x1e7());
   }
@@ -831,7 +813,6 @@ void loop() {
   // V4.76: maintenance mode. Enter on next wake after BLE request.
   //   Exit: /maint/off hit, or MAINT_MAX_MS elapsed.
   if (maintRequest && !serverIsRunning()) {
-    tprint("[MAINT] ====== ENTERING MAINTENANCE MODE ======");
     wifiActive = true;
     wakeLoggerPause();
     if (wifiBringUp()) {
@@ -844,9 +825,18 @@ void loop() {
       tprint("[MAINT] active, cap %lus", MAINT_MAX_MS / 1000UL);
       bool engineStartBail = false;
       static unsigned long lastMaintOled = 0;
+      extern volatile bool uploadNowRequested;
       while (serverIsRunning()) {
         serverLoop();
         delay(20);
+
+        if (uploadNowRequested) {
+          uploadNowRequested = false;
+          tprint("[UPLOAD] /upload consumed, running now");
+          uint32_t nowEp = currentEpoch();
+          if (nowEp > 0) wakeLoggerForceRotate(nowEp);
+          driveUploadPerform(true);
+        }
 
         // V4.87: keep the OLED awake for the whole maint session.
         // Without this the screen stays blank after the prior
@@ -914,7 +904,7 @@ void loop() {
   bool inActiveWork = engineWasRunning || accState ||
                       isCountingDown || isArmingCountdown ||
                       isLogging || alarmSequenceActive ||
-                      lowBattBeepActive || uploadRequested;
+                      lowBattBeepActive;
 
   // V4.85: the guard measures idle time, not total awake time.
   // When we transition from busy to idle, reset the guard clock so

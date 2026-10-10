@@ -536,7 +536,7 @@ bool driveUploadShouldRun() {
 }
 
 // ---- main ----
-bool driveUploadPerform() {
+bool driveUploadPerform(bool fromMaint) {
   extern char wifiMessage[24];
 
   tprint("[UPLOAD] ====== ENTERING UPLOAD MODE ======");
@@ -594,7 +594,9 @@ bool driveUploadPerform() {
       totalFails
   );
 
-  wifiBringDown();
+  if (!fromMaint) {
+    wifiBringDown();
+  }
 
   // V4.39: newest_epoch is NEVER cleared here. The newest completed
   // ride stays on the ESP permanently so the GUI can pull it via BLE.

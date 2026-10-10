@@ -951,12 +951,23 @@ class App:
         DynaTuneWindow(self.root, self, fake, meta)
 
     def force_upload(self):
-        # V4.36: send force-upload command over BLE. Firmware sets
-        # uploadRequested; upload fires on the next wake.
-        print("[UPLOAD] request: {\"upload\":\"now\"}")
-        def on_result(ok, detail):
-            print(f"[UPLOAD] force result: {ok} ({detail})")
-        self.worker.send_ota_command('{"upload":"now"}', on_result)
+        # V4.37: maint-only HTTP upload. Fires immediately, no
+        # BLE, no waiting for the next wake.
+        import urllib.request
+        print("[UPLOAD] request: POST /upload")
+        def _post():
+            try:
+                req = urllib.request.Request(
+                    f"http://{BIKE_IP}/upload",
+                    method="POST")
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    body = r.read().decode(errors="replace")[:80]
+                    print(f"[UPLOAD] /upload -> HTTP {r.status} {body}")
+                set_status("upload done")
+            except Exception as e:
+                print(f"[UPLOAD] /upload failed: {e}")
+                set_status("upload failed")
+        threading.Thread(target=_post, daemon=True).start()
 
     def tick(self):
         # V4.33: auto-detect maint from the bike side. Covers entering

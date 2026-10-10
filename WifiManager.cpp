@@ -14,6 +14,7 @@
 #include <time.h>
 
 extern void tprint(const char* fmt, ...);
+extern void tprint_verbose(const char* fmt, ...);
 extern uint32_t macTimeEpoch;
 extern uint32_t secondsAtSync;
 extern uint32_t totalSeconds;
@@ -31,11 +32,11 @@ static void wifiDebugEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
 
   switch (event) {
     case ARDUINO_EVENT_WIFI_READY:
-      tprint("[WIFI-EVENT] READY");
+      tprint_verbose("[WIFI-EVENT] READY");
       break;
 
     case ARDUINO_EVENT_WIFI_STA_START:
-      tprint("[WIFI-EVENT] STA_START");
+      tprint_verbose("[WIFI-EVENT] STA_START");
       break;
 
     case ARDUINO_EVENT_WIFI_STA_CONNECTED: {
@@ -86,11 +87,11 @@ static void wifiDebugEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
       break;
 
     case ARDUINO_EVENT_WIFI_STA_LOST_IP:
-      tprint("[WIFI-EVENT] LOST_IP");
+      tprint_verbose("[WIFI-EVENT] LOST_IP");
       break;
 
     case ARDUINO_EVENT_WIFI_STA_STOP:
-      tprint("[WIFI-EVENT] STA_STOP");
+      tprint_verbose("[WIFI-EVENT] STA_STOP");
       break;
 
     default:
@@ -162,7 +163,7 @@ static bool opalClockSync() {
   http.collectHeaders(hdrs, 1);
 
   int code = http.GET();
-  tprint("[CLOCK] HTTP code=%d", code);
+  tprint_verbose("[CLOCK] HTTP code=%d", code);
   bool ok = false;
   if (code > 0) {
     String d = http.header("Date");
@@ -296,7 +297,7 @@ static bool _wifiBringUpOnce(unsigned long perAttemptTimeoutMs) {
     delay(400);
   }
 
-  tprint("[WIFI] OK %s", WiFi.localIP().toString().c_str());
+  tprint_verbose("[WIFI] OK %s", WiFi.localIP().toString().c_str());
   tprint("[WIFI] RSSI %d dBm", WiFi.RSSI());
   setMsg("Connected");
 

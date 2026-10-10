@@ -14,6 +14,7 @@
 #include <Preferences.h>
 
 extern void tprint(const char* fmt, ...);
+extern void tprint_verbose(const char* fmt, ...);
 
 // ---- RTC-persistent OTA state ----
 RTC_DATA_ATTR volatile bool otaRequest = false;
@@ -178,7 +179,7 @@ bool otaPerformUpdate(const char* url, uint32_t expectedSize, const char* expect
   otaStage = OTA_STAGE_REBOOT;
   for (int i = 5; i > 0; i--) {
     otaRebootCountdown = (uint8_t)i;
-    tprint("[OTA] reboot in %d...", i);
+    tprint_verbose("[OTA] reboot in %d...", i);
     drawOLED();
     delay(1000);
   }

@@ -202,6 +202,17 @@ Non-negotiable. Read first.
 - Every patch script must exit non-zero on anchor miss. Silent no-ops are
   worse than crashes.
 - Bike-Mate compile requires `:PartitionScheme=min_spiffs`.
+- zsh bracketed-paste mangles multi-line pastes even inside heredocs — lines
+  at the boundary get eaten silently. Fix once:
+  `echo 'unset zle_bracketed_paste' >> ~/.zshrc` then `exec zsh`. Or run
+  `bash` for the session.
+- If a heredoc still misbehaves: write the script with
+  `printf '%s\n' \` and one `'line' \` per line, redirect to `/tmp/x.py`,
+  then `python3 /tmp/x.py`.
+- Never paste Python with `python3 -c`. Always `/tmp/x.py`.
+- A Python string anchor matches the exact bytes. If a file ends without a
+  trailing newline, `"...;\n"` will MISS. Check with
+  `python3 -c 'print(repr(open("f").read()[-40:]))'` before writing the anchor.
 
 ### Patch discipline
 

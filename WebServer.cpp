@@ -10,6 +10,7 @@
 #include <Preferences.h>
 
 extern void tprint(const char* fmt, ...);
+extern void tprint_verbose(const char* fmt, ...);
 
 static WebServer server(80);
 static bool running = false;
@@ -100,7 +101,6 @@ static void handleOtaUpload() {
       if (cl.length() > 0) {
         otaProgressTotal = (uint32_t)cl.toInt();
       }
-      tprint("[OTA] content-length=%lu", (unsigned long)otaProgressTotal);
     }
     // V4.90: GUI passes target version as ?ver=X.YZ so the OLED can
     // show it. HTTP OTA has no other source for the incoming version.
@@ -135,7 +135,7 @@ static void handleOtaUpload() {
         _otaBytes += upload.currentSize;
         if (_otaBytes - _otaLastLoggedKB >= 65536) {
           _otaLastLoggedKB = _otaBytes;
-          tprint("[OTA] %lu KB", (unsigned long)(_otaBytes / 1024));
+          tprint_verbose("[OTA] %lu KB", (unsigned long)(_otaBytes / 1024));
         }
       }
     }
@@ -161,7 +161,6 @@ static void handleOtaDone() {
     server.send(500, "text/plain",
                 "FAIL: " + String(Update.errorString()));
   } else {
-    tprint("[OTA] rebooting");
 
     // V4.83: set NVS flag so the next boot forces maintenance mode.
     // HTTP OTA bypasses OtaManager.cpp entirely, so the flag has to be
@@ -183,7 +182,7 @@ static void handleOtaDone() {
     otaStage = OTA_STAGE_REBOOT;
     for (int i = 5; i > 0; i--) {
       otaRebootCountdown = (uint8_t)i;
-      tprint("[OTA] reboot in %d...", i);
+      tprint_verbose("[OTA] reboot in %d...", i);
       drawOLED();
       delay(1000);
     }
@@ -232,6 +231,42 @@ static void handleVersion() {
   server.send(200, "text/plain", BIKE_MATE_VERSION);
 }
 
+static void handleClockPost() {
+  // V5.22: set clock over HTTP during maint. Accepts either
+  // a decimal epoch string or 4 raw little-endian bytes.
+  extern uint32_t macTimeEpoch;
+  extern uint32_t secondsAtSync;
+  extern uint32_t totalSeconds;
+  if (!server.hasArg("plain")) {
+    server.send(400, "text/plain", "reject: no body");
+    return;
+  }
+  String body = server.arg("plain");
+  uint32_t e = 0;
+  if (body.length() == 4) {
+    memcpy(&e, body.c_str(), 4);
+  } else {
+    e = (uint32_t)strtoul(body.c_str(), NULL, 10);
+  }
+  if (e < 1700000000UL || e > 4102444800UL) {
+    tprint("[CLOCK] /clock reject epoch=%lu", (unsigned long)e);
+    server.send(400, "text/plain", "reject: epoch out of range");
+    return;
+  }
+  macTimeEpoch = e;
+  secondsAtSync = totalSeconds;
+  tprint("[CLOCK] set via HTTP epoch=%lu", (unsigned long)e);
+  server.send(200, "text/plain", "OK");
+}
+
+volatile bool uploadNowRequested = false;
+
+static void handleUploadNow() {
+  uploadNowRequested = true;
+  tprint("[UPLOAD] /upload requested");
+  server.send(200, "text/plain", "OK");
+}
+
 static void handleMaintOff() {
   maintOffRequested = true;
   tprint("[MAINT] /maint/off received");
@@ -243,8 +278,10 @@ void serverSetup() {
   server.on("/serial",     HTTP_GET,  handleSerialPage);
   server.on("/serial-raw", HTTP_GET,  handleSerialRaw);
   server.on("/maint/off",  HTTP_POST, handleMaintOff);
+  server.on("/upload",     HTTP_POST, handleUploadNow);
   server.on("/ota",        HTTP_POST, handleOtaDone, handleOtaUpload);
   server.on("/version",    HTTP_GET,  handleVersion);
+  server.on("/clock",      HTTP_POST, handleClockPost);
   server.on("/settings",   HTTP_GET,  handleSettingsGet);
   server.on("/settings",   HTTP_POST, handleSettingsPost);
   server.on("/ota-progress", HTTP_GET, handleOtaProgress);

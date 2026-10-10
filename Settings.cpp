@@ -2,6 +2,7 @@
 #include "Config.h"
 
 extern void tprint(const char* fmt, ...);
+extern void tprint_verbose(const char* fmt, ...);
 
 #define NVS_NAMESPACE "bikeset"
 
@@ -37,7 +38,7 @@ void settingsLoad() {
   config.monitorWarning_mv= getU16(p, "v.mon.warn", config.monitorWarning_mv);
   config.monitorPanic_mv  = getU16(p, "v.mon.pan",  config.monitorPanic_mv);
   p.end();
-  tprint("[SETTINGS] run: on=%u off=%u un=%u ov=%u | mon: nrm=%u warn=%u pan=%u",
+  tprint_verbose("[SETTINGS] run: on=%u off=%u un=%u ov=%u | mon: nrm=%u warn=%u pan=%u",
          config.runningEnter_mv, config.runningExit_mv,
          config.runUnder_mv, config.runOver_mv,
          config.monitorNormal_mv, config.monitorWarning_mv, config.monitorPanic_mv);

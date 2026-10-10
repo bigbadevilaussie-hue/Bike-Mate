@@ -15,6 +15,7 @@
 #include <time.h>
 
 extern void tprint(const char* fmt, ...);
+extern void tprint_verbose(const char* fmt, ...);
 extern uint32_t currentEpoch();
 extern float latestBatteryVoltage;
 extern float latestTemperatureC;
@@ -199,7 +200,7 @@ void wakeLoggerTick() {
 
   _writeSample(now, -1);
 #if DEBUG_VERBOSE
-  tprint("[WAKE] sample @ %lu V=%.2f T=%d",
+  tprint_verbose("[WAKE] sample @ %lu V=%.2f T=%d",
          (unsigned long)now, latestBatteryVoltage,
          (int)latestTemperatureC);
 #endif

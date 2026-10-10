@@ -26,6 +26,38 @@ Live task list. Ordered by priority within each section.
   4. `curl -X POST .../maint/off`
   5. Watch next wake for `[UPLOAD] ====== ENTERING UPLOAD MODE ======`
 
+## Test 4am scheduled upload path
+
+- [ ] **Never tested.** V5.21 removed bench auto-upload; uploads now fire
+  only at 4am (scheduled) or via the GUI force button. The force path is
+  verified. The scheduled path is not.
+- [ ] **Blocker: `last_epoch` gate.** `driveUploadShouldRun()` compares
+  `getLastUploadEpoch()` against `mostRecent4am()`. After a forced upload,
+  `last_epoch` is set to the (real) current epoch. A subsequent `/clock`
+  POST that rolls the clock back to 03:59 leaves `last_epoch` ahead of the
+  fake 4am, so the gate stays shut. Test therefore never fires.
+- [ ] **Fix: clear `last_epoch` on clock rollback.** In `handleClockPost`
+  (WebServer.cpp), if `e < prevEpoch`, also `prefs.putUInt("last_epoch", 0)`
+  in the `upload` NVS namespace. Dormant in production (`/clock` never
+  called in normal use). Lets the 4am test be run in one maint session.
+- [ ] **Test procedure once fix lands:**
+  1. Enter maint via GUI
+  2. Quit the GUI so no BLE peer re-syncs the clock (BleManager.cpp:326
+     `TimeCallbacks::onWrite`)
+  3. `curl -X POST .../clock --data <03:59 today AEST>`
+  4. Verify serial shows `[CLOCK] rollback ... cleared last_epoch`
+  5. `curl -X POST .../maint/off`
+  6. Watch next wake for:
+     - `[UPLOAD] ====== ENTERING UPLOAD MODE (scheduled) ======`
+     - `[CLOCK] from LAN` (clock re-synced inside upload path — V5.25)
+     - `[WAKE] rotating at <epoch>` after the clock sync
+     - `[UPLOAD] PUT WAKES/... OK (code=201)`
+     - `[UPLOAD] ====== OK (ok=N fail=0) ======`
+     - `[WIFI] down` after (scheduled path tears down WiFi)
+- [ ] **Rollback safe in production:** `/clock` is only callable during
+  maint, and normal usage never calls it. No behaviour change for field
+  deployment.
+
 ## Cold-boot clock pair mismatch
 
 - [ ] **`clockRestore()` leaves `secondsAtSync` stale after cold boot.**

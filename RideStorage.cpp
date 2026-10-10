@@ -53,7 +53,7 @@ void rideStorageBuildFilename(uint32_t epoch, char* buf, size_t n) {
 
 // ---- header writer ----
 
-static void writeHeader(File& f, uint32_t startEpoch) {
+static void writeHeader(File& f, uint32_t startEpoch, float preRideVoltage) {
 
   f.print("# fw=");
   f.println(BIKE_MATE_VERSION);
@@ -62,10 +62,10 @@ static void writeHeader(File& f, uint32_t startEpoch) {
 
   struct tm* ti = localtime(&t);
 
-  char buf[80];
+  char buf[96];
 
   snprintf(buf, sizeof(buf),
-           "# ride_start=%lu (%04d-%02d-%02d %02d:%02d:%02d)",
+           "# opened=%lu (%04d-%02d-%02d %02d:%02d:%02d)",
            (unsigned long)startEpoch,
            ti->tm_year + 1900,
            ti->tm_mon + 1,
@@ -76,12 +76,29 @@ static void writeHeader(File& f, uint32_t startEpoch) {
 
   f.println(buf);
 
+  char pvbuf[48];
+  snprintf(pvbuf, sizeof(pvbuf),
+           "# pre_ride_volt=%.2f",
+           preRideVoltage);
+  f.println(pvbuf);
+
+  extern int32_t rideStartLat_x1e7;
+  extern int32_t rideStartLon_x1e7;
+  if (rideStartLat_x1e7 != 0 || rideStartLon_x1e7 != 0) {
+    char slbuf[64];
+    snprintf(slbuf, sizeof(slbuf),
+             "# start_loc=%.7f,%.7f",
+             rideStartLat_x1e7 / 1e7,
+             rideStartLon_x1e7 / 1e7);
+    f.println(slbuf);
+  }
+
   f.println("epoch,lat,lon,volt,temp,state");
 }
 
 // ---- create ----
 
-bool rideStorageCreate(uint32_t startEpoch) {
+bool rideStorageCreate(uint32_t startEpoch, float preRideVoltage) {
 
   if (_rideFile) {
 
@@ -118,7 +135,8 @@ bool rideStorageCreate(uint32_t startEpoch) {
 
   writeHeader(
       _rideFile,
-      startEpoch
+      startEpoch,
+      preRideVoltage
   );
 
   tprint(
@@ -167,6 +185,25 @@ bool rideStorageAppendRow(const RideRow& row) {
   return written == (size_t)n;
 }
 
+// ---- log close stamp ----
+void rideStorageLogClose(uint32_t closeEpoch) {
+  if (!_rideFile) return;
+  time_t t = closeEpoch;
+  struct tm* ti = localtime(&t);
+  char buf[96];
+  snprintf(buf, sizeof(buf),
+           "# closed=%lu (%04d-%02d-%02d %02d:%02d:%02d)\n",
+           (unsigned long)closeEpoch,
+           ti->tm_year + 1900,
+           ti->tm_mon + 1,
+           ti->tm_mday,
+           ti->tm_hour,
+           ti->tm_min,
+           ti->tm_sec);
+  _rideFile.write((uint8_t*)buf, strlen(buf));
+  tprint("[RIDE] closed stamp @ %lu", (unsigned long)closeEpoch);
+}
+
 // ---- close ----
 
 void rideStorageClose() {
@@ -185,7 +222,8 @@ void rideStorageClose() {
       size_t srcSize = srcF ? srcF.size() : 0;
       if (srcF) srcF.close();
       tprint("[RIDE] gzip check: src=%u", (unsigned)srcSize);
-      if (srcSize > 1024) {
+      // V5.27: gzip every file, no threshold.
+      if (srcSize > 0) {
         char gzPath[64];
         snprintf(gzPath, sizeof(gzPath), "%s.gz", _currentFile);
         File srcGz = LittleFS.open(_currentFile, "r");
@@ -203,7 +241,7 @@ void rideStorageClose() {
           tprint("[RIDE] gzip failed (returned 0)");
         }
       } else {
-        tprint("[RIDE] too small to gzip (%u bytes)", (unsigned)srcSize);
+        tprint("[RIDE] empty file, skipping gzip");
       }
     }
   }

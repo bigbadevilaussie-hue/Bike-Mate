@@ -136,6 +136,11 @@ static void handleOtaUpload() {
         if (_otaBytes - _otaLastLoggedKB >= 65536) {
           _otaLastLoggedKB = _otaBytes;
           tprint_verbose("[OTA] %lu KB", (unsigned long)(_otaBytes / 1024));
+          // V5.27: force OLED redraw during OTA. The maint loop is
+          // blocked inside serverLoop() for the whole POST, so its
+          // 1 Hz drawOLED() never fires until the upload finishes.
+          // This gives ~1 Hz updates (~28 across a 1.8 MB binary).
+          drawOLED();
         }
       }
     }

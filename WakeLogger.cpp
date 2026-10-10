@@ -301,7 +301,8 @@ bool wakeLoggerForceRotate(uint32_t triggerEpoch) {
   size_t srcSize = srcF ? srcF.size() : 0;
   if (srcF) srcF.close();
   tprint("[WAKE] gzip check: src=%u", (unsigned)srcSize);
-  if (srcSize > 1024) {
+  // V5.27: gzip every file, no threshold.
+  if (srcSize > 0) {
     char gzPath[80];
     snprintf(gzPath, sizeof(gzPath), "%s.gz", sealed);
     File srcGz = LittleFS.open(sealed, "r");
@@ -319,7 +320,7 @@ bool wakeLoggerForceRotate(uint32_t triggerEpoch) {
       tprint("[WAKE] gzip failed (returned 0)");
     }
   } else {
-    tprint("[WAKE] too small to gzip (%u bytes)", (unsigned)srcSize);
+    tprint("[WAKE] empty file, skipping gzip");
   }
 
   // Clear current, open fresh

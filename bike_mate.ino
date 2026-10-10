@@ -727,11 +727,31 @@ void loop() {
            gpsTimeUTC(), gpsCourseDeg(), gpsAltitude_m());
   }
 
+  // V5.27 debug: heartbeat + pre/post markers to catch a hang.
+  static unsigned long lastLoopHb = 0;
+  static unsigned long lastStage = 0;
+  if (millis() - lastLoopHb >= 5000UL) {
+    lastLoopHb = millis();
+    tprint("[LOOP] alive at %lu", millis() / 1000UL);
+  }
+
+  lastStage = millis();
   readSensors();
+  if (millis() - lastStage > 100UL) tprint("[LOOP] readSensors took %lums", millis() - lastStage);
+
+  lastStage = millis();
   updateStateTransitions(now);
+  if (millis() - lastStage > 100UL) tprint("[LOOP] updateStateTransitions took %lums", millis() - lastStage);
+
   digitalWrite(ACC_LED_PIN, accState ? HIGH : LOW);
+
+  lastStage = millis();
   updateBeeps(now);
+  if (millis() - lastStage > 100UL) tprint("[LOOP] updateBeeps took %lums", millis() - lastStage);
+
+  lastStage = millis();
   updateOLED_EdgeTriggered();
+  if (millis() - lastStage > 100UL) tprint("[LOOP] updateOLED took %lums", millis() - lastStage);
 
   // V4.55: only restart advertising on the transition from connected
   // to disconnected. Repeated start() calls cause BT_HCI op=0x2008/0x2009
@@ -826,9 +846,19 @@ void loop() {
       bool engineStartBail = false;
       static unsigned long lastMaintOled = 0;
       extern volatile bool uploadNowRequested;
+      static unsigned long lastMaintHb = 0;
       while (serverIsRunning()) {
+        unsigned long _t0 = millis();
         serverLoop();
+        unsigned long _dt = millis() - _t0;
+        if (_dt > 500UL) tprint("[MAINT] serverLoop took %lums", _dt);
         delay(20);
+
+        if (millis() - lastMaintHb >= 5000UL) {
+          lastMaintHb = millis();
+          tprint("[MAINT] alive %lus remaining",
+                 (MAINT_MAX_MS - (millis() - maintStartMs)) / 1000UL);
+        }
 
         if (uploadNowRequested) {
           uploadNowRequested = false;
@@ -865,7 +895,9 @@ void loop() {
         static unsigned long lastMaintSense = 0;
         if (millis() - lastMaintSense >= 500UL) {
           lastMaintSense = millis();
+          unsigned long _st = millis();
           readSensors();
+          if (millis() - _st > 200UL) tprint("[MAINT] readSensors took %lums", millis() - _st);
           float mv = latestBatteryVoltage;
           if (mv >= (config.runningEnter_mv / 1000.0f)) {
             tprint("[MAINT] engine start detected (%.2fV), exiting",

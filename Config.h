@@ -13,7 +13,7 @@
 // V4.70: dead defines removed, section headers added.
 // Deploy-specific values (UPLOAD_URL, SMTP_*) still live here pending move to Deploy.h.
 
-#define BIKE_MATE_VERSION "5.26"
+#define BIKE_MATE_VERSION "5.27.1"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
@@ -177,7 +177,7 @@ struct WakeSample {
 
 // ---- Drive upload module ----
 #define UPLOAD_ENABLED 1
-#define UPLOAD_HOUR_LOCAL 4
+#define UPLOAD_HOUR_LOCAL 17
 #define UPLOAD_URL "https://script.google.com/macros/s/AKfycbx758YfZhY4wp_FdWgu6DSoDVn6-k0Wb0hVVDzwauRSZOSbT9zFAsvskeHv4mz5-G59/exec"
 #define UPLOAD_URL_MAX 256
 #define UPLOAD_WIFI_TIMEOUT_MS 30000UL

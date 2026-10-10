@@ -12,7 +12,10 @@
 void rideStorageBuildFilename(uint32_t epoch, char* buf, size_t n);
 
 // Open (create) a file for a new ride. Returns true on success.
-bool rideStorageCreate(uint32_t startEpoch);
+bool rideStorageCreate(uint32_t startEpoch, float preRideVoltage);
+
+// Append a # closed= stamp to the current file before close.
+void rideStorageLogClose(uint32_t closeEpoch);
 
 // Append one row to the currently open ride file.
 bool rideStorageAppendRow(const RideRow& row);

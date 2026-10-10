@@ -66,7 +66,7 @@ void startRideLog() {
   tprint("[RIDE] START epoch=%lu preV=%.2f",
          (unsigned long)now, ridePreVoltage);
 
-  if (!rideStorageCreate(now)) {
+  if (!rideStorageCreate(now, ridePreVoltage)) {
     tprint("[RIDE] file create failed");
     return;
   }
@@ -182,6 +182,7 @@ void closeRideLog() {
   prefs.putUInt("newest_epoch", rideStartEpoch);
   prefs.end();
 
+  rideStorageLogClose(nowEpoch);
   rideStorageClose();
 
   tprint("[RIDE] saved summary key=%s dur=%lu rows=%d",

@@ -528,15 +528,11 @@ bool driveUploadShouldRun() {
   return false;
 #endif
 
-#if BENCH_MODE
-  return false;
-#else
   uint32_t last4 = mostRecent4am();
 
   if (last4 == 0) return false;
 
   return getLastUploadEpoch() < last4;
-#endif
 }
 
 // ---- main ----

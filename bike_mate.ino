@@ -84,7 +84,6 @@ volatile bool uploadRequested = false;
 
 unsigned long lastUploadAttempt = 0;
 
-RTC_DATA_ATTR static uint8_t uploadCycleCounter = 0;
 
 // GPS functions now in GpsModule.cpp
 
@@ -406,14 +405,6 @@ void updateStateTransitions(unsigned long now) {
     wakeLoggerResume();
     wakeLoggerForceWrite();
 
-#if UPLOAD_ENABLED && BENCH_MODE
-    uploadCycleCounter++;
-    if (uploadCycleCounter >= 1) {
-      uploadCycleCounter = 0;
-      uploadRequested = true;
-      tprint("[UPLOAD] bench trigger set (1 arming)");
-    }
-#endif
   }
 }
 
@@ -528,19 +519,16 @@ void doStateWork(unsigned long now, bool wasWake) {
 #if UPLOAD_ENABLED
   bool uploadDue = false;
 
-#if BENCH_MODE
   if (uploadRequested) {
     uploadDue = true;
     uploadRequested = false;
-    tprint("[UPLOAD] bench trigger consumed");
+    tprint("[UPLOAD] force trigger consumed");
   }
-#else
-  if (driveUploadShouldRun() && currentEpoch() > 0 &&
-      (lastUploadAttempt == 0 ||
-       millis() - lastUploadAttempt > UPLOAD_COOLDOWN_MS)) {
+  else if (driveUploadShouldRun() && currentEpoch() > 0 &&
+           (lastUploadAttempt == 0 ||
+            millis() - lastUploadAttempt > UPLOAD_COOLDOWN_MS)) {
     uploadDue = true;
   }
-#endif
 
   if (uploadDue && !otaRequest && !wifiActive) {
     lastUploadAttempt = millis();
@@ -610,7 +598,6 @@ void setup() {
     lastRestingVoltage = 0.0;
     lowVoltLoops = 0;
     lowBattMailLatched = false;
-    uploadCycleCounter = 0;
     panicLatchCount = 0;
     tprint("cold boot: state reset");
   } else {

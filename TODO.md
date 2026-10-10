@@ -26,6 +26,19 @@ Live task list. Ordered by priority within each section.
   4. `curl -X POST .../maint/off`
   5. Watch next wake for `[UPLOAD] ====== ENTERING UPLOAD MODE ======`
 
+## Cold-boot clock pair mismatch
+
+- [ ] **`clockRestore()` leaves `secondsAtSync` stale after cold boot.**
+  On cold boot, `totalSeconds` is reset to 0 but `clockRestore()` only
+  restores `macTimeEpoch` and `secondsAtSync` from NVS. Result:
+  `currentEpoch() = restoredEpoch + (0 - restoredSecondsAtSync)`, off by
+  however many seconds were in `secondsAtSync` at save time. Observed
+  in V5.24 boot: `[CLOCK] restored from NVS epoch=1791602784` followed by
+  `[WAKE] sample @ 1791600036` — 2748 s hole. Self-heals on maint entry
+  when Opal clock syncs, but wrong until then.
+  Fix: in the cold-boot block, after `clockRestore()` succeeds, set
+  `secondsAtSync = totalSeconds` to align the pair.
+
 ## Clock — GPS source
 
 - [ ] **Parse `$GPRMC` UTC time + date** in `GpsModule.cpp`. Field 1 (hhmmss) +

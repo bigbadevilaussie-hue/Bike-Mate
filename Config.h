@@ -13,7 +13,7 @@
 // V4.70: dead defines removed, section headers added.
 // Deploy-specific values (UPLOAD_URL, SMTP_*) still live here pending move to Deploy.h.
 
-#define BIKE_MATE_VERSION "5.18"
+#define BIKE_MATE_VERSION "5.20"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
@@ -60,8 +60,8 @@
 #define WAKE_BENCH_MS    30000UL
 #define WAKE_DAY_MS     300000UL
 #define WAKE_NIGHT_MS   600000UL
-#define NIGHT_START_HOUR   22
-#define NIGHT_END_HOUR      4
+#define NIGHT_START_HOUR   17
+#define NIGHT_END_HOUR      8
 #define MAX_AWAKE_MS    180000UL   // V4.72: 180 s hard max-awake, OTA exempt
 #define BLE_MAX_CONN_MS  600000UL   // V4.73: force disconnect after 10 min
 #define BLE_IDLE_GRACE_MS   5000UL   // V4.84: idle BLE conn does not block sleep

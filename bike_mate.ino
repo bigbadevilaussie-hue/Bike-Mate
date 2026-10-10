@@ -571,6 +571,9 @@ void doStateWork(unsigned long now, bool wasWake) {
 }
 
 void setup() {
+  // V5.20: suppress the benign IDF wifi-teardown warning that
+  // fires on every WiFi down: 'timeout when WiFi un-init'.
+  esp_log_level_set("wifi", ESP_LOG_NONE);
   Serial.begin(115200);
   delay(300);
   serialBufInit();

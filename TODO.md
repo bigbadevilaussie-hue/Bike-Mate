@@ -2,20 +2,29 @@
 
 Live task list. Ordered by priority within each section.
 
-## Immediate (V5.21)
+**Current:**
+- Firmware on bike: V5.24 (needs flash — V5.23 on bike now)
+- Firmware on disk: V5.24
+- GUI on disk: V4.38
 
-- [ ] **Seal-before-upload restructure** — move `wakeLoggerForceRotate()` out of
-  `doStateWork()` into `driveUploadPerform()`, after WiFi up and clock sync.
-  Seal uses corrected epoch.
-- [ ] **Clock sync in upload path** — call `clockBringUp()` inside
-  `driveUploadPerform()` after `wifiBringUp()` succeeds, before seal.
-  Opal HTTP first, NTP fallback.
-- [ ] **`setLastUploadEpoch()` uses corrected clock** — automatic once clock
-  sync precedes it.
-- [ ] **`# closed=<epoch> (YYYY-MM-DD HH:MM)` line** — new
-  `wakeLoggerLogClose()` in `WakeLogger.cpp`, called before seal. Same format
-  as `# opened=`.
-- [ ] **Version bump to 5.21** in `Config.h`.
+## Immediate
+
+- [ ] **Flash V5.24 to bike.** Changes: `"st"` in publishBLE JSON (storage
+  percent). Verify GUI `💾 Stor` badge populates with real % after BLE reconnect.
+- [ ] **`/clock` POST doesn't stick when a BLE peer is connected.** The Mac
+  GUI's `TimeCallbacks::onWrite` (BleManager.cpp:326) re-syncs `macTimeEpoch`
+  the moment BLE comes back after maint exit (`wifiBringDown()` → `bleStart()`).
+  A `/clock` POST during maint sets the value, then BLE reconnect clobbers it.
+  Blocks the 4am scheduled-path test.
+  Options: reject BLE time sync while a test-clock is latched; or add a
+  `/clock?lock=1` flag that disables BLE time sync until reboot; or quit the
+  GUI during the test.
+- [ ] **4am scheduled path — first test.** Requires fix above. Sequence:
+  1. Enter maint (GUI)
+  2. Quit GUI so no BLE peer clobbers the clock
+  3. `curl -X POST .../clock --data <03:59 today>`
+  4. `curl -X POST .../maint/off`
+  5. Watch next wake for `[UPLOAD] ====== ENTERING UPLOAD MODE ======`
 
 ## Clock — GPS source
 
@@ -31,7 +40,20 @@ Live task list. Ordered by priority within each section.
 - [ ] **Seal first, then update epoch** — ride file stays internally consistent,
   no Dr Who.
 
-## Ride row format expansion (V5.22)
+## Seal-before-upload restructure
+
+- [ ] **Move `wakeLoggerForceRotate()`** out of `doStateWork()` into
+  `driveUploadPerform()`, after WiFi up and clock sync. Seal uses corrected
+  epoch.
+- [ ] **Call `clockBringUp()` inside `driveUploadPerform()`** after
+  `wifiBringUp()` succeeds, before seal. Opal HTTP first, NTP fallback.
+- [ ] **`setLastUploadEpoch()` uses corrected clock** — automatic once clock
+  sync precedes it.
+- [ ] **`# closed=<epoch> (YYYY-MM-DD HH:MM)` line** — new
+  `wakeLoggerLogClose()` in `WakeLogger.cpp`, called before seal. Same format
+  as `# opened=`.
+
+## Ride row format expansion
 
 - [ ] **Add accessor `gpsCourseDeg()`** in `GpsModule.cpp` — parse `$GPRMC`
   field 8 (course made good, true).
@@ -44,20 +66,6 @@ Live task list. Ordered by priority within each section.
 - [ ] **Update `bikemate/ble.py parse_row()`** — parse 16-byte payload.
 - [ ] **Update `bikemate/helpers.py parse_row()`** — new row struct.
 - [ ] **Update `bikemate/reports.py` CSV parse** — expect new columns.
-- [ ] **Version bump to 5.22**.
-
-## Storage visibility
-
-- [ ] **Add `"st":<percent>`** to `publishBLE()` JSON in `BleManager.cpp`.
-- [ ] **GUI reads `state.latest_data["st"]`** — badge / colour change above 75%.
-- [ ] **GUI 4.36 bump** in `bikemate/config.py`.
-
-## Force upload
-
-- [ ] **BLE command `{"upload":"now"}`** in `OtaCallbacks::onWrite` — sets
-  `uploadRequested = true`.
-- [ ] **GUI menu item** "Force Upload" under Maintenance.
-- [ ] **`bikemate/ble.py` send method** for the new command.
 
 ## Wake file clock-sync marker (decide)
 
@@ -98,3 +106,15 @@ Live task list. Ordered by priority within each section.
 - MP1584EN modules in transit (arriving Mon 12 – Tue 13 Oct).
 - New ESP32-C3 board needed for reliable bench work.
 - GPS outdoor test still pending.
+
+## Done (recent)
+
+- [x] **V5.23 — force upload via HTTP `/upload` during maint.** Verified working
+  end-to-end: GUI POSTs, bike runs `driveUploadPerform(true)`, WiFi stays up,
+  server survives. Rule 7 still correct.
+- [x] **V5.23 — remove BLE force-upload handler.**
+- [x] **V5.23 — `fromMaint` param** on `driveUploadPerform()` to skip
+  `wifiBringDown()` when called from the maint HTTP path.
+- [x] **V5.24 — `"st"` storage percent** in `publishBLE()` JSON.
+- [x] **GUI 4.38 — `💾 Stor` badge** in the Temp/Time row.
+- [x] **README — zsh bracketed-paste note, patch anchor rules.**

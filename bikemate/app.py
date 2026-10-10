@@ -100,6 +100,7 @@ class App:
         rc = tk.Frame(root, bg=CARD); rc.pack(fill="x", padx=20, pady=6)
         ri = tk.Frame(rc, bg=CARD); ri.pack(fill="x", pady=6)
         self.temp_lbl = self._col(ri, "🏍️ Temp", "--.-C")
+        self.stor_lbl = self._col(ri, "💾 Stor", "--%")
         self.time_lbl = self._col(ri, "Time", "--:--")
         lr = tk.Frame(root, bg=CARD); lr.pack(fill="x", padx=20, pady=6)
         tk.Label(lr, text="Last Ride", bg=CARD, fg=MUTED,
@@ -1063,6 +1064,11 @@ class App:
             elif t < 30: te = "☀️"
             else: te = "☀️"
             self.temp_lbl.config(text=f"{te} {t:.1f}C")
+        st = d.get("st")
+        if st is None or stale:
+            self.stor_lbl.config(text="--%")
+        else:
+            self.stor_lbl.config(text=f"{int(st)}%")
         self.time_lbl.config(text=f"{time_emoji()} {local_time_str()}")
         self.acc_lbl.config(text="ON" if d.get("a") else "OFF",
                             fg=GREEN if d.get("a") else MUTED)

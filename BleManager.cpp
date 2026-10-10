@@ -674,15 +674,23 @@ void publishBLE() {
   int32_t lat = gpsLat_x1e7();
   int32_t lon = gpsLon_x1e7();
 
+  // V5.23: storage telemetry. used/total bytes in LittleFS.
+  uint32_t _fsTotal = LittleFS.totalBytes();
+  uint32_t _fsUsed  = LittleFS.usedBytes();
+  uint8_t  storagePercent = (_fsTotal > 0)
+                            ? (uint8_t)((_fsUsed * 100) / _fsTotal)
+                            : 0;
+
   char buf[240];
 
   // V5.11: fv travels with every telemetry notify so the GUI has the
   // firmware version on the first connect, not on the third or fourth.
   // The onConnect one-shot notify was racing the next publishBLE().
+  // V5.23: st = storage percent, GUI badge.
   snprintf(
       buf,
       sizeof(buf),
-      "{\"v\":%.2f,\"t\":%.1f,\"a\":%d,\"e\":%d,\"w\":%d,\"s\":\"%s\",\"p\":%d,\"ll\":\"%ld.%04ld,%ld.%04ld\",\"lg\":%d,\"gs\":%d,\"fv\":\"%s\"}",
+      "{\"v\":%.2f,\"t\":%.1f,\"a\":%d,\"e\":%d,\"w\":%d,\"s\":\"%s\",\"p\":%d,\"ll\":\"%ld.%04ld,%ld.%04ld\",\"lg\":%d,\"gs\":%d,\"fv\":\"%s\",\"st\":%u}",
       latestBatteryVoltage,
       latestTemperatureC,
       accState ? 1 : 0,
@@ -696,7 +704,8 @@ void publishBLE() {
       (long)(labs((lon % 10000000) / 1000)),
       isLogging ? 1 : 0,
       (int)gpsSats(),
-      BIKE_MATE_VERSION);
+      BIKE_MATE_VERSION,
+      (unsigned)storagePercent);
 
   pDataChar->setValue(
       (uint8_t*)buf,

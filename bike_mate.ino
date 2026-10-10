@@ -128,9 +128,20 @@ void tprint_verbose(const char* fmt, ...) {
 #endif
 }
 
+// V5.28: monotonic epoch floor. Bench-mode clock syncs (BLE from GUI,
+// Opal LAN on maint entry, /clock POST) can pull macTimeEpoch backward.
+// That produced out-of-order wake rows. The floor clamps currentEpoch()
+// so it never returns a value lower than the highest one already
+// returned this session. Reset on cold boot (RTC RAM wipe). No effect
+// in the field where no backward sync happens.
+RTC_DATA_ATTR uint32_t _epochFloor = 0;
+
 uint32_t currentEpoch() {
   if (macTimeEpoch == 0) return 0;
-  return macTimeEpoch + (totalSeconds - secondsAtSync);
+  uint32_t e = macTimeEpoch + (totalSeconds - secondsAtSync);
+  if (e < _epochFloor) e = _epochFloor;
+  _epochFloor = e;
+  return e;
 }
 
 // V5.18: persist the clock to NVS so a cold boot doesn't lose

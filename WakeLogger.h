@@ -29,6 +29,10 @@ bool wakeLoggerRotate(uint32_t triggerEpoch);
 // and opens a fresh file for the same day. Bench-mode only.
 bool wakeLoggerForceRotate(uint32_t triggerEpoch);
 
+// V5.28: Manual seal — bypasses the .sealed-exists and _paused
+// guards. Invoked by POST /seal during maint. Full authority.
+bool wakeLoggerSealManual(uint32_t triggerEpoch);
+
 // Log upload result lines to current wake file.
 void wakeLoggerLogUpload(const char* filename, bool ok, const char* detail);
 void wakeLoggerLogUploadStart();

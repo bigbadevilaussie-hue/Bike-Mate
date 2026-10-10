@@ -11,6 +11,8 @@
 
 extern void tprint(const char* fmt, ...);
 extern void tprint_verbose(const char* fmt, ...);
+extern uint32_t currentEpoch();
+extern bool wakeLoggerSealManual(uint32_t triggerEpoch);
 
 static WebServer server(80);
 static bool running = false;
@@ -272,6 +274,26 @@ static void handleUploadNow() {
   server.send(200, "text/plain", "OK");
 }
 
+static void handleSeal() {
+  // V5.28: manual seal. Wake file always. Ride file if logging.
+  extern bool isLogging;
+  uint32_t ep = currentEpoch();
+  if (ep == 0) {
+    server.send(500, "text/plain", "no clock");
+    return;
+  }
+  tprint("[SEAL] manual seal requested");
+  bool wakeOk = wakeLoggerSealManual(ep);
+  bool rideOk = true;
+  if (isLogging) {
+    tprint("[SEAL] ride in progress, closing");
+    extern void closeRideLog();
+    closeRideLog();
+  }
+  server.send(200, "text/plain",
+              wakeOk && rideOk ? "OK" : "PARTIAL");
+}
+
 static void handleMaintOff() {
   maintOffRequested = true;
   tprint("[MAINT] /maint/off received");
@@ -284,6 +306,7 @@ void serverSetup() {
   server.on("/serial-raw", HTTP_GET,  handleSerialRaw);
   server.on("/maint/off",  HTTP_POST, handleMaintOff);
   server.on("/upload",     HTTP_POST, handleUploadNow);
+  server.on("/seal",       HTTP_POST, handleSeal);
   server.on("/ota",        HTTP_POST, handleOtaDone, handleOtaUpload);
   server.on("/version",    HTTP_GET,  handleVersion);
   server.on("/clock",      HTTP_POST, handleClockPost);

@@ -333,6 +333,83 @@ bool wakeLoggerForceRotate(uint32_t triggerEpoch) {
   return true;
 }
 
+// ---- V5.28: manual seal ----
+// Bypasses the .sealed-exists guard and the _paused guard.
+// Caller is responsible for knowing what they're doing.
+bool wakeLoggerSealManual(uint32_t triggerEpoch) {
+  tprint("[WAKE] manual seal @ %lu", (unsigned long)triggerEpoch);
+
+  if (_currentPath[0] == 0) {
+    if (!openCurrentFile(triggerEpoch)) {
+      tprint("[WAKE] manual seal: cannot open file");
+      return false;
+    }
+  }
+
+  // Write # closed= stamp into the current file
+  {
+    File f = LittleFS.open(_currentPath, "a");
+    if (f) {
+      time_t t = triggerEpoch;
+      struct tm* ti = localtime(&t);
+      char buf[80];
+      snprintf(buf, sizeof(buf),
+               "# closed=%lu (%04d-%02d-%02d %02d:%02d:%02d)\n",
+               (unsigned long)triggerEpoch,
+               ti->tm_year + 1900, ti->tm_mon + 1, ti->tm_mday,
+               ti->tm_hour, ti->tm_min, ti->tm_sec);
+      f.write((uint8_t*)buf, strlen(buf));
+      f.close();
+      tprint("[WAKE] closed stamp @ %lu", (unsigned long)triggerEpoch);
+    }
+  }
+
+  // Unique sealed name with HHMMSS
+  char sealedBase[64];
+  buildSealedName(triggerEpoch, sealedBase, sizeof(sealedBase));
+  char sealed[80];
+  snprintf(sealed, sizeof(sealed), "%s.sealed", sealedBase);
+
+  if (!LittleFS.rename(_currentPath, sealed)) {
+    tprint("[WAKE] manual seal: rename failed");
+    return false;
+  }
+  tprint("[WAKE] sealed as %s", sealed);
+
+  // Gzip the sealed file
+  File srcF = LittleFS.open(sealed, "r");
+  size_t srcSize = srcF ? srcF.size() : 0;
+  if (srcF) srcF.close();
+  if (srcSize > 0) {
+    char gzPath[80];
+    snprintf(gzPath, sizeof(gzPath), "%s.gz", sealed);
+    File srcGz = LittleFS.open(sealed, "r");
+    File dstGz = LittleFS.open(gzPath, "w");
+    size_t gzBytes = 0;
+    if (srcGz && dstGz) {
+      gzBytes = LZPacker::compress(&srcGz, srcGz.size(), &dstGz);
+    }
+    if (srcGz) srcGz.close();
+    if (dstGz) dstGz.close();
+    if (gzBytes > 0) {
+      tprint("[WAKE] gzipped %s", gzPath);
+      LittleFS.remove(sealed);
+      tprint("[WAKE] removed raw %s", sealed);
+    } else {
+      tprint("[WAKE] gzip failed, keeping raw");
+    }
+  }
+
+  // Open fresh file with current format
+  _currentPath[0] = 0;
+  if (!openCurrentFile(triggerEpoch)) {
+    tprint("[WAKE] manual seal: new file create failed");
+    return false;
+  }
+  tprint("[WAKE] new file %s", _currentPath);
+  return true;
+}
+
 // ---- upload logging ----
 void wakeLoggerLogUploadStart() {
   if (_paused) return;

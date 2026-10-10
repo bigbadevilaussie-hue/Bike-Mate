@@ -3,163 +3,218 @@
 Live task list. Ordered by priority within each section.
 
 **Current:**
-- Firmware on bike: V5.24 (needs flash — V5.23 on bike now)
-- Firmware on disk: V5.24
-- GUI on disk: V4.38
+- Firmware on bike: **V5.30**
+- Firmware on disk: **V5.30** (committed, pushed, tagged)
+- GUI on disk: **V4.38**
+- Storage on bike: **~15%** (self-cleaning after every upload run)
+
+---
 
 ## Immediate
 
-- [ ] **Flash V5.24 to bike.** Changes: `"st"` in publishBLE JSON (storage
-  percent). Verify GUI `💾 Stor` badge populates with real % after BLE reconnect.
-- [ ] **`/clock` POST doesn't stick when a BLE peer is connected.** The Mac
-  GUI's `TimeCallbacks::onWrite` (BleManager.cpp:326) re-syncs `macTimeEpoch`
-  the moment BLE comes back after maint exit (`wifiBringDown()` → `bleStart()`).
-  A `/clock` POST during maint sets the value, then BLE reconnect clobbers it.
-  Blocks the 4am scheduled-path test.
-  Options: reject BLE time sync while a test-clock is latched; or add a
-  `/clock?lock=1` flag that disables BLE time sync until reboot; or quit the
-  GUI during the test.
-- [ ] **4am scheduled path — first test.** Requires fix above. Sequence:
-  1. Enter maint (GUI)
-  2. Quit GUI so no BLE peer clobbers the clock
-  3. `curl -X POST .../clock --data <03:59 today>`
-  4. `curl -X POST .../maint/off`
-  5. Watch next wake for `[UPLOAD] ====== ENTERING UPLOAD MODE ======`
+- [ ] **Verify V5.30 upload run on the bike.** Full sequence:
+  1. Enter maint
+  2. `curl -X POST http://192.168.8.196/upload`
+  3. Watch for: `manual seal` → `# closed=` → `gzip` → `removed raw` →
+     `new file` → (no reconcile for current open file) → uploads with
+     no 422 → paired raw deletes → `OK`
+  4. Check LittleFS after: only `wakes_YYYY-MM-DD.csv` + newest ride
+     `.csv` + newest ride `.csv.gz`
 
-## Test 4am scheduled upload path
+- [ ] **Verify scheduled 4am path seals the wake file.** V5.29 moved the
+  seal into `driveUploadPerform()`, so both paths should seal. The test
+  at 17:00 earlier was before the move. Needs re-test.
 
-- [ ] **Never tested.** V5.21 removed bench auto-upload; uploads now fire
-  only at 4am (scheduled) or via the GUI force button. The force path is
-  verified. The scheduled path is not.
-- [ ] **Blocker: `last_epoch` gate.** `driveUploadShouldRun()` compares
-  `getLastUploadEpoch()` against `mostRecent4am()`. After a forced upload,
-  `last_epoch` is set to the (real) current epoch. A subsequent `/clock`
-  POST that rolls the clock back to 03:59 leaves `last_epoch` ahead of the
-  fake 4am, so the gate stays shut. Test therefore never fires.
-- [ ] **Fix: clear `last_epoch` on clock rollback.** In `handleClockPost`
-  (WebServer.cpp), if `e < prevEpoch`, also `prefs.putUInt("last_epoch", 0)`
-  in the `upload` NVS namespace. Dormant in production (`/clock` never
-  called in normal use). Lets the 4am test be run in one maint session.
-- [ ] **Test procedure once fix lands:**
-  1. Enter maint via GUI
-  2. Quit the GUI so no BLE peer re-syncs the clock (BleManager.cpp:326
-     `TimeCallbacks::onWrite`)
-  3. `curl -X POST .../clock --data <03:59 today AEST>`
-  4. Verify serial shows `[CLOCK] rollback ... cleared last_epoch`
-  5. `curl -X POST .../maint/off`
-  6. Watch next wake for:
-     - `[UPLOAD] ====== ENTERING UPLOAD MODE (scheduled) ======`
-     - `[CLOCK] from LAN` (clock re-synced inside upload path — V5.25)
-     - `[WAKE] rotating at <epoch>` after the clock sync
-     - `[UPLOAD] PUT WAKES/... OK (code=201)`
-     - `[UPLOAD] ====== OK (ok=N fail=0) ======`
-     - `[WIFI] down` after (scheduled path tears down WiFi)
-- [ ] **Rollback safe in production:** `/clock` is only callable during
-  maint, and normal usage never calls it. No behaviour change for field
-  deployment.
+- [ ] **GUI `/upload` timeout is a false negative.** Firmware returns 200
+  from `handleUploadNow()` immediately, but the 200 sits in the TCP
+  buffer while `driveUploadPerform()` runs (no `serverLoop()` during the
+  upload). GUI's 60s `urllib` timeout fires. Upload completes anyway.
+  Cosmetic. Options: bump GUI timeout, add `serverLoop()` calls inside
+  the upload, or accept and document.
 
-## Cold-boot clock pair mismatch
+---
 
-- [ ] **`clockRestore()` leaves `secondsAtSync` stale after cold boot.**
-  On cold boot, `totalSeconds` is reset to 0 but `clockRestore()` only
-  restores `macTimeEpoch` and `secondsAtSync` from NVS. Result:
-  `currentEpoch() = restoredEpoch + (0 - restoredSecondsAtSync)`, off by
-  however many seconds were in `secondsAtSync` at save time. Observed
-  in V5.24 boot: `[CLOCK] restored from NVS epoch=1791602784` followed by
-  `[WAKE] sample @ 1791600036` — 2748 s hole. Self-heals on maint entry
-  when Opal clock syncs, but wrong until then.
-  Fix: in the cold-boot block, after `clockRestore()` succeeds, set
-  `secondsAtSync = totalSeconds` to align the pair.
+## Ride lifecycle
 
-## Clock — GPS source
+- [ ] **Ride start 15s debounce.** Currently: 30s settle countdown from
+  engine-start detection to `startRideLog()`. Spec: 15s of continuous
+  voltage above `runningEnter_mv`. `rideStartEpoch` = moment the window
+  opens (crank-detected), or the moment it closes (debounce-complete) —
+  decide.
+- [ ] **Ride end 15s debounce.** Currently: `parkedDelayMs = 0`, one low
+  sample ends the ride. Spec: 15s of continuous voltage below
+  `runningExit_mv`.
+- [ ] **Re-entry guards.** `closeRideLog()` sets `isLogging = false`
+  before writing the summary. A mid-write engine-start can create a
+  second file. Add a "closing in progress" latch.
+- [ ] **Clear `rideStartLat_x1e7` / `rideStartLon_x1e7` at
+  `startRideLog()`.** They're non-RTC globals, currently never reset
+  between rides. A ride starting without a GPS fix inherits the
+  previous ride's `# start_loc=`.
 
-- [ ] **Parse `$GPRMC` UTC time + date** in `GpsModule.cpp`. Field 1 (hhmmss) +
-  field 9 (ddmmyy). Only on status `A`.
-- [ ] **Compute UTC epoch** and store in `_epochUTC`. Bounds check
-  `1700000000 < e < 4102444800`.
-- [ ] **`gpsEpochUTC()` accessor** — declared already, just needs to return
-  `_epochUTC`.
-- [ ] **At engine stop, after `closeRideLog()`:** read `gpsEpochUTC()`, if valid
-  update `macTimeEpoch` + `secondsAtSync`. Serial log:
-  `[CLOCK] ride close sync old=<a> new=<b>`.
-- [ ] **Seal first, then update epoch** — ride file stays internally consistent,
-  no Dr Who.
-
-## Seal-before-upload restructure
-
-- [ ] **Move `wakeLoggerForceRotate()`** out of `doStateWork()` into
-  `driveUploadPerform()`, after WiFi up and clock sync. Seal uses corrected
-  epoch.
-- [ ] **Call `clockBringUp()` inside `driveUploadPerform()`** after
-  `wifiBringUp()` succeeds, before seal. Opal HTTP first, NTP fallback.
-- [ ] **`setLastUploadEpoch()` uses corrected clock** — automatic once clock
-  sync precedes it.
-- [ ] **`# closed=<epoch> (YYYY-MM-DD HH:MM)` line** — new
-  `wakeLoggerLogClose()` in `WakeLogger.cpp`, called before seal. Same format
-  as `# opened=`.
+---
 
 ## Ride row format expansion
 
-- [ ] **Add accessor `gpsCourseDeg()`** in `GpsModule.cpp` — parse `$GPRMC`
-  field 8 (course made good, true).
-- [ ] **Extend `writeRideRow()`** in `RideLogger.cpp` — emit
-  `speed,hdg,alt,sats,fix` after `state`.
-- [ ] **Update header line** in `RideStorage.cpp writeHeader()` — match new
-  column order.
-- [ ] **Extend BLE row payload** in `BleManager.cpp pushNewSlots()` — 8 bytes
-  → 16 bytes.
-- [ ] **Update `bikemate/ble.py parse_row()`** — parse 16-byte payload.
-- [ ] **Update `bikemate/helpers.py parse_row()`** — new row struct.
-- [ ] **Update `bikemate/reports.py` CSV parse** — expect new columns.
+Current 6-column format: `epoch,lat,lon,volt,temp,state`.
+Target 11-column: add `speed,hdg,alt,sats,flags`.
 
-## Wake file clock-sync marker (decide)
+- [ ] **`writeRideRow()`** in `RideLogger.cpp` — emit the extra fields.
+- [ ] **`RideStorage.cpp writeHeader()`** — match new column order.
+- [ ] **`RideStorage.cpp rideStorageAppendRow()`** — new format.
+- [ ] **`RideRow` struct** in `Config.h` — add the fields.
+- [ ] **BLE row payload** in `BleManager.cpp pushNewSlots()` — 8 bytes
+  → ~20 bytes.
+- [ ] **`bikemate/ble.py parse_row()`** — parse new payload.
+- [ ] **`bikemate/helpers.py parse_row()`** — new row struct.
+- [ ] **`bikemate/reports.py` CSV parse** — expect new columns.
 
-- [ ] **Decide:** log the ride-close clock sync to serial only, or write
-  `# clock_sync old=<a> new=<b>` into the wake file.
-- [ ] **Implement whichever.**
+---
+
+## Clock
+
+- [ ] **GPS clock source.** `GpsModule.cpp` parses `$GPRMC` time and
+  date into `_epochUTC`. `gpsEpochUTC()` accessor exists but always
+  returns 0. Implement the parse + populate. At engine stop after
+  `closeRideLog()`: read `gpsEpochUTC()`, if valid update
+  `macTimeEpoch` + `secondsAtSync`. Serial log:
+  `[CLOCK] ride close sync old=<a> new=<b>`.
+- [ ] **Seal first, then update epoch.** Ride file stays internally
+  consistent. Currently no update happens, so this is moot until GPS
+  clock source lands.
+- [ ] **Cold-boot clock pair mismatch.** On cold boot, `totalSeconds`
+  is reset to 0 but `clockRestore()` only restores `macTimeEpoch` and
+  `secondsAtSync` from NVS. Result: `currentEpoch()` = `restoredEpoch +
+  (0 - restoredSecondsAtSync)`, off by the saved `secondsAtSync`.
+  Observed: 2748s hole. Self-heals on next Opal/NTP sync. Fix: in the
+  cold-boot block, after `clockRestore()` succeeds, set `secondsAtSync
+  = totalSeconds`.
+
+---
+
+## Wake file format
+
+- [ ] **Decide final shape.** Current: data rows + `# upload=...`
+  event lines interleaved. V5.29 added the event lines. Earlier spec
+  considered a "pure data log" with events going to serial only.
+  Confirm which.
+- [ ] **Reader must skip `#` lines when parsing rows.** `reports.py`
+  already skips `# fw=` and `# opened=`. Add `# upload=` and `# closed=`
+  to the skip set if not already covered by a general `#` check.
+
+---
+
+## Upload / storage (mostly done this session)
+
+- [x] **Force upload via HTTP `/upload` during maint.** V5.23. Verified.
+- [x] **BLE force-upload handler removed.** V5.23.
+- [x] **`fromMaint` param** on `driveUploadPerform()`. V5.23.
+- [x] **Clock sync inside `driveUploadPerform()`.** V5.25.
+- [x] **Upload reason param** (`forced` / `scheduled`). V5.25.
+- [x] **Storage % telemetry.** `"st":<percent>` in publishBLE. V5.24.
+- [x] **GUI Stor badge.** V4.38.
+- [x] **Ride `# opened=` / `# pre_ride_volt=` / `# start_loc=` /
+  `# closed=`.** V5.27.
+- [x] **gzip every file, no threshold.** V5.27.
+- [x] **OTA OLED redraw during upload.** V5.27.
+- [x] **Debug heartbeats + per-stage timing.** V5.27.1.
+- [x] **`/seal` manual endpoint.** V5.28.
+- [x] **Monotonic `_epochFloor`.** V5.28.
+- [x] **Upload routine: seal → reconcile → upload → delete raw.**
+  V5.29.
+- [x] **`# upload=...` event lines in wake file.** V5.29.
+- [x] **Reconcile skips current open files.** V5.30.
+- [x] **422 treated as already-exists.** V5.30.
+- [x] **Raw `.csv` / `.sealed` deleted after gzip.** V5.30.
+
+- [ ] **Orphan ride summary recovery.** When a ride `.csv` exists with
+  no NVS summary (power-off mid-ride), reconcile should parse the file
+  and write a summary. Not implemented. Currently the file uploads raw
+  and the GUI can't show it as Last Ride.
+
+---
+
+## Alarm / PANIC
+
+- [ ] **Horn policy.** If a 12V horn is added as a PANIC output:
+  horn fires once at latch, silence after. Subsequent wakes: mail only.
+  Never repeat the blast. A 15A horn on every wake kills the battery
+  in hours.
+- [ ] **PANIC beep cadence.** Currently one beep sequence per wake
+  while latched. Confirm this is wanted, or make it once-per-hour.
+- [ ] **Mail on PANIC.** Fires once at latch (current). Confirm.
+- [ ] **Arming chirp + fake alarm LED flash.** Cosmetic. Keep.
+
+---
+
+## GUI
+
+- [ ] **`/upload` timeout false negative.** See Immediate.
+- [ ] **`reports.py` skip `#` lines.** See Wake file format.
+- [ ] **Drive sync.** Already pulls wakes + rides + bin. Verified.
+  No change.
+
+---
 
 ## Docs
 
-- [ ] **Update `README.md`** — note GPS as clock source, seal-before-upload
-  flow, `# closed=` line, new ride row format.
-- [ ] **Update `DYNA_TUNE.md`** — Dyna Tune should parse the new ride row
-  columns.
-- [ ] **`HANDOFF.md`** — refresh "current state" and "known open issues".
-- [ ] **Fix README duplication** — Maintenance / GUI / Bench snapshot /
-  Protected systems / Prime directive all appear twice.
+- [ ] **`README.md`** — update for V5.30. `/seal` endpoint, upload
+  routine flow, wake file `# upload=` lines, ride header fields.
+- [ ] **`DYNA_TUNE.md`** — refresh.
+- [ ] **`HANDOFF.md`** — refresh current state.
+- [ ] **README duplication** — Maintenance / GUI / Bench snapshot /
+  Protected systems / Prime directive. Still duplicated.
+
+---
 
 ## Housekeeping
 
-- [ ] **`ESP32-C3` XCW board** — replace with new board when the MP1584EN
-  modules arrive.
-- [ ] **Voltage divider calibration** — measure actual ratio with DMM, update
-  `BATTERY_SLOPE`.
-- [ ] **NTC constants** — code has B=4600, physical part is B=3950. Fix or
-  accept ~1.5 °C error.
+- [ ] **ESP32-C3 XCW board** — replace with new board when the
+  MP1584EN modules arrive.
+- [ ] **Voltage divider calibration** — measure actual ratio with DMM,
+  update `BATTERY_SLOPE`.
+- [ ] **NTC constants** — code has B=4600, physical part is B=3950.
+  Fix or accept ~1.5 °C error.
+
+---
 
 ## Deferred
 
 - [ ] **Summary struct expansion** — `avgSpeed`, `maxSpeed`, `maxAlt`,
   `minAlt` using spare fields.
-- [ ] **DS3231 hardware RTC** — for multi-week accuracy without GPS or WiFi.
-- [ ] **Dyna Tune `dynatune.py`** — real analysis module against the spec.
+- [ ] **DS3231 hardware RTC** — multi-week accuracy without GPS or WiFi.
+- [ ] **Dyna Tune `dynatune.py`** — real analysis module.
 - [ ] **Settings History window** — logging layer + Tk window.
-- [ ] **Power measurement** — MP1584EN quiescent at 12.6 V input, 5 V out.
+- [ ] **Power measurement** — MP1584EN quiescent at 12.6 V input.
+
+---
 
 ## Blockers
 
-- MP1584EN modules in transit (arriving Mon 12 – Tue 13 Oct).
+- MP1584EN modules in transit.
 - New ESP32-C3 board needed for reliable bench work.
 - GPS outdoor test still pending.
 
-## Done (recent)
+---
 
-- [x] **V5.23 — force upload via HTTP `/upload` during maint.** Verified working
-  end-to-end: GUI POSTs, bike runs `driveUploadPerform(true)`, WiFi stays up,
-  server survives. Rule 7 still correct.
-- [x] **V5.23 — remove BLE force-upload handler.**
-- [x] **V5.23 — `fromMaint` param** on `driveUploadPerform()` to skip
-  `wifiBringDown()` when called from the maint HTTP path.
-- [x] **V5.24 — `"st"` storage percent** in `publishBLE()` JSON.
-- [x] **GUI 4.38 — `💾 Stor` badge** in the Temp/Time row.
-- [x] **README — zsh bracketed-paste note, patch anchor rules.**
+## Done this session (2026-10-10)
+
+- V5.23: HTTP `/upload` during maint, BLE force-upload handler removed
+- V5.24: storage % telemetry + GUI Stor badge
+- V5.25: clock sync inside `driveUploadPerform()`, upload reason
+- V5.26: GPS debug print with utc/hdg/alt
+- V5.27 / V5.27.1: ride header/footer stamps, gzip all, OTA OLED
+  redraw, debug heartbeats
+- V5.28: `/seal` endpoint, monotonic epoch floor
+- V5.29: upload routine rebuild — seal, reconcile, upload, delete raw,
+  `# upload=` event lines
+- V5.30: reconcile skips current open files, 422 handled, raw delete
+  after gzip in seal paths
+
+**Verified working end-to-end:**
+- Force upload (GUI → `/upload` → GitHub → GUI Drive sync)
+- Scheduled upload at 17:00 test (before V5.29 seal move)
+- Rule 7 hold-back of newest ride
+- `/seal` manual seal: `# closed=`, gzip, raw delete, new file
+- Reconcile: orphan `.csv` / `.sealed` → gzip → raw delete
+- Storage reclaimed from 53% → 15% after V5.30 upload run

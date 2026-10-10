@@ -525,7 +525,6 @@ void doStateWork(unsigned long now, bool wasWake) {
 
   if (uploadDue && !otaRequest && !wifiActive) {
     lastUploadAttempt = millis();
-    tprint("[UPLOAD] ====== ENTERING UPLOAD MODE ======");
 
     extern char wifiMessage[24];
     snprintf(wifiMessage, sizeof(wifiMessage), "Starting");
@@ -835,7 +834,7 @@ void loop() {
           tprint("[UPLOAD] /upload consumed, running now");
           uint32_t nowEp = currentEpoch();
           if (nowEp > 0) wakeLoggerForceRotate(nowEp);
-          driveUploadPerform(true);
+          driveUploadPerform(true, "forced");
         }
 
         // V4.87: keep the OLED awake for the whole maint session.

@@ -13,7 +13,7 @@
 // V4.70: dead defines removed, section headers added.
 // Deploy-specific values (UPLOAD_URL, SMTP_*) still live here pending move to Deploy.h.
 
-#define BIKE_MATE_VERSION "5.24"
+#define BIKE_MATE_VERSION "5.25"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1

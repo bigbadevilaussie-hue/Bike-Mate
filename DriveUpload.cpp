@@ -536,10 +536,10 @@ bool driveUploadShouldRun() {
 }
 
 // ---- main ----
-bool driveUploadPerform(bool fromMaint) {
+bool driveUploadPerform(bool fromMaint, const char* reason) {
   extern char wifiMessage[24];
 
-  tprint("[UPLOAD] ====== ENTERING UPLOAD MODE ======");
+  tprint("[UPLOAD] ====== ENTERING UPLOAD MODE (%s) ======", reason);
 
   display.ssd1306_command(SSD1306_DISPLAYON);
   display.clearDisplay();
@@ -568,6 +568,13 @@ bool driveUploadPerform(bool fromMaint) {
 
     return false;
   }
+
+  // V5.24: sync the clock now that WiFi is up. The 4am upload
+  // path runs on drifted RTC time; without this, the wake file
+  // epochs and setLastUploadEpoch() are all drifted. Opal LAN
+  // first, NTP fallback. Failure is non-fatal - the upload still
+  // proceeds on the drifted clock (better than no upload).
+  clockBringUp();
 
   int wakeOk = 0;
   int rideOk = 0;

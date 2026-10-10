@@ -1,5 +1,8 @@
 # Bike-Mate
 
+**Handoff doc for the next AI. Not for humans.** Nick doesn't read
+this. Keep it accurate so the next session starts clean.
+
 Motorcycle battery, temperature and ride logger. ESP32-C3 + BLE + OLED.
 
 **Prime directive: Bike-Mate must not drain the bike battery past the point

@@ -13,6 +13,8 @@
 #include "WifiManager.h"
 #include "DisplayManager.h"
 
+#define DEST_FS_USES_LITTLEFS
+#include <ESP32-targz.h>
 #include <HTTPClient.h>
 #include <LittleFS.h>
 #include <Preferences.h>
@@ -99,6 +101,64 @@ static String urlEncSegment(const String& s) {
     }
   }
   return out;
+}
+
+// ---- V5.29: reconcile orphans ----
+// Any .sealed or ride .csv without a matching .gz gets gzipped.
+// Successful gzip deletes the raw. Failed gzip keeps both.
+static void reconcileLittleFS() {
+  // V5.30: never touch the currently-open wake or ride files.
+  // The seal opens a fresh wake file right before reconcile runs,
+  // and gzipping it deletes the file the writer is still appending
+  // to. Same for an in-progress ride.
+  const char* openWake = wakeLoggerCurrentFile();
+  const char* openRide = rideStorageCurrentFile();
+
+  File root = LittleFS.open("/");
+  if (!root || !root.isDirectory()) return;
+  File e = root.openNextFile();
+  while (e) {
+    String n = String(e.name());
+    size_t sz = e.size();
+    e.close();
+
+    // Normalise path for comparison
+    String base = n;
+    if (!base.startsWith("/")) base = "/" + base;
+    if (openWake && openWake[0] && base == String(openWake)) {
+      e = root.openNextFile();
+      continue;
+    }
+    if (openRide && openRide[0] && base == String(openRide)) {
+      e = root.openNextFile();
+      continue;
+    }
+
+    bool isSealed = n.endsWith(".sealed");
+    bool isCsv = n.endsWith(".csv");
+    if (isSealed || isCsv) {
+      String base = n;
+      if (!base.startsWith("/")) base = "/" + base;
+      String gz = base + ".gz";
+      if (!LittleFS.exists(gz)) {
+        tprint("[RECONCILE] gzip %s (%u bytes)", n.c_str(), (unsigned)sz);
+        File src = LittleFS.open(base, "r");
+        File dst = LittleFS.open(gz, "w");
+        size_t gzBytes = 0;
+        if (src && dst) gzBytes = LZPacker::compress(&src, src.size(), &dst);
+        if (src) src.close();
+        if (dst) dst.close();
+        if (gzBytes > 0) {
+          LittleFS.remove(base);
+          tprint("[RECONCILE] removed raw %s", base.c_str());
+        } else {
+          tprint("[RECONCILE] gzip failed, keeping raw");
+        }
+      }
+    }
+    e = root.openNextFile();
+  }
+  root.close();
 }
 
 // ---- POST one file to GitHub Contents API ----
@@ -190,7 +250,10 @@ static bool postFile(const char* localPath, const char* uploadName) {
     http.addHeader("Content-Type", "application/json");
   }
 
-  bool ok = (code == 201 || code == 200);
+  // V5.30: 422 = file already exists on GitHub without a sha.
+  // Treat as already-uploaded so the caller deletes the local copy
+  // and doesn't retry forever. Content is presumed identical.
+  bool ok = (code == 201 || code == 200 || code == 422);
   tprint("[UPLOAD] %s %s (code=%d)",
          path.c_str(), ok ? "OK" : "FAIL", code);
   http.end();
@@ -286,11 +349,8 @@ static int uploadAllWakeFiles(const char* currentWakeFile, int* okCount) {
 
     bool ok = postFile(uploadNames[i], cleanName);
 
-    wakeLoggerLogUpload(
-        cleanName,
-        ok,
-        ok ? "" : "upload failed"
-    );
+    wakeLoggerLogEvent("send wakes=%s %s",
+        cleanName, ok ? "OK" : "FAIL");
 
     if (ok) {
       char fullPath[64];
@@ -302,6 +362,19 @@ static int uploadAllWakeFiles(const char* currentWakeFile, int* okCount) {
       );
 
       LittleFS.remove(fullPath);
+
+      // V5.29: delete paired raw (.gz -> .sealed)
+      char rawPath[64];
+      strncpy(rawPath, fullPath, sizeof(rawPath) - 1);
+      rawPath[sizeof(rawPath) - 1] = 0;
+      size_t rlen = strlen(rawPath);
+      if (rlen > 3 && strcmp(rawPath + rlen - 3, ".gz") == 0) {
+        rawPath[rlen - 3] = 0;
+        if (LittleFS.exists(rawPath)) {
+          LittleFS.remove(rawPath);
+          tprint("[UPLOAD] removed raw %s", rawPath);
+        }
+      }
 
       (*okCount)++;
 
@@ -447,11 +520,8 @@ static int uploadAllRideFiles(int* okCount) {
     bool ok =
         postFile(uploadNames[i], n);
 
-    wakeLoggerLogUpload(
-        n,
-        ok,
-        ok ? "" : "upload failed"
-    );
+    wakeLoggerLogEvent("send rides=%s %s",
+        n, ok ? "OK" : "FAIL");
 
     if (ok) {
 
@@ -464,6 +534,19 @@ static int uploadAllRideFiles(int* okCount) {
       );
 
       LittleFS.remove(fullPath);
+
+      // V5.29: delete paired raw (.gz -> .csv)
+      char rawPath[64];
+      strncpy(rawPath, fullPath, sizeof(rawPath) - 1);
+      rawPath[sizeof(rawPath) - 1] = 0;
+      size_t rlen = strlen(rawPath);
+      if (rlen > 3 && strcmp(rawPath + rlen - 3, ".gz") == 0) {
+        rawPath[rlen - 3] = 0;
+        if (LittleFS.exists(rawPath)) {
+          LittleFS.remove(rawPath);
+          tprint("[UPLOAD] removed raw %s", rawPath);
+        }
+      }
 
       (*okCount)++;
 
@@ -546,35 +629,24 @@ bool driveUploadPerform(bool fromMaint, const char* reason) {
   drawUploadScreen();
   display.display();
 
-  wakeLoggerLogUploadStart();
-
   if (!wifiBringUp()) {
-
-    wakeLoggerLogUpload(
-        "wifi",
-        false,
-        "connect failed"
-    );
-
-    wakeLoggerLogUploadDone(0, 1);
-
     tprint("[UPLOAD] ====== FAILED (WiFi) ======");
-
-    snprintf(
-        wifiMessage,
-        sizeof(wifiMessage),
-        "WiFi fail"
-    );
-
+    wakeLoggerLogEvent("wifi FAIL");
+    snprintf(wifiMessage, sizeof(wifiMessage), "WiFi fail");
     return false;
   }
 
-  // V5.24: sync the clock now that WiFi is up. The 4am upload
-  // path runs on drifted RTC time; without this, the wake file
-  // epochs and setLastUploadEpoch() are all drifted. Opal LAN
-  // first, NTP fallback. Failure is non-fatal - the upload still
-  // proceeds on the drifted clock (better than no upload).
+  // V5.24: sync the clock now that WiFi is up.
   clockBringUp();
+
+  // V5.29: log start, seal the current wake file, open a new one.
+  wakeLoggerLogEvent("start reason=%s", reason);
+  wakeLoggerSealManual(currentEpoch());
+  wakeLoggerLogEvent("sealed new file");
+
+  // V5.29: reconcile orphan .sealed and .csv into .gz, delete raw.
+  reconcileLittleFS();
+  wakeLoggerLogEvent("reconciled");
 
   int wakeOk = 0;
   int rideOk = 0;
@@ -596,10 +668,7 @@ bool driveUploadPerform(bool fromMaint, const char* reason) {
   int totalOk =
       wakeOk + rideOk;
 
-  wakeLoggerLogUploadDone(
-      totalOk,
-      totalFails
-  );
+  wakeLoggerLogEvent("done ok=%d fail=%d", totalOk, totalFails);
 
   if (!fromMaint) {
     wifiBringDown();

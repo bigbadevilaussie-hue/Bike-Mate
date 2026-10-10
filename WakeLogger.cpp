@@ -316,6 +316,10 @@ bool wakeLoggerForceRotate(uint32_t triggerEpoch) {
     tprint("[WAKE] gzip result: %u", (unsigned)gzBytes);
     if (gzBytes > 0) {
       tprint("[WAKE] gzipped %s", gzPath);
+      // V5.30: delete the raw after successful gzip. Was the
+      // source of the orphan .sealed pile.
+      LittleFS.remove(sealed);
+      tprint("[WAKE] removed raw %s", sealed);
     } else {
       tprint("[WAKE] gzip failed (returned 0)");
     }
@@ -451,6 +455,22 @@ void wakeLoggerLogUploadDone(int okCount, int failCount) {
   char buf[80];
   snprintf(buf, sizeof(buf), "UPLOAD,done,%d ok %d fail\n", okCount, failCount);
   f.write((uint8_t*)buf, strlen(buf));
+  f.close();
+}
+
+// ---- V5.29: event line ----
+void wakeLoggerLogEvent(const char* fmt, ...) {
+  if (_currentPath[0] == 0) return;
+  File f = LittleFS.open(_currentPath, "a");
+  if (!f) return;
+  char body[160];
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(body, sizeof(body), fmt, args);
+  va_end(args);
+  char line[192];
+  snprintf(line, sizeof(line), "# upload=%s\n", body);
+  f.write((uint8_t*)line, strlen(line));
   f.close();
 }
 

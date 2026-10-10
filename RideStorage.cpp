@@ -237,6 +237,10 @@ void rideStorageClose() {
         tprint("[RIDE] gzip result: %u", (unsigned)gzBytes);
         if (gzBytes > 0) {
           tprint("[RIDE] gzipped %s", gzPath);
+          // V5.30: delete the raw after successful gzip. Was the
+          // source of the orphan .csv pile.
+          LittleFS.remove(_currentFile);
+          tprint("[RIDE] removed raw %s", _currentFile);
         } else {
           tprint("[RIDE] gzip failed (returned 0)");
         }

@@ -26,6 +26,8 @@ RTC_DATA_ATTR static uint8_t  _sats = 0;
 static float    _speed_kmh = 0.0f;
 static float    _altitude_m = 0.0f;
 static uint32_t _epochUTC = 0;
+static float    _courseDeg = 0.0f;
+static char     _timeUTC[9] = "--";
 static uint32_t _lastSentenceMs = 0;
 
 // Parse helper - split on commas, return field N as float (or NAN on empty)
@@ -99,6 +101,12 @@ static void _parseLine(char* line, uint8_t len) {
       char* lonF = _fieldStr(line, 5);
       char* lonH = _fieldStr(line, 6);
       char* spdF = _fieldStr(line, 7);
+      char* timeF = _fieldStr(line, 1);
+      // V5.26: capture hhmmss for debug print (no clock update yet)
+      if (timeF && strlen(timeF) >= 6) {
+        strncpy(_timeUTC, timeF, 6);
+        _timeUTC[6] = 0;
+      }
       if (latF && latH) _lat_x1e7 = _nmeaTo_x1e7(latF, *latH);
       if (lonF && lonH) _lon_x1e7 = _nmeaTo_x1e7(lonF, *lonH);
       if (spdF && *spdF) {
@@ -126,6 +134,10 @@ static void _parseLine(char* line, uint8_t len) {
   }
   // GPVTG - track + speed
   else if (strncmp(line, "$GPVTG,", 7) == 0 || strncmp(line, "$GNVTG,", 7) == 0) {
+    char* courseF = _fieldStr(line, 1);
+    if (courseF && *courseF) {
+      _courseDeg = atof(courseF);
+    }
     char* kmhF = _fieldStr(line, 7);
     if (kmhF && *kmhF) {
       float kmh = atof(kmhF);
@@ -214,6 +226,22 @@ float gpsAltitude_m() {
   return 0.0f;
 #else
   return _altitude_m;
+#endif
+}
+
+float gpsCourseDeg() {
+#if GPS_STUB_ENABLED
+  return 0.0f;
+#else
+  return _courseDeg;
+#endif
+}
+
+const char* gpsTimeUTC() {
+#if GPS_STUB_ENABLED
+  return "--";
+#else
+  return _timeUTC;
 #endif
 }
 

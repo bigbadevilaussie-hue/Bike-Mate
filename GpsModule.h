@@ -18,3 +18,5 @@ uint8_t  gpsSats();
 float    gpsSpeed_kmh();
 float    gpsAltitude_m();
 uint32_t gpsEpochUTC();     // 0 if no fix/time yet
+float    gpsCourseDeg();    // 0 if no fix
+const char* gpsTimeUTC();   // "hhmmss" or "--" if none

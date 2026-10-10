@@ -721,9 +721,10 @@ void loop() {
   static unsigned long lastGpsPrint = 0;
   if (millis() - lastGpsPrint > 5000) {
     lastGpsPrint = millis();
-    tprint_verbose("[GPS] fix=%d sats=%d spd=%.1f lat=%ld lon=%ld",
+    tprint_verbose("[GPS] fix=%d sats=%d spd=%.1f lat=%ld lon=%ld utc=%s hdg=%.1f alt=%.1f",
            gpsHasFix() ? 1 : 0, gpsSats(), gpsSpeed_kmh(),
-           (long)gpsLat_x1e7(), (long)gpsLon_x1e7());
+           (long)gpsLat_x1e7(), (long)gpsLon_x1e7(),
+           gpsTimeUTC(), gpsCourseDeg(), gpsAltitude_m());
   }
 
   readSensors();

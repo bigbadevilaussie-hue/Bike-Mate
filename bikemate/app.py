@@ -46,6 +46,8 @@ class App:
                                command=self.activate_maintenance)
         maint_menu.add_command(label="🛑  Deactivate",
                                command=self.deactivate_maintenance)
+        maint_menu.add_command(label="🔄  Sync Bike-Mate",
+                               command=self.force_upload)
         maint_menu.add_separator()
         maint_menu.add_command(label="📤  Update Firmware",
                                command=self.menu_ota)
@@ -471,7 +473,8 @@ class App:
         self.maint_menu.entryconfig(0, state=("normal" if off else "disabled"))
         self.maint_menu.entryconfig(1, state=("normal" if on  else "disabled"))
         st = "normal" if on else "disabled"
-        for idx in (3, 4, 6):
+        # V4.36: Sync Bike-Mate (2) added. Indices shifted below it.
+        for idx in (2, 4, 5, 7):
             try:
                 self.maint_menu.entryconfig(idx, state=st)
             except Exception:
@@ -946,6 +949,14 @@ class App:
         }
         from .dynatune_window import DynaTuneWindow
         DynaTuneWindow(self.root, self, fake, meta)
+
+    def force_upload(self):
+        # V4.36: send force-upload command over BLE. Firmware sets
+        # uploadRequested; upload fires on the next wake.
+        print("[UPLOAD] request: {\"upload\":\"now\"}")
+        def on_result(ok, detail):
+            print(f"[UPLOAD] force result: {ok} ({detail})")
+        self.worker.send_ota_command('{"upload":"now"}', on_result)
 
     def tick(self):
         # V4.33: auto-detect maint from the bike side. Covers entering

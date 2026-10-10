@@ -24,7 +24,7 @@ from datetime import datetime
 from tkinter import messagebox
 from bleak import BleakScanner, BleakClient
 
-GUI_VERSION = "4.35"
+GUI_VERSION = "4.36"
 
 MAINTENANCE_ACK_TIMEOUT_MS = 5000
 MAINTENANCE_BROWSER_DELAY_MS = 3000

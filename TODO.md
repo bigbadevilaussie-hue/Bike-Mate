@@ -189,6 +189,47 @@ Target 11-column: add `speed,hdg,alt,sats,flags`.
 
 ---
 
+## OSA Server + panic alerts
+
+Bike-Mate PANIC should POST to the OSA Server on the Mac, which fires:
+iMessage, Reminder, sound, and a Sinric Pro switch that Alexa picks up
+to announce on the Echo Show.
+
+- [ ] **Firmware patch: POST to OSA Server on PANIC.** In `doStateWork()`
+  panic block, call `wifiBringUp()`, POST `http://192.168.8.187:9999/panic`
+  with the panic message, then `wifiBringDown()`. Once per latch or every
+  wake — decide. `Config.h` needs `MAC_SERVER_IP` + `MAC_SERVER_PORT`.
+- [ ] **Test PANIC -> OSA -> Sinric -> Alexa end to end.** Not yet run
+  from the bike. Manual curl test works (verified this session).
+- [ ] **Same for Fan-Mate.** Fan-Mate firmware POSTs to
+  `http://192.168.8.187:9999/fanpanic`. Separate repo (Fan-Mate), not
+  Bike-Mate.
+
+**OSA Server repo:** `github.com/bigbadevilaussie-hue/OSA-Server` (private).
+Current version: v1.1. Status page at `http://localhost:9999/`.
+
+---
+
+## Box design (hardware enclosure)
+
+- [ ] **Board layout finalised.** Vero 45 x 70 mm, two-row layout.
+  Buck + ESP32 top row, USB charger + GPS bottom row. MOSFET, buzzer,
+  second buck for fan.
+- [ ] **Box dimensions:** 49 x 74 x 29 mm outer, 45 x 70 x 25 mm internal.
+  Front panel: OLED + 2 LEDs. Side: rocker + USB-A x2 + fan inlets. Back:
+  SAE connector + 40mm fan. Top: GPS antenna slot. Bottom: mount.
+- [ ] **Fan control:** 40mm 5V fan on the USB charger 5V rail. Flyback
+  diode across fan. Runs when charger has 5V (gated on accState).
+- [ ] **Kill switch:** 12V rocker between battery and everything else.
+  Back of box, near SAE. Master power.
+- [ ] **Thermistor for internal temp.** Second thermistor on the vero.
+  GPIO TBD. Log box temp on every wake.
+- [ ] **Measure buck quiescent.** First thing when the MP1584EN arrives.
+  If > 2 mA, prime directive at risk. Kill switch becomes mandatory for
+  storage > 2 weeks.
+
+---
+
 ## Blockers
 
 - MP1584EN modules in transit.

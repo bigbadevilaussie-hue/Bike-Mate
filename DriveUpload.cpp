@@ -10,6 +10,7 @@
 #include "WakeLogger.h"
 #include "RideStorage.h"
 #include "Config.h"
+#include "Settings.h"
 #include "WifiManager.h"
 #include "DisplayManager.h"
 
@@ -589,7 +590,7 @@ static uint32_t mostRecent4am() {
 
   struct tm target = *ti;
 
-  target.tm_hour = UPLOAD_HOUR_LOCAL;
+  target.tm_hour = config.uploadHour;
   target.tm_min = 0;
   target.tm_sec = 0;
 

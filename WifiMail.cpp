@@ -6,6 +6,7 @@
 
 #include "WifiMail.h"
 #include "Config.h"
+#include "Settings.h"
 #include "WifiManager.h"
 
 #include <WiFi.h>
@@ -76,10 +77,10 @@ bool sendMail(const String& subject, const String& body) {
   tprint("[MAIL] disabled by MAIL_ENABLED=0");
   return false;
 #endif
-#if BENCH_MODE
-  tprint("[MAIL] disabled on bench (BENCH_MODE=1)");
-  return false;
-#endif
+  if (config.benchMode) {
+    tprint("[MAIL] disabled on bench (config.benchMode=1)");
+    return false;
+  }
 
   // Rate limit
   uint32_t now = currentEpoch();

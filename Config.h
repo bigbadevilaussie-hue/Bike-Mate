@@ -13,7 +13,7 @@
 // V4.70: dead defines removed, section headers added.
 // Deploy-specific values (UPLOAD_URL, SMTP_*) still live here pending move to Deploy.h.
 
-#define BIKE_MATE_VERSION "5.30"
+#define BIKE_MATE_VERSION "5.31"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
@@ -56,12 +56,19 @@
 #define NVS_NAMESPACE_UPLOAD "upload"
 
 // ---- Wake intervals ----
-#define BENCH_MODE 1
+// V5.31: three-zone schedule. All times are AEST hour (0-23).
+// Cadences in minutes, 1-30. Defaults are the old two-zone behaviour
+// for backwards compatibility until the settings migrate.
+//   Off-peak: offPeakStart -> offPeakEnd, wake every offPeakWakeMin
+//   Day peak: peakStart    -> peakEnd,    wake every peakWakeMin
+//   Day:      everything else,            wake every dayWakeMin
+// BENCH_MODE is now a runtime setting (config.benchMode).
+// WAKE_BENCH_MS stays compile-time for the bench cadence.
 #define WAKE_BENCH_MS    30000UL
-#define WAKE_DAY_MS     300000UL
-#define WAKE_NIGHT_MS   600000UL
-#define NIGHT_START_HOUR   17
-#define NIGHT_END_HOUR      8
+#define MAX_AWAKE_MS    180000UL
+#define BLE_MAX_CONN_MS  600000UL
+#define BLE_IDLE_GRACE_MS   5000UL
+#define MAINT_MAX_MS     300000UL
 #define MAX_AWAKE_MS    180000UL   // V4.72: 180 s hard max-awake, OTA exempt
 #define BLE_MAX_CONN_MS  600000UL   // V4.73: force disconnect after 10 min
 #define BLE_IDLE_GRACE_MS   5000UL   // V4.84: idle BLE conn does not block sleep
@@ -177,7 +184,8 @@ struct WakeSample {
 
 // ---- Drive upload module ----
 #define UPLOAD_ENABLED 1
-#define UPLOAD_HOUR_LOCAL 17
+// UPLOAD_HOUR_LOCAL now runtime: config.uploadHour
+// Default 4 lives in Settings.cpp set_defaults().
 #define UPLOAD_URL "https://script.google.com/macros/s/AKfycbx758YfZhY4wp_FdWgu6DSoDVn6-k0Wb0hVVDzwauRSZOSbT9zFAsvskeHv4mz5-G59/exec"
 #define UPLOAD_URL_MAX 256
 #define UPLOAD_WIFI_TIMEOUT_MS 30000UL

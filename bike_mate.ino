@@ -180,31 +180,38 @@ void formatTime12h_buf(uint32_t e, char* out, size_t n) {
 }
 
 const char* currentWakeMode() {
-#if BENCH_MODE
-  return "BENCH";
-#else
+  if (config.benchMode) return "BENCH";
   uint32_t ep = currentEpoch();
   if (ep == 0) return "DAY";
   time_t t = ep;
   struct tm* ti = localtime(&t);
   int h = ti->tm_hour;
-  bool night = (h >= NIGHT_START_HOUR || h < NIGHT_END_HOUR);
-  return night ? "NIGHT" : "DAY";
-#endif
+  bool offPeak = (config.offPeakStart <= config.offPeakEnd)
+      ? (h >= config.offPeakStart && h < config.offPeakEnd)
+      : (h >= config.offPeakStart || h < config.offPeakEnd);
+  bool peak = (h >= config.peakStart && h < config.peakEnd);
+  if (offPeak) return "OFFPEAK";
+  if (peak) return "PEAK";
+  return "DAY";
 }
 
 uint32_t currentWakeMs() {
-#if BENCH_MODE
-  return WAKE_BENCH_MS;
-#else
+  if (config.benchMode) return WAKE_BENCH_MS;
   uint32_t ep = currentEpoch();
-  if (ep == 0) return WAKE_DAY_MS;
+  if (ep == 0) return (uint32_t)config.dayWakeMin * 60000UL;
   time_t t = ep;
   struct tm* ti = localtime(&t);
   int h = ti->tm_hour;
-  bool night = (h >= NIGHT_START_HOUR || h < NIGHT_END_HOUR);
-  return night ? WAKE_NIGHT_MS : WAKE_DAY_MS;
-#endif
+  bool offPeak = (config.offPeakStart <= config.offPeakEnd)
+      ? (h >= config.offPeakStart && h < config.offPeakEnd)
+      : (h >= config.offPeakStart || h < config.offPeakEnd);
+  bool peak = (h >= config.peakStart && h < config.peakEnd);
+  uint8_t m = offPeak ? config.offPeakWakeMin
+            : peak    ? config.peakWakeMin
+            :           config.dayWakeMin;
+  if (m < 1)  m = 1;
+  if (m > 30) m = 30;
+  return (uint32_t)m * 60000UL;
 }
 
 void wakeFlash() {
@@ -570,11 +577,14 @@ void setup() {
       (cause == ESP_SLEEP_WAKEUP_UNDEFINED) ? "cold boot" : "other";
   tprint("=================================================");
   tprint("  BIKE-MATE V%s", BIKE_MATE_VERSION);
-#if BENCH_MODE
-  tprint("  BENCH_MODE=1  wake=30s/30s");
-#else
-  tprint("  BENCH_MODE=0  day=300s night=600s");
-#endif
+  if (config.benchMode) {
+    tprint("  BENCH_MODE=1  wake=30s/30s");
+  } else {
+    tprint("  BENCH_MODE=0  op=%u-%u/%um pk=%u-%u/%um day=%um",
+           config.offPeakStart, config.offPeakEnd, config.offPeakWakeMin,
+           config.peakStart, config.peakEnd, config.peakWakeMin,
+           config.dayWakeMin);
+  }
   tprint("=================================================");
   tprint("[WAKE] cause=%d (%s)", (int)cause, causeStr);
   setenv("TZ", "AEST-10", 1); tzset();

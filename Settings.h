@@ -24,6 +24,19 @@ struct BikeMateConfig {
   uint16_t monitorNormal_mv;  // resting voltage at or above = healthy
   uint16_t monitorWarning_mv; // resting voltage below = email
   uint16_t monitorPanic_mv;   // resting voltage below = PANIC / prime directive
+
+  // V5.31 SLEEP SCHEDULE
+  bool     benchMode;         // 1 = 30s wakes, 0 = three-zone schedule
+  uint8_t  offPeakStart;      // hour 0-23, off-peak window start
+  uint8_t  offPeakEnd;        // hour 0-23, off-peak window end
+  uint8_t  offPeakWakeMin;    // 1-30, wake cadence in off-peak
+  uint8_t  peakStart;         // hour 0-23, day-peak window start
+  uint8_t  peakEnd;           // hour 0-23, day-peak window end
+  uint8_t  peakWakeMin;       // 1-30, wake cadence in day-peak
+  uint8_t  dayWakeMin;        // 1-30, wake cadence in day (all other hours)
+
+  // V5.31 UPLOAD SCHEDULE
+  uint8_t  uploadHour;        // hour 0-23, daily upload trigger
 };
 
 extern BikeMateConfig config;

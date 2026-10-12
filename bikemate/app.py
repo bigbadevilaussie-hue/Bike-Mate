@@ -575,12 +575,17 @@ class App:
         # enters maintenance on its NEXT wake, so reachability of the
         # serial page is the real signal that maintenance is running.
         def on_result(ok, detail):
-            print(f"[MAINT] BLE result for '{on_off}': {ok} ({detail})")
+            print(f"[MAINT] OSA result for '{on_off}': {ok} ({detail})")
 
-        self.worker.send_ota_command(payload, on_result)
-
+        # V5.34: BLE is retired. Maint-on is a POST to OSA, which
+        # queues the BLE write and applies it on the next bike wake.
         if on_off == "on":
+            from .ble import send_maint_on
+            send_maint_on(on_result)
             self._start_maint_poll()
+        else:
+            # off is HTTP direct to the bike (existing behaviour)
+            on_result(False, "maint off is HTTP direct; not routed via OSA")
 
     def _start_maint_poll(self):
         import urllib.request

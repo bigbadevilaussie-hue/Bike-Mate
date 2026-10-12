@@ -13,10 +13,11 @@
 // V4.70: dead defines removed, section headers added.
 // Deploy-specific values (UPLOAD_URL, SMTP_*) still live here pending move to Deploy.h.
 
-#define BIKE_MATE_VERSION "5.33"
+#define BIKE_MATE_VERSION "5.34"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
+#define DEBUG_CAPTURE 0   // V5.34: gate the per-100ms capture logs
 
 // ---- Display ----
 #define SCREEN_W 128
@@ -65,6 +66,7 @@
 // BENCH_MODE is now a runtime setting (config.benchMode).
 // WAKE_BENCH_MS stays compile-time for the bench cadence.
 #define WAKE_BENCH_MS    30000UL
+#define BB_HEARTBEAT_MS  60000UL   // V5.34: black-box HB throttle
 #define MAX_AWAKE_MS    180000UL
 #define BLE_MAX_CONN_MS  600000UL
 #define BLE_IDLE_GRACE_MS   5000UL

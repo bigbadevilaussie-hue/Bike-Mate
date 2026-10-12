@@ -707,6 +707,33 @@ void publishBLE() {
       BIKE_MATE_VERSION,
       (unsigned)storagePercent);
 
+  // V5.34: append HB fields so OSA caches them alongside telemetry.
+  {
+    size_t used = strlen(buf);
+    uint32_t free_heap  = ESP.getFreeHeap();
+    uint32_t min_heap   = ESP.getMinFreeHeap();
+    uint32_t stack_mark = uxTaskGetStackHighWaterMark(NULL);
+    extern bool isLogging;
+    extern bool inPanic;
+    char hb[160];
+    snprintf(hb, sizeof(hb),
+             ",\"hb\":{\"h\":%u,\"mn\":%u,\"st\":%u,\"up\":%lu,"
+             "\"rst\":%u,\"pn\":%d,\"lg\":%d}",
+             (unsigned)free_heap,
+             (unsigned)min_heap,
+             (unsigned)stack_mark,
+             (unsigned long)(millis() / 1000UL),
+             (unsigned)esp_reset_reason(),
+             inPanic ? 1 : 0,
+             isLogging ? 1 : 0);
+    // insert before the closing brace
+    if (used >= 2 && buf[used - 1] == '}') {
+      buf[used - 1] = 0;
+      strncat(buf, hb, sizeof(buf) - strlen(buf) - 2);
+      strncat(buf, "}", sizeof(buf) - strlen(buf) - 1);
+    }
+  }
+
   pDataChar->setValue(
       (uint8_t*)buf,
       strlen(buf));

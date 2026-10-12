@@ -325,7 +325,14 @@ static bool _wifiBringUpOnce(unsigned long perAttemptTimeoutMs) {
 // second attempt after a full teardown + settle usually succeeds.
 // Two attempts total, then give up (bike sleeps, retries next wake).
 bool wifiBringUp(unsigned long perAttemptTimeoutMs) {
-  WiFi.onEvent(wifiDebugEvent);
+  // V5.34: register the event handler once. On core 2.0.17 WiFi.onEvent
+  // stacks handlers rather than replacing, so calling this on every
+  // bring-up caused duplicate [WIFI-EVENT] logs.
+  static bool _evtRegistered = false;
+  if (!_evtRegistered) {
+    WiFi.onEvent(wifiDebugEvent);
+    _evtRegistered = true;
+  }
   for (int attempt = 1; attempt <= 2; attempt++) {
     tprint("[WIFI] attempt %d/2", attempt);
     if (_wifiBringUpOnce(perAttemptTimeoutMs)) {

@@ -492,6 +492,7 @@ void doStateWork(unsigned long now, bool wasWake) {
   publishBLE();
 
   wakeLoggerTick();
+  black_box_heartbeat();   // V5.34
 
   tprint("[SENSOR] V=%.2f raw=%d ntc=%d temp=%.1fC",
          latestBatteryVoltage, latestRawVoltage,
@@ -575,6 +576,8 @@ void setup() {
   const char* causeStr =
       (cause == ESP_SLEEP_WAKEUP_TIMER) ? "timer" :
       (cause == ESP_SLEEP_WAKEUP_UNDEFINED) ? "cold boot" : "other";
+  setenv("TZ", "AEST-10", 1); tzset();
+  settingsLoad();   // V5.34: load NVS before the banner so it prints real values
   tprint("=================================================");
   tprint("  BIKE-MATE V%s", BIKE_MATE_VERSION);
   if (config.benchMode) {
@@ -587,8 +590,6 @@ void setup() {
   }
   tprint("=================================================");
   tprint("[WAKE] cause=%d (%s)", (int)cause, causeStr);
-  setenv("TZ", "AEST-10", 1); tzset();
-  settingsLoad();
   cycleCount++;
   tprint("[BOOT] cycleCount = %lu", cycleCount);
   bool coldBoot = (cause == ESP_SLEEP_WAKEUP_UNDEFINED);
@@ -748,14 +749,8 @@ void loop() {
            gpsTimeUTC(), gpsCourseDeg(), gpsAltitude_m());
   }
 
-  // V5.27 debug: heartbeat + pre/post markers to catch a hang.
-  static unsigned long lastLoopHb = 0;
+  // V5.34: [LOOP] alive removed - the [GPS] tick is the heartbeat.
   static unsigned long lastStage = 0;
-  if (millis() - lastLoopHb >= 5000UL) {
-    lastLoopHb = millis();
-    tprint("[LOOP] alive at %lu", millis() / 1000UL);
-  }
-
   lastStage = millis();
   readSensors();
   if (millis() - lastStage > 100UL) tprint("[LOOP] readSensors took %lums", millis() - lastStage);
@@ -830,16 +825,20 @@ void loop() {
   if (engineStartCapture) {
     static unsigned long lastActiveLog = 0;
     unsigned long captureNow = millis();
+#if DEBUG_CAPTURE
     if (captureNow - lastActiveLog > 500) {
       lastActiveLog = captureNow;
       tprint("[CAPTURE] active flag=%d elapsed=%lu",
              (int)engineStartCapture,
              (unsigned long)(captureNow - engineStartCaptureMs));
     }
+#endif
     if (captureNow - engineStartCaptureMs >= 5000UL) {
       engineStartCapture = false;
     } else if (captureNow - lastCaptureRow >= 100UL) {
       lastCaptureRow = captureNow;
+      extern void wakeLoggerForceWriteQuiet();
+      wakeLoggerForceWriteQuiet();
       wakeLoggerForceWrite(1);
     }
   }

@@ -476,14 +476,12 @@ static int uploadAllRideFiles(int* okCount) {
           char* gz = strstr(nStripped, ".gz");
           if (gz) *gz = 0;
 
-          tprint("[UPLOAD] Rule7: n='%s' np='%s' newest=%lu", nStripped, np, (unsigned long)newest);
           if (strcmp(nStripped, np) == 0) {
             skip = true;
             tprint("[UPLOAD] skipping newest ride %s", n);
           }
-        } else {
-          tprint("[UPLOAD] Rule7: newest_epoch is 0");
         }
+        // V5.34: Rule7 log hoisted; no per-file spam.
       }
 
       if (!skip) {
@@ -630,11 +628,22 @@ bool driveUploadPerform(bool fromMaint, const char* reason) {
   drawUploadScreen();
   display.display();
 
-  if (!wifiBringUp()) {
-    tprint("[UPLOAD] ====== FAILED (WiFi) ======");
-    wakeLoggerLogEvent("wifi FAIL");
-    snprintf(wifiMessage, sizeof(wifiMessage), "WiFi fail");
-    return false;
+  // V5.34: if WiFi is already up (invoked from maint), do not
+  // tear it down and reinit. The old path called wifiBringUp()
+  // unconditionally which caused duplicate WiFi.onEvent handlers
+  // and a needless STA drop/reconnect.
+  extern volatile bool wifiActive;
+  bool weBroughtUp = false;
+  if (!wifiActive || WiFi.status() != WL_CONNECTED) {
+    if (!wifiBringUp()) {
+      tprint("[UPLOAD] ====== FAILED (WiFi) ======");
+      wakeLoggerLogEvent("wifi FAIL");
+      snprintf(wifiMessage, sizeof(wifiMessage), "WiFi fail");
+      return false;
+    }
+    weBroughtUp = true;
+  } else {
+    tprint("[UPLOAD] WiFi already up, skipping bring-up");
   }
 
   // V5.24: sync the clock now that WiFi is up.
@@ -671,7 +680,7 @@ bool driveUploadPerform(bool fromMaint, const char* reason) {
 
   wakeLoggerLogEvent("done ok=%d fail=%d", totalOk, totalFails);
 
-  if (!fromMaint) {
+  if (!fromMaint && weBroughtUp) {
     wifiBringDown();
   }
 

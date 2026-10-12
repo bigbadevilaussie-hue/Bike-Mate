@@ -49,5 +49,9 @@ bool   wakeLoggerTruncate();
 // GPS location for next sample
 void wakeLoggerSetLocation(int32_t lat_x1e7, int32_t lon_x1e7, uint8_t sats);
 
+// V5.34: black-box heartbeat. 60s throttle, writes HB row
+// to the current wake file as a # event line.
+void black_box_heartbeat();
+
 // Current filename
 const char* wakeLoggerCurrentFile();

@@ -207,6 +207,9 @@ void wakeLoggerTick() {
 }
 
 // ---- force write ----
+static bool _quietForce = false;   // V5.34: set during capture loop
+void wakeLoggerForceWriteQuiet() { _quietForce = true; }
+
 void wakeLoggerForceWrite(int state) {
   if (_paused) return;
 
@@ -214,7 +217,12 @@ void wakeLoggerForceWrite(int state) {
   if (now == 0) return;
 
   _writeSample(now, state);
-  tprint("[WAKE] force @ %lu", (unsigned long)now);
+  // V5.34: suppress the print when called from the 100ms capture
+  // loop. Real events (engine start/stop, arming) still print.
+  if (!_quietForce) {
+    tprint("[WAKE] force @ %lu", (unsigned long)now);
+  }
+  _quietForce = false;
 }
 
 // ---- rotate (called at 04:00 trigger) ----
@@ -506,4 +514,54 @@ void wakeLoggerSetLocation(int32_t lat_x1e7, int32_t lon_x1e7, uint8_t sats) {
   _lat_x1e7 = lat_x1e7;
   _lon_x1e7 = lon_x1e7;
   _sats = sats;
+}
+
+// ---- V5.34: black-box heartbeat ----
+// One HB row per BB_HEARTBEAT_MS. Written as a # event line so the
+// report parser skips it, but it travels with the wake file through
+// seal/gzip/upload.
+void black_box_heartbeat() {
+  static unsigned long last_hb = 0;
+  unsigned long now = millis();
+  if (now - last_hb < BB_HEARTBEAT_MS) return;
+  last_hb = now;
+
+  uint32_t free_heap  = ESP.getFreeHeap();
+  uint32_t min_heap   = ESP.getMinFreeHeap();
+  uint32_t stack_mark = uxTaskGetStackHighWaterMark(NULL);
+
+  // V5.34: no RSSI in the wake-file HB. Reading WiFi.RSSI() would
+  // require <WiFi.h> in WakeLogger.cpp, which initialises the netif
+  // and breaks association on the C3 (V4.89 lesson). RSSI is
+  // available in the BLE HB path where WiFi is already in scope.
+  int rssi = 0;
+
+  // storage percent
+  size_t total = LittleFS.totalBytes();
+  size_t used  = LittleFS.usedBytes();
+  uint8_t st = (total > 0) ? (uint8_t)((used * 100) / total) : 0;
+
+  extern const char* currentWakeMode();
+  extern bool isLogging;
+  extern bool inPanic;
+  extern float latestBatteryVoltage;
+  extern float latestTemperatureC;
+  extern bool gpsHasFix();
+  extern uint8_t gpsSats();
+
+  wakeLoggerLogEvent(
+      "HB heap=%u min=%u stack=%u rssi=%d up=%lu v=%.2f t=%.1f rst=%u wake=%s panic=%d lg=%d st=%u sats=%u",
+      (unsigned)free_heap,
+      (unsigned)min_heap,
+      (unsigned)stack_mark,
+      rssi,
+      (unsigned long)(now / 1000UL),
+      latestBatteryVoltage,
+      latestTemperatureC,
+      (unsigned)esp_reset_reason(),
+      currentWakeMode(),
+      inPanic ? 1 : 0,
+      isLogging ? 1 : 0,
+      (unsigned)st,
+      (unsigned)gpsSats());
 }

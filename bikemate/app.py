@@ -86,7 +86,11 @@ class App:
         sf = tk.Frame(root, bg=CARD); sf.pack(fill="x", padx=20, pady=6)
         self.state_lbl = tk.Label(sf, text="💤 MONITOR", bg=CARD, fg=BLUE,
                                   font=("Helvetica", 26, "bold"))
-        self.state_lbl.pack(pady=14)
+        self.state_lbl.pack(pady=(14, 0))
+        # V5.43: wake mode indicator (BENCH/OFFPEAK/PEAK/DAY)
+        self.wake_lbl = tk.Label(sf, text="", bg=CARD, fg=MUTED,
+                                 font=("Helvetica", 11, "bold"))
+        self.wake_lbl.pack(pady=(0, 8))
         self.maint_lbl = tk.Label(sf, text="", bg=CARD, fg=YELLOW,
                                   font=("Helvetica", 13, "bold"),
                                   padx=12, pady=4)
@@ -1049,6 +1053,14 @@ class App:
             elif st == "PANIC": self.state_lbl.config(fg=RED)
             elif st == "MONITOR": self.state_lbl.config(fg=BLUE)
             else: self.state_lbl.config(fg=FG)
+        # V5.43: wake mode indicator
+        wm = d.get("wm", "")
+        if stale or not wm:
+            self.wake_lbl.config(text="", fg=MUTED)
+        else:
+            colour = {"BENCH": MUTED, "DAY": MUTED,
+                      "PEAK": YELLOW, "OFFPEAK": BLUE}.get(wm, MUTED)
+            self.wake_lbl.config(text=f"SLEEP · {wm}", fg=colour)
         with state.maintenance_lock:
             m = state.maintenance_state
         if not hasattr(self, "_last_maint_log") or self._last_maint_log != m:

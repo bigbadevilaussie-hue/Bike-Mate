@@ -666,6 +666,8 @@ void bleInit() {
   bleInited = true;
 }
 
+extern const char* currentWakeMode();
+
 void publishBLE() {
   if (!pDataChar || !bleInited) return;
   if (!isActuallyConnected()) return;
@@ -731,6 +733,16 @@ void publishBLE() {
       buf[used - 1] = 0;
       strncat(buf, hb, sizeof(buf) - strlen(buf) - 2);
       strncat(buf, "}", sizeof(buf) - strlen(buf) - 1);
+    }
+  }
+
+  // V5.35: append wake-mode string so OSA/GUI can show BENCH/OFFPEAK/PEAK/DAY.
+  {
+    size_t used = strlen(buf);
+    if (used > 0 && used < sizeof(buf) - 1 && buf[used - 1] == '}') {
+      buf[used - 1] = 0;
+      snprintf(buf + used - 1, sizeof(buf) - used + 1,
+               ",\"wm\":\"%s\"}", currentWakeMode());
     }
   }
 

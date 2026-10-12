@@ -582,6 +582,10 @@ class App:
         if on_off == "on":
             from .ble import send_maint_on
             send_maint_on(on_result)
+            # V4.41: kick the maint probe immediately so the state
+            # flips to ON the moment the bike's HTTP server answers,
+            # not up to 15s later on the next probe cycle.
+            self._maint_probe_last = 0
             self._start_maint_poll()
         else:
             # off is HTTP direct to the bike (existing behaviour)

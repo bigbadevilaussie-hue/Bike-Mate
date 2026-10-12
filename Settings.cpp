@@ -127,12 +127,12 @@ size_t settingsToJson(char* buf, size_t n) {
     "},"
     "\"m\":{"
       "\"nrm\":%.1f,\"wrn\":%.1f,\"pan\":%.1f"
-    "}",
+    "},"
     "\"s\":{"
       "\"b\":%d,\"ops\":%d,\"ope\":%d,\"opw\":%d,"
       "\"pks\":%d,\"pke\":%d,\"pkw\":%d,\"dw\":%d,"
       "\"uh\":%d"
-    "}",
+    "}}",
     config.runningEnter_mv   / 1000.0f,
     config.runningExit_mv    / 1000.0f,
     config.runUnder_mv       / 1000.0f,

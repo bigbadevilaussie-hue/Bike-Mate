@@ -768,6 +768,15 @@ class App:
             tk.Label(row, text=unit, bg=BG, fg=MUTED, width=4, anchor="w",
                      font=("Helvetica", 11)).pack(side="left")
             fields[key] = e
+        def add_int_row(label, key, value, unit):
+            row = tk.Frame(dlg, bg=BG); row.pack(fill="x", padx=20, pady=4)
+            tk.Label(row, text=label, bg=BG, fg=FG, width=20, anchor="w",
+                     font=("Helvetica", 11)).pack(side="left")
+            e = tk.Entry(row, width=10, font=("Helvetica", 11))
+            e.insert(0, f"{value:d}"); e.pack(side="left")
+            tk.Label(row, text=unit, bg=BG, fg=MUTED, width=4, anchor="w",
+                     font=("Helvetica", 11)).pack(side="left")
+            fields[key] = e
         # V5.03: firmware sends compact keys now: {"r":{...},"m":{...}}
         r = current.get("r", current.get("run", {}))
         m = current.get("m", current.get("monitor", {}))
@@ -783,6 +792,19 @@ class App:
             "warning": m.get("wrn", m.get("warning", 12.4)),
             "panic":   m.get("pan", m.get("panic",   12.2)),
         }
+        # V5.31: sleep schedule + upload hour block
+        s = current.get("s", {})
+        s = {
+            "bench":    int(s.get("b",   1)),
+            "ops":      int(s.get("ops", 22)),
+            "ope":      int(s.get("ope", 5)),
+            "opw":      int(s.get("opw", 15)),
+            "pks":      int(s.get("pks", 10)),
+            "pke":      int(s.get("pke", 13)),
+            "pkw":      int(s.get("pkw", 2)),
+            "dw":       int(s.get("dw",  5)),
+            "uh":       int(s.get("uh",  4)),
+        }
 
         section("🚀 RUN MODE")
         add_row("Engine start",  "running_enter", r.get("running_enter", 13.8), "V")
@@ -794,6 +816,19 @@ class App:
         add_row("Normal floor",  "normal",  m.get("normal",  12.5), "V")
         add_row("Warning",       "warning", m.get("warning", 12.4), "V")
         add_row("Panic",         "panic",   m.get("panic",   12.2), "V")
+
+        section("😴 SLEEP SCHEDULE")
+        add_int_row("Bench (1=yes)",  "bench", s["bench"],    "0/1")
+        add_int_row("Off-peak start", "ops",   s["ops"],      "hr")
+        add_int_row("Off-peak end",   "ope",   s["ope"],      "hr")
+        add_int_row("Off-peak wake",  "opw",   s["opw"],      "min")
+        add_int_row("Peak start",     "pks",   s["pks"],      "hr")
+        add_int_row("Peak end",       "pke",   s["pke"],      "hr")
+        add_int_row("Peak wake",      "pkw",   s["pkw"],      "min")
+        add_int_row("Day wake",       "dw",    s["dw"],       "min")
+
+        section("📤 UPLOAD SCHEDULE")
+        add_int_row("Upload hour",    "uh",    s["uh"],       "hr")
 
         btn_row = tk.Frame(dlg, bg=BG); btn_row.pack(pady=20)
         def apply():
@@ -809,6 +844,17 @@ class App:
                         "nrm": float(fields["normal"].get()),
                         "wrn": float(fields["warning"].get()),
                         "pan": float(fields["panic"].get()),
+                    },
+                    "s": {
+                        "b":   int(fields["bench"].get()),
+                        "ops": int(fields["ops"].get()),
+                        "ope": int(fields["ope"].get()),
+                        "opw": int(fields["opw"].get()),
+                        "pks": int(fields["pks"].get()),
+                        "pke": int(fields["pke"].get()),
+                        "pkw": int(fields["pkw"].get()),
+                        "dw":  int(fields["dw"].get()),
+                        "uh":  int(fields["uh"].get()),
                     },
                 }
             except ValueError:

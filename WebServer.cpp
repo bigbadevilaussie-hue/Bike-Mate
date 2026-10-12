@@ -217,8 +217,14 @@ static void handleOtaProgress() {
 }
 
 static void handleSettingsGet() {
-  char buf[128];
-  settingsToJson(buf, sizeof(buf));
+  // V5.32: 128 bytes truncated the sleep+upload block. Full payload
+  // is ~156 chars. 256 leaves room for future fields.
+  char buf[256];
+  size_t n = settingsToJson(buf, sizeof(buf));
+  if (n >= sizeof(buf)) {
+    tprint("[SETTINGS] JSON truncated: need %u, have %u",
+           (unsigned)n, (unsigned)sizeof(buf));
+  }
   server.send(200, "application/json", buf);
 }
 

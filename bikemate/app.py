@@ -60,8 +60,6 @@ class App:
         self.maint_menu = maint_menu
         am.add_separator()
         reports_menu = tk.Menu(am, tearoff=0)
-        reports_menu.add_command(label="Last Ride",    command=self.open_last_ride_report)
-        reports_menu.add_separator()
         reports_menu.add_command(label="Last 2 Hours", command=lambda: self.open_report("2h"))
         reports_menu.add_command(label="Daily",        command=lambda: self.open_report("day"))
         reports_menu.add_command(label="Weekly",       command=lambda: self.open_report("week"))
@@ -102,18 +100,6 @@ class App:
         self.temp_lbl = self._col(ri, "🏍️ Temp", "--.-C")
         self.stor_lbl = self._col(ri, "💾 Stor", "--%")
         self.time_lbl = self._col(ri, "Time", "--:--")
-        lr = tk.Frame(root, bg=CARD); lr.pack(fill="x", padx=20, pady=6)
-        tk.Label(lr, text="Last Ride", bg=CARD, fg=MUTED,
-                 font=("Helvetica", 10)).pack(pady=(8, 2))
-        self.last_ride_lbl = tk.Label(lr, text="none yet", bg=CARD, fg=MUTED,
-                                      font=("Helvetica", 13, "bold"))
-        self.last_ride_lbl.pack()
-        self.last_ride_sub = tk.Label(lr, text="", bg=CARD, fg=MUTED,
-                                      font=("Helvetica", 10))
-        self.last_ride_sub.pack(pady=(2, 0))
-        self.last_ride_pre = tk.Label(lr, text="", bg=CARD, fg=MUTED,
-                                      font=("Helvetica", 11, "bold"))
-        self.last_ride_pre.pack(pady=(0, 8))
         vgc = tk.Frame(root, bg=CARD); vgc.pack(fill="x", padx=20, pady=6)
         self.volt_graph = Graph(vgc, self, color_key="green", y_min=11.5, y_max=15.0)
         self.volt_graph.pack(padx=8, pady=8)
@@ -188,9 +174,6 @@ class App:
             self.volt_lbl:   None,  # set by tick()
             self.state_lbl:  None,  # set by tick()
             self.temp_lbl:   None,  # set by tick()
-            self.last_ride_lbl:  None,
-            self.last_ride_sub:  None,
-            self.last_ride_pre:  None,
         }
 
         def walk(w):
@@ -252,24 +235,6 @@ class App:
 
     def open_report(self, mode):
         BikeReport(self.root, self, mode)
-
-    def open_last_ride_report(self):
-        with state.latest_ride_lock:
-            r = state.latest_ride
-        if r and r.get("summary"):
-            LastRideReport(self.root, self)
-        else:
-            WaitingForRide(self.root, self)
-
-    def open_last_ride_report(self):
-        # If we have a cached ride in memory, show it.
-        with state.latest_ride_lock:
-            r = state.latest_ride
-        if r and r.get("summary"):
-            LastRideReport(self.root, self)
-            return
-        # Otherwise open a waiting window that polls for up to 3 wake cycles.
-        WaitingForRide(self.root, self)
 
     def on_quit(self):
         stop_ota_server()
@@ -1135,32 +1100,6 @@ class App:
             text=f"Atkinsons Dam · {state.weather['temp']:.1f}° {state.weather['emoji']}")
         fw = state.latest_data.get("fv", "?")
         self.footer_lbl.config(text=f"GUI v{GUI_VERSION}  ·  FW v{fw}")
-        with state.latest_ride_lock:
-            r = state.latest_ride
-        if r and r["summary"]:
-            s = r["summary"]
-            start = datetime.fromtimestamp(s["startEpoch"])
-            self.last_ride_lbl.config(text=start.strftime("%a %d %b, %I:%M%p"), fg=FG)
-            if s["flags"] == 0:
-                sub_color = GREEN
-            elif s["flags"] & 0x30 or s["flags"] & 0x08:
-                sub_color = RED
-            else:
-                sub_color = YELLOW
-            self.last_ride_sub.config(
-                text=f"{ago_str(s['startEpoch'])}  ·  {s['durationSecs']//60} min",
-                fg=sub_color)
-            pre = s.get("preRideVolt", 0)
-            if pre > 0:
-                self.last_ride_pre.config(
-                    text=f"cold {pre:.2f}V  →  ride {s['avgVolt']:.2f}V",
-                    fg=YELLOW)
-            else:
-                self.last_ride_pre.config(text="", fg=MUTED)
-        else:
-            self.last_ride_lbl.config(text="none yet", fg=MUTED)
-            self.last_ride_sub.config(text="", fg=MUTED)
-            self.last_ride_pre.config(text="", fg=MUTED)
         self.volt_graph.set_data(state.volt_hist)
         self.temp_graph.set_data(state.temp_hist)
         self.root.after(1000, self.tick)

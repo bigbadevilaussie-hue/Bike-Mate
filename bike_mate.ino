@@ -492,7 +492,6 @@ void doStateWork(unsigned long now, bool wasWake) {
   publishBLE();
 
   wakeLoggerTick();
-  black_box_heartbeat();   // V5.34
 
   tprint("[SENSOR] V=%.2f raw=%d ntc=%d temp=%.1fC",
          latestBatteryVoltage, latestRawVoltage,

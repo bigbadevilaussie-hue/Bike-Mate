@@ -15,7 +15,10 @@ AGM, the practical cranking floor is ~12.2 V rested.
 
 - **Firmware:** `Config.h` → `BIKE_MATE_VERSION`
 - **GUI:** `bikemate/config.py` → `GUI_VERSION`
+- **OSA:** `osa_server.py` → `__version__` (separate repo, runs 24/7 on the Mac)
 - **Repo:** https://github.com/bigbadevilaussie-hue/Bike-Mate
+- **OSA repo:** https://github.com/bigbadevilaussie-hue/OSA-Server
+- **Logs repo:** https://github.com/bigbadevilaussie-hue/Bike-Mate-Uploads (off-site log backup)
 - **Local:** `~/Documents/Arduino/bike_mate/`
 - **Bike:** Triumph Sprint ST 1050 (breadboard build)
 
@@ -39,10 +42,17 @@ GPIO 9 is a boot-strapping pin — no strong pull-downs or caps.
 
 - Timer wake (30 s bench, 300/600 s field) → read V/T → state machine → log row.
 - Engine start >13.8 V, stop <13.0 V. Ride CSV while engine is running.
-- BLE telemetry + newest-ride pull for the GUI.
-- Uploads wake + ride logs to GitHub at 04:00 local, or on-demand via
-  `/upload` during maint. Every file gzipped; raw deleted after gzip.
-  Newest ride held back (Rule 7) for GUI pull over BLE.
+- BLE telemetry (26a8) consumed by OSA, not the GUI. The GUI polls
+  OSA's `/bike/status` over HTTP.
+- **Auto upload path (BLE → OSA).** On the 04:00 schedule, or on a manual
+  `{"cmd":"upload"}` written to 26ae, the bike seals + gzips its wake and
+  ride files, then ships each over **26b1** in 180-byte chunks. OSA
+  reassembles and writes to `~/bike-mate-drive/` on the Mac, then pushes
+  to `Bike-Mate-Uploads` in the background.
+- **Manual upload path (WiFi → GitHub).** `POST /seal` + `POST /upload`
+  during maint. Same GitHub Contents API destination, over WiFi.
+- Every file gzipped; raw deleted after gzip. Newest ride held back
+  (Rule 7) for the GUI's pull path.
 - Gmail SMTP alerts on low battery / PANIC.
 - Deep sleeps between wakes. Prime directive: never drain the battery.
 - Maint mode brings WiFi up on demand for serial + OTA.
@@ -68,12 +78,12 @@ GPIO 9 is a boot-strapping pin — no strong pull-downs or caps.
 | `RideLogger.cpp` | Ride lifecycle, summary to NVS |
 | `RideStorage.cpp` | LittleFS ride CSV writer |
 | `WakeLogger.cpp` | LittleFS wake CSV writer (date-keyed) |
-| `BleManager.cpp` | BLE server, telemetry push, maint trigger, settings |
+| `BleManager.cpp` | BLE server, telemetry push, maint trigger, settings, `bleSendFile` over 26b1 |
 | `DisplayManager.cpp` | OLED rendering, edge-triggered updates |
 | `WifiManager.cpp` | WiFi bring-up, clock fetch (Opal LAN + NTP fallback) |
 | `WifiMail.cpp` | Gmail SMTP alerts |
-| `DriveUpload.cpp` | Wake + ride CSV upload to GitHub via Contents API |
-| `OtaManager.cpp` | Legacy BLE-URL OTA. Retired, still compiled |
+| `DriveUpload.cpp` | WiFi-path upload to GitHub Contents API; `reconcileLittleFS()` exported for the BLE path |
+| `OtaManager.cpp` | Legacy BLE-URL OTA path. Retired for OTA, but `OtaCallbacks` in BleManager still parses the OTA JSON envelope |
 | `Settings.cpp` | Runtime settings in NVS `bikeset` |
 | `GpsModule.cpp` | NMEA parser for NEO-6M, no external library |
 | `SerialBuffer.cpp` | Ring buffer feeding /serial-raw |
@@ -90,7 +100,8 @@ GPIO 9 is a boot-strapping pin — no strong pull-downs or caps.
 | `/version` | GET | `BIKE_MATE_VERSION` as text |
 | `/settings` | GET | Settings JSON |
 | `/settings` | POST | Apply settings JSON |
-| `/upload` | POST | Force upload now (maint only, returns immediately) |
+| `/upload` | POST | Force WiFi upload now (maint only, returns immediately) |
+| `/seal` | POST | Manually seal the current wake file (and ride if logging) |
 | `/clock` | POST | Set clock (decimal epoch string or 4 raw LE bytes) |
 
 ---

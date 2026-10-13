@@ -249,15 +249,12 @@ static bool shouldSleep() {
   if (wifiActive) return false;
   if (serverIsRunning()) return false;
   if (maintRequest) return false;
-  if (millis() - bootMillis < 5000UL) return false;
-
-  // V4.84: an idle BLE connection does not block sleep. Only recent
-  // incoming writes (GUI -> device) count as activity. The Mac GUI
-  // holds the link open permanently, so the old unconditional gate
-  // pinned the bike awake until the 180 s max-awake guard fired.
-  if (isActuallyConnected() &&
-      (millis() - lastBleWriteMs) < BLE_IDLE_GRACE_MS) {
-    return false;
+  // V5.40: bench mode holds the full 30 s window from bootMillis.
+  // Field mode sleeps as soon as work is done.
+  if (config.benchMode) {
+    if (millis() - bootMillis < 30000UL) return false;
+  } else {
+    if (millis() - bootMillis < 5000UL) return false;
   }
 
   if (millis() - lastDisconnectMillis < 3000UL) return false;
@@ -580,7 +577,9 @@ void doStateWork(unsigned long now, bool wasWake) {
             String path = n.startsWith("/") ? n : "/" + n;
             tprint("[UPLOAD] auto: found %s (%u bytes)", n.c_str(), (unsigned)sz);
             if (bleSendFile(path.c_str(), n.c_str())) {
-              LittleFS.remove(path);
+              // V5.37.8: no delete on send. bleSendFile returning true
+              // only means the chunks were queued, not that OSA wrote
+              // to disk. Files stay on LittleFS until an ack path lands.
               sent++;
             } else {
               tprint("[UPLOAD] auto: send FAILED for %s", n.c_str());
@@ -887,7 +886,11 @@ void loop() {
     }
   }
 
-  if (firstTick || (now - lastTick >= TICK_MS)) {
+  // V5.37.9: fire doStateWork immediately when a manual BLE
+  // upload is queued, not on the next TICK_MS boundary.
+  // Field mode otherwise waits a full 300/600 s wake.
+  if (firstTick || bleUploadNowRequested ||
+      (now - lastTick >= TICK_MS)) {
     bool wasWake = firstTick;
     firstTick = false;
     lastTick = now;

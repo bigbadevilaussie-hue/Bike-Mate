@@ -107,7 +107,7 @@ static String urlEncSegment(const String& s) {
 // ---- V5.29: reconcile orphans ----
 // Any .sealed or ride .csv without a matching .gz gets gzipped.
 // Successful gzip deletes the raw. Failed gzip keeps both.
-static void reconcileLittleFS() {
+void reconcileLittleFS() {
   // V5.30: never touch the currently-open wake or ride files.
   // The seal opens a fresh wake file right before reconcile runs,
   // and gzipping it deletes the file the writer is still appending

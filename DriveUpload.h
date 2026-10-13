@@ -21,3 +21,7 @@ bool driveUploadShouldRun();
 // Performs the upload. Blocks until done.
 // Returns true if all files uploaded successfully.
 bool driveUploadPerform(bool fromMaint = false, const char* reason = "scheduled");
+
+// V5.37: expose orphan-gzip pass so bike_mate.ino can call it on
+// every wake, not just during a full upload.
+void reconcileLittleFS();

@@ -32,3 +32,6 @@ bool isActuallyConnected();
 // V3.11: pause BLE for WiFi operations (single 2.4 GHz radio)
 void bleStop();
 void bleStart();
+
+// V5.37: send a file over BLE in chunks.
+bool bleSendFile(const char* path, const char* uploadName);

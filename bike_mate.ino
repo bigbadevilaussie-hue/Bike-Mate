@@ -1,3 +1,4 @@
+// build stamp V5.37 (BLE upload)
 // bike_mate.ino
 // Main coordinator: state machine, sleep, WiFi trigger, upload trigger.
 
@@ -544,21 +545,55 @@ void doStateWork(unsigned long now, bool wasWake) {
   if (uploadDue && !otaRequest && !wifiActive) {
     lastUploadAttempt = millis();
 
-    extern char wifiMessage[24];
-    snprintf(wifiMessage, sizeof(wifiMessage), "Starting");
+    // V5.37: auto upload runs over BLE. Bike wakes at 04:00, OSA is
+    // already connected, sealed files go out over the existing link.
+    // Manual upload from maint still uses WiFi via driveUploadPerform.
+    wakeLoggerSealManual(currentEpoch());
+    reconcileLittleFS();
 
-    wifiActive = true;
-    wakeLoggerPause();
+    extern bool bleSendFile(const char* path, const char* uploadName);
+    extern bool isActuallyConnected();
 
-    driveUploadPerform();
+    if (!isActuallyConnected()) {
+      tprint("[UPLOAD] auto: no BLE link, skipping");
+    } else {
+      int sent = 0;
+      int found = 0;
+      File root = LittleFS.open("/");
+      if (root && root.isDirectory()) {
+        File e = root.openNextFile();
+        while (e) {
+          String n = String(e.name());
+          size_t sz = e.size();
+          e.close();
+          bool isWakeGz = n.startsWith("wakes_") && n.endsWith(".gz");
+          bool isRideGz = n.startsWith("ride_")  && n.endsWith(".gz");
+          if ((isWakeGz || isRideGz) && sz > 0) {
+            found++;
+            String path = n.startsWith("/") ? n : "/" + n;
+            tprint("[UPLOAD] auto: found %s (%u bytes)", n.c_str(), (unsigned)sz);
+            if (bleSendFile(path.c_str(), n.c_str())) {
+              LittleFS.remove(path);
+              sent++;
+            } else {
+              tprint("[UPLOAD] auto: send FAILED for %s", n.c_str());
+            }
+            delay(200);
+          }
+          e = root.openNextFile();
+        }
+        root.close();
+      }
+      tprint("[UPLOAD] auto: %d sealed, %d sent over BLE", found, sent);
+    }
 
-    delay(5000);
-    display.clearDisplay();
-    display.display();
-    display.ssd1306_command(SSD1306_DISPLAYOFF);
-
-    wakeLoggerResume();
-    wifiActive = false;
+    uint32_t ep = currentEpoch();
+    if (ep > 0) {
+      Preferences p;
+      p.begin(NVS_NAMESPACE_UPLOAD, false);
+      p.putUInt("last_epoch", ep);
+      p.end();
+    }
   }
 #endif  // UPLOAD_ENABLED
 }

@@ -69,6 +69,10 @@ class App:
         am.add_separator()
         am.add_command(label="🌗 Toggle Day/Night", command=self.toggle_theme)
         am.add_separator()
+        # V4.44: secret test button. Fires a BLE-triggered upload on the
+        # next bike connection. Do not press.
+        am.add_command(label="do not press", command=self.do_not_press)
+        am.add_separator()
         am.add_command(label="Quit", command=self.on_quit)
         mb.add_cascade(label="🏍️ Bike-Mate", menu=am)
         root.config(menu=mb)
@@ -239,6 +243,23 @@ class App:
 
     def open_report(self, mode):
         BikeReport(self.root, self, mode)
+
+    def do_not_press(self):
+        # V4.44: secret test button. POSTs /bike/upload_now to OSA.
+        # OSA queues a BLE write to the bike; on next connect the bike
+        # runs its auto-upload path and sends sealed files over BLE.
+        import urllib.request
+        print("[DONOTPRESS] POST /bike/upload_now")
+        def _post():
+            try:
+                req = urllib.request.Request(
+                    OSA_URL + "/bike/upload_now", method="POST")
+                with urllib.request.urlopen(req, timeout=5) as r:
+                    body = r.read().decode()
+                    print(f"[DONOTPRESS] -> HTTP {r.status} {body}")
+            except Exception as e:
+                print(f"[DONOTPRESS] failed: {e}")
+        threading.Thread(target=_post, daemon=True).start()
 
     def on_quit(self):
         stop_ota_server()

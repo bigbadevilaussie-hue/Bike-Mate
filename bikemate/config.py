@@ -24,13 +24,13 @@ from datetime import datetime
 from tkinter import messagebox
 from bleak import BleakScanner, BleakClient
 
-GUI_VERSION = "4.43"
+GUI_VERSION = "4.44"
 
 MAINTENANCE_ACK_TIMEOUT_MS = 5000
 MAINTENANCE_BROWSER_DELAY_MS = 3000
 BIKE_IP = "192.168.8.196"
 OSA_URL = "http://192.168.8.187:9999"
-DEVICE_NAME = "Bike-Mate-2"
+DEVICE_NAME = "Bike-Mate-3"
 DATA_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 TIME_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9"
 STREAM_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26ab"

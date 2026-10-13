@@ -73,6 +73,25 @@ void drawUploadScreen() {
   display.display();
 }
 
+// V5.37.7: shown while bleUploadActive. Bare screen, no progress.
+static void drawBleUploadScreen() {
+  display.setTextColor(SSD1306_WHITE);
+
+  display.setTextSize(2);
+  const char* big = "BLE";
+  int bw = strlen(big) * 12;
+  display.setCursor((SCREEN_W - bw) / 2, 20);
+  display.print(big);
+
+  display.setTextSize(1);
+  const char* sub = "Uploading...";
+  int sw = strlen(sub) * 6;
+  display.setCursor((SCREEN_W - sw) / 2, 44);
+  display.print(sub);
+
+  display.display();
+}
+
 static void drawMaintScreen() {
   extern unsigned long maintStartMs;
   display.setTextColor(SSD1306_WHITE);
@@ -254,6 +273,13 @@ static void drawRunningScreen() {
 void drawOLED() {
   display.clearDisplay();
 
+  extern volatile bool bleUploadActive;
+  if (bleUploadActive) {
+    display.ssd1306_command(SSD1306_DISPLAYON);
+    drawBleUploadScreen();
+    return;
+  }
+
   if (otaRequest) {
     display.ssd1306_command(SSD1306_DISPLAYON);
     drawFwUpdateScreen();
@@ -292,7 +318,11 @@ void drawOLED() {
 void updateOLED_EdgeTriggered() {
   char key[48];
 
-  if (otaRequest) {
+  extern volatile bool bleUploadActive;
+  if (bleUploadActive) {
+    snprintf(key, sizeof(key), "BLEUP");
+  }
+  else if (otaRequest) {
     snprintf(key, sizeof(key), "OTA|%d|%d",
              (int)otaStage,
              (int)otaRebootCountdown);

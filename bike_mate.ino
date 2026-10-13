@@ -59,6 +59,10 @@ RTC_DATA_ATTR bool lowBattMailLatched = false;
 // Same pattern as otaRequest.
 RTC_DATA_ATTR bool maintRequest = false;
 
+// V5.37.6: manual upload trigger from OSA. Set by the {"cmd":"upload"}
+// BLE write, consumed by doStateWork on the next pass.
+RTC_DATA_ATTR bool bleUploadNowRequested = false;
+
 bool isCountingDown = false;
 unsigned long countdownStartMillis = 0;
 extern const int countdownSeconds = 30;
@@ -536,7 +540,10 @@ void doStateWork(unsigned long now, bool wasWake) {
 #if UPLOAD_ENABLED
   bool uploadDue = false;
 
-  if (driveUploadShouldRun() && currentEpoch() > 0 &&
+  bool scheduledUpload = driveUploadShouldRun();
+  bool manualUpload = bleUploadNowRequested;
+
+  if ((scheduledUpload || manualUpload) && currentEpoch() > 0 &&
            (lastUploadAttempt == 0 ||
             millis() - lastUploadAttempt > UPLOAD_COOLDOWN_MS)) {
     uploadDue = true;
@@ -586,6 +593,9 @@ void doStateWork(unsigned long now, bool wasWake) {
       }
       tprint("[UPLOAD] auto: %d sealed, %d sent over BLE", found, sent);
     }
+
+    // V5.37.6: clear the manual trigger. Only fires once per request.
+    bleUploadNowRequested = false;
 
     uint32_t ep = currentEpoch();
     if (ep > 0) {

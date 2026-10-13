@@ -19,6 +19,7 @@ extern BLECharacteristic* pSettingsChar;
 extern volatile bool maintenanceModeRequested;
 
 extern bool bleInited;
+extern volatile bool bleUploadActive;   // V5.37.7
 extern volatile bool pushRequested;
 extern volatile unsigned long lastBleWriteMs;   // V4.84
 extern volatile bool pushInProgress;

@@ -33,6 +33,10 @@ volatile unsigned long lastBleWriteMs = 0;   // V4.84: last incoming BLE write
 
 bool bleInited = false;
 
+// V5.37.7: set while bleSendFile is transferring. Read by
+// DisplayManager to show the upload screen on the OLED.
+volatile bool bleUploadActive = false;
+
 volatile bool pushRequested = false;
 volatile bool pushInProgress = false;
 volatile uint32_t pushGuiEpoch = 0;
@@ -395,6 +399,22 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
       }
     }
 
+    // V5.37.6: manual upload trigger from OSA. Payload is {"cmd":"upload"}.
+    // Sets a flag the main loop reads on the next doStateWork pass,
+    // which runs the same BLE-send path the 04:00 schedule uses.
+    if (v.length() > 1) {
+      String cv = String(v.c_str());
+      if (cv.indexOf("\"cmd\":\"upload\"") >= 0) {
+        extern bool bleUploadNowRequested;
+        bleUploadNowRequested = true;
+        uint8_t ack = 0x01;
+        pOtaChar->setValue(&ack, 1);
+        pOtaChar->notify();
+        tprint("[UPLOAD] manual trigger over BLE (flag set)");
+        return;
+      }
+    }
+
     // Settings apply: multi-byte payload containing "voltage"
     if (v.length() > 1) {
       String sv = String(v.c_str());
@@ -681,14 +701,17 @@ bool bleSendFile(const char* path, const char* uploadName) {
   if (!pUploadChar || !bleInited) return false;
   if (!isActuallyConnected()) return false;
 
+  bleUploadActive = true;
+
   File f = LittleFS.open(path, "r");
   if (!f) {
     tprint("[BLEUP] cannot open %s", path);
+    bleUploadActive = false;
     return false;
   }
 
   size_t total = f.size();
-  if (total == 0) { f.close(); return true; }
+  if (total == 0) { f.close(); bleUploadActive = false; return true; }
 
   uint8_t hdr[181];
   hdr[0] = 0x01;
@@ -724,6 +747,7 @@ bool bleSendFile(const char* path, const char* uploadName) {
   delay(40);
 
   tprint("[BLEUP] sent %s (%u bytes)", uploadName, (unsigned)total);
+  bleUploadActive = false;
   return (sent == total);
 }
 

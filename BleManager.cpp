@@ -27,6 +27,7 @@ BLECharacteristic* pStreamChar = nullptr;
 BLECharacteristic* pRequestChar = nullptr;
 BLECharacteristic* pOtaChar = nullptr;
 BLECharacteristic* pSettingsChar = nullptr;
+BLECharacteristic* pUploadChar = nullptr;   // V5.37
 volatile bool maintenanceModeRequested = false;
 volatile unsigned long lastBleWriteMs = 0;   // V4.84: last incoming BLE write
 
@@ -596,7 +597,7 @@ void bleInit() {
       new ServerCallbacks());
 
   BLEService* svc =
-      pServer->createService(SERVICE_UUID);
+      pServer->createService(BLEUUID(SERVICE_UUID), 30, 0);
 
   pDataChar = svc->createCharacteristic(
       DATA_UUID,
@@ -655,6 +656,13 @@ void bleInit() {
     pSettingsChar->setValue((uint8_t*)sbuf, strlen(sbuf));
   }
 
+  pUploadChar = svc->createCharacteristic(
+      UPLOAD_UUID,
+      BLECharacteristic::PROPERTY_NOTIFY);
+
+  pUploadChar->addDescriptor(
+      new BLE2902());
+
   svc->start();
 
   BLEAdvertising* adv =
@@ -667,6 +675,57 @@ void bleInit() {
 }
 
 extern const char* currentWakeMode();
+
+// V5.37: send a file over BLE in 180-byte chunks.
+bool bleSendFile(const char* path, const char* uploadName) {
+  if (!pUploadChar || !bleInited) return false;
+  if (!isActuallyConnected()) return false;
+
+  File f = LittleFS.open(path, "r");
+  if (!f) {
+    tprint("[BLEUP] cannot open %s", path);
+    return false;
+  }
+
+  size_t total = f.size();
+  if (total == 0) { f.close(); return true; }
+
+  uint8_t hdr[181];
+  hdr[0] = 0x01;
+  memcpy(hdr + 1, &total, 4);
+  size_t nameLen = strlen(uploadName);
+  if (nameLen > 176) nameLen = 176;
+  memset(hdr + 5, 0, 176);
+  memcpy(hdr + 5, uploadName, nameLen);
+  pUploadChar->setValue(hdr, 181);
+  pUploadChar->notify();
+  delay(60);
+
+  uint8_t buf[181];
+  buf[0] = 0x02;
+  size_t sent = 0;
+  while (sent < total) {
+    size_t n = f.read(buf + 1, 180);
+    if (n == 0) break;
+    if (n < 180) memset(buf + 1 + n, 0, 180 - n);
+    pUploadChar->setValue(buf, 181);
+    pUploadChar->notify();
+    sent += n;
+    delay(35);
+  }
+  f.close();
+
+  uint8_t endBuf[5];
+  endBuf[0] = 0x03;
+  uint32_t crc = 0;
+  memcpy(endBuf + 1, &crc, 4);
+  pUploadChar->setValue(endBuf, 5);
+  pUploadChar->notify();
+  delay(40);
+
+  tprint("[BLEUP] sent %s (%u bytes)", uploadName, (unsigned)total);
+  return (sent == total);
+}
 
 void publishBLE() {
   if (!pDataChar || !bleInited) return;

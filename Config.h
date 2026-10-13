@@ -13,7 +13,7 @@
 // V4.70: dead defines removed, section headers added.
 // Deploy-specific values (UPLOAD_URL, SMTP_*) still live here pending move to Deploy.h.
 
-#define BIKE_MATE_VERSION "5.36"
+#define BIKE_MATE_VERSION "5.37.4"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
@@ -38,7 +38,7 @@
 #define GPS_TX_PIN 21
 
 // ---- BLE ----
-#define DEVICE_NAME "Bike-Mate-2"
+#define DEVICE_NAME "Bike-Mate-3"
 #define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define DATA_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 #define TIME_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a9"
@@ -46,6 +46,7 @@
 #define REQUEST_UUID "beb5483e-36e1-4688-b7f5-ea07361b26ad"
 #define OTA_UUID "beb5483e-36e1-4688-b7f5-ea07361b26ae"
 #define SETTINGS_UUID "beb5483e-36e1-4688-b7f5-ea07361b26b0"
+#define UPLOAD_UUID "beb5483e-36e1-4688-b7f5-ea07361b26b1"
 
 // ---- Logging ----
 // NOTE: LOG_INTERVAL_SEC is aspirational — actual ride cadence is TICK_MS.

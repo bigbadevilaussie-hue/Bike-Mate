@@ -99,7 +99,7 @@ static bool firstTick = false;
 
 volatile bool wifiActive = false;
 
-unsigned long lastUploadAttempt = 0;
+RTC_DATA_ATTR uint32_t lastUploadEpoch = 0;   // V5.58: epoch-based, survives sleep
 
 
 // GPS functions now in GpsModule.cpp
@@ -631,27 +631,28 @@ void doStateWork(unsigned long now, bool wasWake) {
   bool scheduledUpload = driveUploadShouldRun();
   bool manualUpload = bleUploadNowRequested;
 
-  if ((scheduledUpload || manualUpload) && currentEpoch() > 0 &&
-           (lastUploadAttempt == 0 ||
-            millis() - lastUploadAttempt > UPLOAD_COOLDOWN_MS)) {
+  uint32_t nowEp = currentEpoch();
+  if ((scheduledUpload || manualUpload) && nowEp > 0 &&
+           (lastUploadEpoch == 0 ||
+            nowEp - lastUploadEpoch > (UPLOAD_COOLDOWN_MS / 1000UL))) {
     uploadDue = true;
   }
 
   if (uploadDue && !otaRequest && !wifiActive) {
-    lastUploadAttempt = millis();
+    lastUploadEpoch = nowEp;
 
-    // V5.37: auto upload runs over BLE. Bike wakes at 04:00, OSA is
-    // already connected, sealed files go out over the existing link.
-    // Manual upload from maint still uses WiFi via driveUploadPerform.
-    wakeLoggerSealManual(currentEpoch());
-    reconcileLittleFS();
-
+    // V5.58: seal + reconcile + send all gated on a live BLE link.
+    // Previously the seal ran unconditionally, wasting work on
+    // BLE-less wakes, and the manual trigger was cleared even when
+    // nothing shipped.
     extern bool bleSendFile(const char* path, const char* uploadName);
     extern bool isActuallyConnected();
 
     if (!isActuallyConnected()) {
-      tprint("[UPLOAD] auto: no BLE link, skipping");
+      tprint("[UPLOAD] auto: no BLE link, deferring (trigger kept)");
     } else {
+      wakeLoggerSealManual(currentEpoch());
+      reconcileLittleFS();
       int sent = 0;
       int found = 0;
       File root = LittleFS.open("/");
@@ -666,8 +667,17 @@ void doStateWork(unsigned long now, bool wasWake) {
           if ((isWakeGz || isRideGz) && sz > 0) {
             found++;
             String path = n.startsWith("/") ? n : "/" + n;
-            tprint("[UPLOAD] auto: found %s (%u bytes)", n.c_str(), (unsigned)sz);
-            if (bleSendFile(path.c_str(), n.c_str())) {
+            // V5.59: strip .sealed before shipping. OSA writes the name
+            // verbatim, GitHub has no .sealed anywhere, so the two paths
+            // must agree on wakes_*.csv.gz / ride_*.csv.gz.
+            String uploadName = n;
+            int sealedIdx = uploadName.indexOf(".sealed");
+            if (sealedIdx >= 0) {
+              uploadName = uploadName.substring(0, sealedIdx) + ".gz";
+            }
+            tprint("[UPLOAD] auto: found %s (%u bytes) as %s",
+                   n.c_str(), (unsigned)sz, uploadName.c_str());
+            if (bleSendFile(path.c_str(), uploadName.c_str())) {
               // V5.37.8: no delete on send. bleSendFile returning true
               // only means the chunks were queued, not that OSA wrote
               // to disk. Files stay on LittleFS until an ack path lands.
@@ -684,8 +694,11 @@ void doStateWork(unsigned long now, bool wasWake) {
       tprint("[UPLOAD] auto: %d sealed, %d sent over BLE", found, sent);
     }
 
-    // V5.37.6: clear the manual trigger. Only fires once per request.
-    bleUploadNowRequested = false;
+    // V5.58: clear the manual trigger only if we shipped. A BLE-less
+    // wake keeps the request pending.
+    if (isActuallyConnected()) {
+      bleUploadNowRequested = false;
+    }
 
     uint32_t ep = currentEpoch();
     if (ep > 0) {

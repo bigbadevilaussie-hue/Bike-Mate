@@ -195,68 +195,50 @@ static bool postFile(const char* localPath, const char* uploadName) {
     return false;
   }
 
-  String b64 = base64::encode(buf, fileSize);
-  free(buf);
-
+  // V5.60: ship raw bytes to OSA. OSA forwards to GitHub on its own
+  // 2h timer. The bike no longer talks to GitHub directly.
   String name(uploadName);
   const char* sub = ghSubfolder(name.c_str());
-  String path = (sub[0] ? String(sub) + "/" : String("")) + name;
+  String dir = sub[0] ? String(sub) : String("other");
+  dir.toLowerCase();
 
-  String json;
-  json.reserve(b64.length() + 200);
-  json  = "{\"message\":\"upload ";
-  json += name;
-  json += "\",\"content\":\"";
-  json += b64;
-  json += "\",\"branch\":\"";
-  json += GH_BRANCH;
-  json += "\"}";
+  String url = String(UPLOAD_URL);
+  url += "?dir=";
+  url += dir;
+  url += "&name=";
+  url += urlEncSegment(name);
 
-  String url = "https://api.github.com/repos/";
-  url += GH_REPO;
-  url += "/contents/";
-  url += urlEncSegment(path);
-
-  tprint("[UPLOAD] PUT %s size=%u b64=%u",
-         path.c_str(), (unsigned)fileSize, (unsigned)b64.length());
+  tprint("[UPLOAD] POST %s size=%u", url.c_str(), (unsigned)fileSize);
 
   HTTPClient http;
   http.setReuse(false);
   http.setTimeout(UPLOAD_HTTP_TIMEOUT_MS);
-  http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
   http.begin(url);
-  http.addHeader("Authorization", String("Bearer ") + GH_TOKEN);
-  http.addHeader("Accept", "application/vnd.github+json");
-  http.addHeader("X-GitHub-Api-Version", "2022-11-28");
+  http.addHeader("Content-Type", "application/octet-stream");
   http.addHeader("User-Agent", "bike-mate-esp32");
-  http.addHeader("Content-Type", "application/json");
 
   int code = -1;
   for (int attempt = 1; attempt <= 3; attempt++) {
-    code = http.PUT((uint8_t*)json.c_str(), json.length());
-    if (code == 201 || code == 200) break;
-    tprint("[UPLOAD] %s attempt %d code=%d", path.c_str(), attempt, code);
+    code = http.POST(buf, fileSize);
+    if (code == 200 || code == 201) break;
+    tprint("[UPLOAD] %s attempt %d code=%d", name.c_str(), attempt, code);
     if (code > 0) {
       String resp = http.getString();
       resp.trim();
-      tprint("[UPLOAD] %s resp=%s", path.c_str(), resp.c_str());
+      tprint("[UPLOAD] %s resp=%s", name.c_str(), resp.c_str());
     }
     http.end();
     delay(1000);
     http.begin(url);
-    http.addHeader("Authorization", String("Bearer ") + GH_TOKEN);
-    http.addHeader("Accept", "application/vnd.github+json");
-    http.addHeader("X-GitHub-Api-Version", "2022-11-28");
+    http.addHeader("Content-Type", "application/octet-stream");
     http.addHeader("User-Agent", "bike-mate-esp32");
-    http.addHeader("Content-Type", "application/json");
   }
 
-  // V5.30: 422 = file already exists on GitHub without a sha.
-  // Treat as already-uploaded so the caller deletes the local copy
-  // and doesn't retry forever. Content is presumed identical.
-  bool ok = (code == 201 || code == 200 || code == 422);
+  free(buf);
+
+  bool ok = (code == 200 || code == 201);
   tprint("[UPLOAD] %s %s (code=%d)",
-         path.c_str(), ok ? "OK" : "FAIL", code);
+         name.c_str(), ok ? "OK" : "FAIL", code);
   http.end();
   return ok;
 }

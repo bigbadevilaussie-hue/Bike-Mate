@@ -13,7 +13,7 @@
 // V4.70: dead defines removed, section headers added.
 // Deploy-specific values (UPLOAD_URL, SMTP_*) still live here pending move to Deploy.h.
 
-#define BIKE_MATE_VERSION "5.57"
+#define BIKE_MATE_VERSION "5.60"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
@@ -194,7 +194,7 @@ struct WakeSample {
 #define UPLOAD_ENABLED 1
 // UPLOAD_HOUR_LOCAL now runtime: config.uploadHour
 // Default 4 lives in Settings.cpp set_defaults().
-#define UPLOAD_URL "https://script.google.com/macros/s/AKfycbx758YfZhY4wp_FdWgu6DSoDVn6-k0Wb0hVVDzwauRSZOSbT9zFAsvskeHv4mz5-G59/exec"
+#define UPLOAD_URL "http://192.168.8.187:9999/bike/file"
 #define UPLOAD_URL_MAX 256
 #define UPLOAD_WIFI_TIMEOUT_MS 30000UL
 #define UPLOAD_HTTP_TIMEOUT_MS 60000UL

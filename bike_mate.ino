@@ -297,12 +297,11 @@ static void goToSleep() {
   display.clearDisplay();
   display.display();
   display.ssd1306_command(SSD1306_DISPLAYOFF);
-  // V4.42: add the current wake duration to totalSeconds before sleeping.
-  // The next wake adds the assumed sleep interval (wakeMs/1000). Without
-  // this, the ~1s of setup+loop time per wake is lost, drifting the RTC
-  // ~48 min/day at 30s cadence. The RTC oscillator adds another 15-30 min
-  // per day of drift, bounded by the BLE time sync on GUI connect.
-  totalSeconds += millis() / 1000;
+  // V5.42: removed. The loop already increments totalSeconds once
+  // per awake second. This line counted the same awake window a
+  // second time, doubling the counter and racing the clock ahead
+  // of real time. The floor in currentEpoch() then locked the epoch
+  // at the raced value, and every seal collided on the same filename.
 
   tprint("[SLEEP] mode=%s V=%.2f conn=%d wake=%lus",
          mode, latestBatteryVoltage,

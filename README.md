@@ -336,3 +336,51 @@ Same rules as above, plus:
   merged into the bike-mate HB log.
 - GUI 4.47/4.48 commit state — HEAD of this repo is the V5.57 commit.
   Check whether 4.47/4.48 came in with it or are still uncommitted.
+
+---
+
+## Hardware build
+
+`veroboard.txt` in this repo contains the physical build:
+
+- Vero board dimensions (13 strips × 45 holes, 35 × 115 mm)
+- Component placement plan by region
+- Power rail routing (12V, 5V always-on, 5V switched, 3V3, GND)
+- Cut list (where to sever copper tracks)
+- Jumper list (wire links between strips)
+- Full netlist (every electrical connection)
+- Bill of materials
+- Front panel / side / back panel cutout dimensions
+- Pre-power-up checklist
+- Power budget (always-on vs switched rails)
+
+Hardware architecture in brief:
+
+    AGM 12V
+      │
+      SAE → Kill switch → Fuse → TVS
+                                  │
+              ┌───────────────────┼───────────────────┐
+              │                   │                   │
+         MP1584EN             98.8k/9.98k        IRF4905 SOURCE
+         12V→5V               divider                 │
+              │              (GPIO 0)          IRF4905 DRAIN
+             5V                                    │
+              │                             Switched 12V
+         ESP32-C3                                  │
+         (always on)                    ┌──────────┼──────────┐
+                                        │          │          │
+                                    Mini 360   USB charger   (future)
+                                    12V→5V
+                                        │
+                                    GPS + Fan
+
+Prime directive: the always-on rail draws ~250 µA total
+(MP1584EN quiescent + divider + ESP32 light sleep). On a
+10.5 Ah AGM that's ~2.6% per month. Everything else —
+GPS, fan, USB charger — lives on the IRF4905-switched rail,
+gated by `accState`. The ESP32 switches it on when it
+detects engine running (voltage > 13.8 V).
+
+**Not yet built.** The doc is the spec; the board doesn't
+exist yet.

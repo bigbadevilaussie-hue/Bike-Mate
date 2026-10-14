@@ -18,6 +18,7 @@ extern void tprint_verbose(const char* fmt, ...);
 extern uint32_t macTimeEpoch;
 extern uint32_t secondsAtSync;
 extern uint32_t totalSeconds;
+extern uint32_t currentEpoch();   // V5.63
 
 char wifiMessage[24] = "";
 
@@ -230,15 +231,38 @@ static bool opalClockSync() {
 static bool ntpSync() {
   setMsg("NTP sync");
   tprint("[WIFI] NTP sync");
+
+  // V5.63: don't let NTP overwrite a plausible clock. A bad NTP
+  // response was stamping 2038-01-02 and renaming wake files
+  // wakes_2038-01-02.csv.
+  uint32_t known = currentEpoch();
+  if (known >= 1700000000UL && known <= 1893456000UL) {
+    tprint("[WIFI] NTP skipped, clock already valid (%lu)",
+           (unsigned long)known);
+    setMsg("Clock ok");
+    return true;
+  }
+
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   unsigned long t0 = millis();
   time_t now = 0;
   while (millis() - t0 < 20000UL) {
     time(&now);
     if (now > 1700000000) {
-      macTimeEpoch = (uint32_t)now;
+      uint32_t now32 = (uint32_t)now;
+      if (known > 1700000000UL) {
+        long diff = (long)now32 - (long)known;
+        if (diff < 0) diff = -diff;
+        if (diff > 31536000L) {
+          tprint("[WIFI] NTP rejected: %lu vs known %lu (off %lds)",
+                 (unsigned long)now32, (unsigned long)known, diff);
+          setMsg("NTP reject");
+          return false;
+        }
+      }
+      macTimeEpoch = now32;
       secondsAtSync = totalSeconds;
-      tprint("[WIFI] NTP OK %lu", (unsigned long)now);
+      tprint("[WIFI] NTP OK %lu", (unsigned long)now32);
       setMsg("NTP OK");
       return true;
     }
@@ -331,15 +355,20 @@ static bool _wifiBringUpOnce(unsigned long perAttemptTimeoutMs) {
   tprint("[WIFI] RSSI %d dBm", WiFi.RSSI());
   setMsg("Connected");
 
+  // V5.62: ping is advisory, not fatal. The association succeeded,
+  // the IP is assigned, the LAN is up. A single TCP connect to the
+  // gateway failing does not mean the LAN is down. Previously this
+  // killed the whole bring-up on the first failure, causing the
+  // rapid assoc/deassoc churn the Opal's log showed. Now we log it
+  // and continue. If the Opal really is unreachable, the clock
+  // fetch and any upload will fail at a later, more useful point.
   if (!wifiPingTest()) {
-    tprint("[WIFI] ping FAIL");
-    setMsg("Ping fail");
-    WiFi.disconnect(true);
-    WiFi.mode(WIFI_OFF);
-    return false;
+    tprint("[WIFI] ping FAIL (advisory, continuing)");
+    setMsg("Ping warn");
+  } else {
+    tprint("[WIFI] ping OK");
+    setMsg("Ping OK");
   }
-  tprint("[WIFI] ping OK");
-  setMsg("Ping OK");
 
   // V5.07: clock fetch moved OUT of the critical path. The Opal's
   // uhttpd can stall for 3+ seconds under LuCI load, and NTP can

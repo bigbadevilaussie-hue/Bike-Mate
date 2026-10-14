@@ -191,7 +191,13 @@ static bool clockRestore() {
   p.begin("clock", true);
   uint32_t e = p.getUInt("epoch", 0);
   p.end();
-  if (e < 1700000000UL || e > 4102444800UL) return false;
+  // V5.63: tighten the sanity window to 2020-2030 so a poisoned
+  // 2038 value in NVS is rejected instead of accepted.
+  if (e < 1577836800UL || e > 1893456000UL) {
+    tprint("[CLOCK] restore rejected: %lu out of 2020-2030 window",
+           (unsigned long)e);
+    return false;
+  }
   macTimeEpoch = e;
   secondsAtSync = totalSeconds;     // V5.54: anchor to now, not old counter
   tprint("[CLOCK] restored from NVS epoch=%lu", (unsigned long)e);
@@ -1070,8 +1076,10 @@ void loop() {
         if (uploadNowRequested) {
           uploadNowRequested = false;
           tprint("[UPLOAD] /upload consumed, running now");
-          uint32_t nowEp = currentEpoch();
-          if (nowEp > 0) wakeLoggerForceRotate(nowEp);
+          // V5.61: driveUploadPerform() already calls
+          // wakeLoggerSealManual(). The extra wakeLoggerForceRotate()
+          // here was producing two seals with the same timestamped
+          // name — second overwrote first. Single seal now.
           driveUploadPerform(true, "forced");
         }
 

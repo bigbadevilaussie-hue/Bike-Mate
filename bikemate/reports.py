@@ -29,16 +29,22 @@ class BikeReport(tk.Toplevel):
             self.title("Bike-Mate Report — Last Week")
 
         files = self._find_files()
+        if files is None:
+            tk.Label(self, text="OSA unreachable.\nIs the server running?",
+                     bg=BG, fg=FG, font=("Helvetica", 13),
+                     padx=30, pady=30).pack()
+            tk.Button(self, text="Close", command=self.destroy).pack(pady=(0, 20))
+            return
         if not files:
-            tk.Label(self, text="No wake files.\nClick Sync from Drive first.",
+            tk.Label(self, text="No files on OSA yet.",
                      bg=BG, fg=FG, font=("Helvetica", 13),
                      padx=30, pady=30).pack()
             tk.Button(self, text="Close", command=self.destroy).pack(pady=(0, 20))
             return
 
         rows = []
-        for f in files:
-            rows.extend(self._parse(f))
+        for sub, name in files:
+            rows.extend(self._parse(sub, name))
 
         if not rows:
             tk.Label(self, text="No data rows in file.",
@@ -49,75 +55,94 @@ class BikeReport(tk.Toplevel):
 
         self._build_ui(rows, files)
 
-    def _find_files(self):
-        import glob
-        base = os.path.join(DRIVE_DIR, "wakes")
-        all_files = sorted(glob.glob(os.path.join(base, "wakes_*.csv")) +
-                          glob.glob(os.path.join(base, "wakes_*.csv.gz")))
+    def _osa_list(self, sub):
+        """Fetch the file list from OSA's /bike/files/list."""
+        import urllib.request, json as _json
+        try:
+            url = f"{OSA_URL}/bike/files/list?dir={sub}"
+            with urllib.request.urlopen(url, timeout=5) as r:
+                data = _json.loads(r.read().decode())
+            return data.get("files", [])
+        except Exception as e:
+            print(f"[REPORT] OSA list {sub} failed: {e}")
+            return None
 
-        if not all_files:
+    def _find_files(self):
+        # V4.49: source is OSA, not the local filesystem. Returns
+        # a list of (sub, name) tuples.
+        wakes = self._osa_list("wakes")
+        if wakes is None:
+            return None   # OSA unreachable — caller shows an error
+        # wakes filenames: wakes_YYYY-MM-DD_HHMMSS.csv.gz
+        all_wakes = sorted(wakes, key=lambda f: f["name"])
+
+        if not all_wakes:
             return []
 
         if self.mode == "2h":
             from datetime import date
             y = date.today().strftime("%Y-%m-%d")
-            target = os.path.join(base, f"wakes_{y}.csv")
-            if os.path.exists(target):
-                return [target]
-            return all_files[-1:]
+            for f in all_wakes:
+                if f["name"].startswith(f"wakes_{y}"):
+                    return [("wakes", f["name"])]
+            return [("wakes", all_wakes[-1]["name"])]
 
         if self.mode == "day":
             from datetime import date, timedelta
             y = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-            target = os.path.join(base, f"wakes_{y}.csv")
-            if os.path.exists(target):
-                return [target]
-            return all_files[-1:]
+            for f in all_wakes:
+                if f["name"].startswith(f"wakes_{y}"):
+                    return [("wakes", f["name"])]
+            return [("wakes", all_wakes[-1]["name"])]
 
         elif self.mode == "week":
             from datetime import date, timedelta
-            files = []
+            out = []
             for i in range(7):
                 d = (date.today() - timedelta(days=i+1)).strftime("%Y-%m-%d")
-                p = os.path.join(base, f"wakes_{d}.csv")
-                if os.path.exists(p):
-                    files.append(p)
-            return sorted(files) if files else all_files[-7:]
+                for f in all_wakes:
+                    if f["name"].startswith(f"wakes_{d}"):
+                        out.append(("wakes", f["name"]))
+                        break
+            return out if out else [("wakes", all_wakes[-7 + j]["name"]) for j in range(min(7, len(all_wakes)))]
 
         elif self.mode == "ride":
-            rides = sorted(glob.glob(os.path.join(DRIVE_DIR, "rides", "ride_*.csv")) +
-                           glob.glob(os.path.join(DRIVE_DIR, "rides", "ride_*.csv.gz")))
+            rides = self._osa_list("rides")
+            if rides is None:
+                return None
             if not rides:
-                return all_files[-1:]
-            return rides[-1:]
+                return [("wakes", all_wakes[-1]["name"])]
+            rides_sorted = sorted(rides, key=lambda f: f["name"])
+            return [("rides", rides_sorted[-1]["name"])]
 
         return []
 
-    def _parse(self, path):
-        import csv
+    def _parse(self, sub, name):
+        # V4.49: fetch raw bytes from OSA, decompress in-memory.
+        import csv, io, urllib.request
         rows = []
         try:
-            # V4.34: support .csv.gz — the firmware gzips large rides
-            # and (pre-V5.12) mislabelled the wake uploads, so some
-            # files on Drive are gzip bytes under a .csv name.
-            # Sniff the magic bytes so both cases work.
-            with open(path, "rb") as probe:
-                is_gz = probe.read(2) == b"\x1f\x8b"
-            opener = gzip.open if is_gz else open
-            with opener(path, "rt") as f:
-                for r in csv.reader(f):
-                    if not r or r[0].startswith("#") or r[0] == "epoch":
-                        continue
-                    try:
-                        rows.append({
-                            "epoch": int(r[0]),
-                            "volt":  float(r[3]),
-                            "temp":  int(r[4]),
-                        })
-                    except (ValueError, IndexError):
-                        continue
+            url = f"{OSA_URL}/bike/files?dir={sub}&name={name}"
+            with urllib.request.urlopen(url, timeout=10) as r:
+                raw = r.read()
+            is_gz = raw[:2] == b"\x1f\x8b"
+            if is_gz:
+                text = gzip.decompress(raw).decode("utf-8", "replace")
+            else:
+                text = raw.decode("utf-8", "replace")
+            for r in csv.reader(io.StringIO(text)):
+                if not r or r[0].startswith("#") or r[0] == "epoch":
+                    continue
+                try:
+                    rows.append({
+                        "epoch": int(r[0]),
+                        "volt":  float(r[3]),
+                        "temp":  int(r[4]),
+                    })
+                except (ValueError, IndexError):
+                    continue
         except Exception as e:
-            print(f"[REPORT] parse failed {path}: {e}")
+            print(f"[REPORT] parse failed {sub}/{name}: {e}")
         return rows
 
     def _build_ui(self, rows, files):

@@ -41,6 +41,7 @@ void wakeLoggerLogUploadDone(int okCount, int failCount);
 // V5.29: structured event line into the current wake file.
 // Writes "# upload=<body>" so the reader can filter with '#'.
 void wakeLoggerLogEvent(const char* fmt, ...);
+void wakeLoggerLogRideEnd(uint32_t rideEpoch, uint32_t durSecs, int stall);
 
 // File ops
 size_t wakeLoggerFileSize();

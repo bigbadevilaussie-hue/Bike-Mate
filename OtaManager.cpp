@@ -188,6 +188,11 @@ bool otaPerformUpdate(const char* url, uint32_t expectedSize, const char* expect
   display.display();
   display.ssd1306_command(SSD1306_DISPLAYOFF);
 
+  // V5.54: save the clock before resetting. ESP.restart() zeroes
+  // RTC_DATA_ATTR, so any unsaved time is lost.
+  extern void clockSave();
+  clockSave();
+
   ESP.restart();
 
   return true;

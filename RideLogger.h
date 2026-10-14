@@ -30,7 +30,7 @@ extern int32_t rideStartLon_x1e7;
 void loadRideState();
 void startRideLog();
 void writeRideRow();
-void closeRideLog();
+void closeRideLog(bool stall = false, uint32_t stallDur = 0);
 
 // Set ride start location (called from bike_mate.ino during engine start)
 void setRideStartLocation(int32_t lat_x1e7, int32_t lon_x1e7);

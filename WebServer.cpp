@@ -197,6 +197,11 @@ static void handleOtaDone() {
     display.clearDisplay();
     display.display();
     display.ssd1306_command(SSD1306_DISPLAYOFF);
+
+    // V5.54: save the clock before resetting.
+    extern void clockSave();
+    clockSave();
+
     ESP.restart();
   }
 }
@@ -293,8 +298,8 @@ static void handleSeal() {
   bool rideOk = true;
   if (isLogging) {
     tprint("[SEAL] ride in progress, closing");
-    extern void closeRideLog();
-    closeRideLog();
+    extern void closeRideLog(bool stall = false, uint32_t stallDur = 0);
+    closeRideLog(false, 0);
   }
   server.send(200, "text/plain",
               wakeOk && rideOk ? "OK" : "PARTIAL");

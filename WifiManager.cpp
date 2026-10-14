@@ -111,11 +111,22 @@ static void setMsg(const char* m) {
 bool wifiPingTest() {
   IPAddress gw = WiFi.gatewayIP();
   if ((uint32_t)gw == 0) return false;
-  WiFiClient test;
-  test.setTimeout(2000);
-  bool ok = test.connect(gw, 80);
-  test.stop();
-  return ok;
+  // V5.53: retry the LAN probe. The first TCP connect after a flaky
+  // association often fails because the ARP cache is cold. Retrying
+  // warms it. Three attempts, 400 ms apart.
+  for (int attempt = 1; attempt <= 3; attempt++) {
+    WiFiClient test;
+    bool ok = test.connect(gw, 80, 2000);   // V5.54: ms connect timeout
+    test.stop();
+    if (ok) {
+      if (attempt > 1) {
+        tprint("[WIFI] ping OK on attempt %d", attempt);
+      }
+      return true;
+    }
+    if (attempt < 3) delay(400);
+  }
+  return false;
 }
 
 // V4.92: fetch the router's Date header over LAN. The Opal
@@ -154,6 +165,7 @@ static bool opalClockSync() {
 
   HTTPClient http;
   http.setTimeout(3000);
+  http.setConnectTimeout(3000);   // V5.54: separate connect timeout
   http.setReuse(false);
   if (!http.begin(url)) {
     tprint("[CLOCK] begin failed");
@@ -163,6 +175,18 @@ static bool opalClockSync() {
   http.collectHeaders(hdrs, 1);
 
   int code = http.GET();
+  if (code <= 0) {
+    tprint("[CLOCK] Opal GET code=%d, retry in 2s", code);
+    http.end();
+    delay(2000);
+    if (!http.begin(url)) {
+      tprint("[CLOCK] retry begin failed");
+      return false;
+    }
+    http.collectHeaders(hdrs, 1);
+    code = http.GET();
+    tprint("[CLOCK] retry code=%d", code);
+  }
   tprint_verbose("[CLOCK] HTTP code=%d", code);
   bool ok = false;
   if (code > 0) {

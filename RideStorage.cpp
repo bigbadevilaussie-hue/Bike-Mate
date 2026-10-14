@@ -204,6 +204,14 @@ void rideStorageLogClose(uint32_t closeEpoch) {
   tprint("[RIDE] closed stamp @ %lu", (unsigned long)closeEpoch);
 }
 
+// V5.51: stall marker
+void rideStorageLogStall(bool stall) {
+  if (!_rideFile) return;
+  if (!stall) return;
+  const char* line = "# stall=1\n";
+  _rideFile.write((uint8_t*)line, strlen(line));
+}
+
 // ---- close ----
 
 void rideStorageClose() {
@@ -350,7 +358,14 @@ bool rideStorageExists(
       sizeof(path)
   );
 
-  return LittleFS.exists(path);
+  if (LittleFS.exists(path)) return true;
+
+  // V5.53: rides are gzipped on close and the raw .csv is deleted.
+  // Check for the .gz variant too so newest_epoch doesn't get cleared
+  // on the boot after a ride close.
+  char gz[48];
+  snprintf(gz, sizeof(gz), "%s.gz", path);
+  return LittleFS.exists(gz);
 }
 
 // ---- current file ----

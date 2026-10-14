@@ -13,7 +13,7 @@
 // V4.70: dead defines removed, section headers added.
 // Deploy-specific values (UPLOAD_URL, SMTP_*) still live here pending move to Deploy.h.
 
-#define BIKE_MATE_VERSION "5.49"
+#define BIKE_MATE_VERSION "5.54"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
@@ -34,6 +34,7 @@
 #define STATUS_LED_PIN 10
 #define WAKE_BTN_PIN 5   // V5.43: wake button
 #define RIDER_READY_MS 120000UL   // V5.44: button hold window
+#define RIDE_STALL_SEC 60
 
 // ---- GPS UART ----
 #define GPS_RX_PIN 2
@@ -128,7 +129,7 @@ struct WakeSample {
 #define FLAG_OVER_VOLT 0x02
 #define FLAG_FREEZING 0x04
 #define FLAG_HOT_AMBIENT 0x08
-#define FLAG_ENCLOSURE_HOT 0x10
+#define FLAG_STALL 0x10   // V5.51
 #define FLAG_STORAGE_LOW 0x20   // V4.57: repurposed from FLAG_THERMAL_CUT
 #define FLAG_PANIC 0x40
 #define FLAG_GPS_FIX 0x80

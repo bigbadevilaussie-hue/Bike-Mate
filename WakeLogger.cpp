@@ -482,6 +482,22 @@ void wakeLoggerLogEvent(const char* fmt, ...) {
   f.close();
 }
 
+// V5.51: ride-end marker
+void wakeLoggerLogRideEnd(uint32_t rideEpoch, uint32_t durSecs, int stall) {
+  if (_paused) return;
+  if (_currentPath[0] == 0) return;
+  File f = LittleFS.open(_currentPath, "a");
+  if (!f) return;
+  char line[96];
+  snprintf(line, sizeof(line),
+           "# ride_end=%lu dur=%lu stall=%d\n",
+           (unsigned long)rideEpoch,
+           (unsigned long)durSecs,
+           stall);
+  f.write((uint8_t*)line, strlen(line));
+  f.close();
+}
+
 // ---- file ops ----
 size_t wakeLoggerFileSize() {
   if (_currentPath[0] == 0) return 0;

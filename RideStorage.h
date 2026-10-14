@@ -16,6 +16,7 @@ bool rideStorageCreate(uint32_t startEpoch, float preRideVoltage);
 
 // Append a # closed= stamp to the current file before close.
 void rideStorageLogClose(uint32_t closeEpoch);
+void rideStorageLogStall(bool stall);
 
 // Append one row to the currently open ride file.
 bool rideStorageAppendRow(const RideRow& row);

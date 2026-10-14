@@ -50,6 +50,8 @@ RTC_DATA_ATTR float lastRestingVoltage = 0.0;
 RTC_DATA_ATTR uint8_t lowVoltLoops = 0;
 RTC_DATA_ATTR uint8_t panicLatchCount = 0;
 static bool engineStartCapture = false;
+static bool rideStallFlag = false;
+static uint32_t rideStopDuration = 0;
 static unsigned long engineStartCaptureMs = 0;
 static unsigned long lastCaptureRow = 0;
 RTC_DATA_ATTR bool lowBattMailLatched = false;
@@ -72,7 +74,7 @@ unsigned long countdownStartMillis = 0;
 extern const int countdownSeconds = 30;
 bool isArmingCountdown = false;
 unsigned long armingStartMillis = 0;
-extern const int armingSeconds = 10;
+extern const int armingSeconds = 30;
 bool parkedTimerActive = false;
 unsigned long parkedTimerStart = 0;
 const unsigned long parkedDelayMs = 0;
@@ -156,12 +158,12 @@ uint32_t currentEpoch() {
 // V5.18: persist the clock to NVS so a cold boot doesn't lose
 // the epoch. Without this, a ride started after a cold boot has
 // currentEpoch()==0, startRideLog() bails, and the ride is lost.
-static void clockSave() {
-  if (macTimeEpoch == 0) return;
+void clockSave() {
+  uint32_t e = currentEpoch();
+  if (e == 0) return;
   Preferences p;
   p.begin("clock", false);
-  p.putUInt("epoch", macTimeEpoch);
-  p.putUInt("at_total", secondsAtSync);
+  p.putUInt("epoch", e);            // V5.54: current time, not the anchor
   p.end();
 }
 
@@ -169,11 +171,10 @@ static bool clockRestore() {
   Preferences p;
   p.begin("clock", true);
   uint32_t e = p.getUInt("epoch", 0);
-  uint32_t t = p.getUInt("at_total", 0);
   p.end();
   if (e < 1700000000UL || e > 4102444800UL) return false;
   macTimeEpoch = e;
-  secondsAtSync = t;
+  secondsAtSync = totalSeconds;     // V5.54: anchor to now, not old counter
   tprint("[CLOCK] restored from NVS epoch=%lu", (unsigned long)e);
   return true;
 }
@@ -399,10 +400,16 @@ void updateStateTransitions(unsigned long now) {
   if (V >= (config.runningEnter_mv / 1000.0f)) {
     parkedTimerActive = false;
     if (!engineWasRunning && !isCountingDown) {
+      bool wasArming = isArmingCountdown;
       engineWasRunning = true;
       isArmingCountdown = false;
-      riderReadyActive = false;   // V5.45: rider arrived, end ready window
+      riderReadyActive = false;
+      rideStallFlag = false;
+      rideStopDuration = 0;
       tprint("[RIDER] engine start, ready window cleared");
+      if (wasArming) {
+        tprint("[RIDE] stall cancelled, ride continues");
+      }
       alarmSequenceActive = true; alarmStep = 0; alarmStepTimer = now;
       isCountingDown = true;
       countdownStartMillis = millis();
@@ -440,12 +447,22 @@ void updateStateTransitions(unsigned long now) {
   }
 
   if (parkedTimerActive && (now - parkedTimerStart) >= parkedDelayMs) {
-    if (isLogging) closeRideLog();   // V4.55: ride ends at engine stop
     engineWasRunning = false;
     accState = false;
     isArmingCountdown = true;
     armingStartMillis = millis();
     parkedTimerActive = false;
+
+    if (isLogging && rideStartEpoch > 0 && currentEpoch() > rideStartEpoch) {
+      rideStopDuration = currentEpoch() - rideStartEpoch;
+      rideStallFlag = (rideStopDuration < RIDE_STALL_SEC);
+      tprint("[RIDE] engine stop dur=%lus stall=%d",
+             (unsigned long)rideStopDuration, rideStallFlag ? 1 : 0);
+    } else {
+      rideStopDuration = 0;
+      rideStallFlag = false;
+    }
+
     tprint("[STATE] engine stop -> arming %.2f", V);
     wakeLoggerForceWrite();
   }
@@ -453,12 +470,20 @@ void updateStateTransitions(unsigned long now) {
   if (isArmingCountdown &&
       (millis() - armingStartMillis) / 1000 >= armingSeconds) {
     isArmingCountdown = false;
+
+    if (isLogging) {
+      closeRideLog(rideStallFlag, rideStopDuration);
+      if (rideStallFlag) {
+        wakeLoggerLogRideEnd(rideStartEpoch, rideStopDuration, 1);
+      }
+    }
+    rideStallFlag = false;
+    rideStopDuration = 0;
+
     alarmSequenceActive = true; alarmStep = 0; alarmStepTimer = millis();
-    // V4.55: closeRideLog moved to engine stop - ride ends when engine stops
     tprint("[STATE] arming complete");
     wakeLoggerResume();
     wakeLoggerForceWrite();
-
   }
 }
 

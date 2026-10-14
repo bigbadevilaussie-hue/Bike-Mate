@@ -121,7 +121,7 @@ void writeRideRow() {
   }
 }
 
-void closeRideLog() {
+void closeRideLog(bool stall, uint32_t stallDur) {
   if (!isLogging) return;
 
   tprint("[RIDE] END rows=%d", (int)currentRowCount);
@@ -166,7 +166,7 @@ void closeRideLog() {
   if (rideOverSecs > 0)            s.flags |= FLAG_OVER_VOLT;
   if (rideMinT < TH_FREEZING)      s.flags |= FLAG_FREEZING;
   if (rideMaxT > TH_HOT_AMBIENT)   s.flags |= FLAG_HOT_AMBIENT;
-  if (rideMaxT > TH_ENCLOSURE_HOT) s.flags |= FLAG_ENCLOSURE_HOT;
+  if (stall)                       s.flags |= FLAG_STALL;
 
   if (s.durationSecs == 0) {
     tprint("[RIDE] zero duration, closing file without summary");
@@ -181,6 +181,11 @@ void closeRideLog() {
   prefs.putBytes(key, &s, sizeof(s));
   prefs.putUInt("newest_epoch", rideStartEpoch);
   prefs.end();
+
+  if (stall) {
+    rideStorageLogStall(true);
+    tprint("[RIDE] that was a bs ride (%lus)", (unsigned long)stallDur);
+  }
 
   rideStorageLogClose(nowEpoch);
   rideStorageClose();

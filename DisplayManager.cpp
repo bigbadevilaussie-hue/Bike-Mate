@@ -268,10 +268,62 @@ static void drawRunningScreen() {
   display.display();
 }
 
+// V5.44: shown while riderReadyActive. Counts down from RIDER_READY_MS.
+static void drawRiderReadyScreen() {
+  extern bool riderReadyActive;
+  extern unsigned long riderReadyStart;
+
+  display.setTextColor(SSD1306_WHITE);
+
+  display.setTextSize(2);
+  {
+    const char* l1 = "RIDER";
+    int w1 = strlen(l1) * 12;
+    display.setCursor((SCREEN_W - w1) / 2, 2);
+    display.print(l1);
+
+    const char* l2 = "READY";
+    int w2 = strlen(l2) * 12;
+    display.setCursor((SCREEN_W - w2) / 2, 18);
+    display.print(l2);
+  }
+
+  long elapsed_ms = (long)(millis() - riderReadyStart);
+  long remaining = ((long)RIDER_READY_MS - elapsed_ms) / 1000L;
+  if (remaining < 0) remaining = 0;
+  if (remaining > (long)(RIDER_READY_MS / 1000UL)) {
+    remaining = (long)(RIDER_READY_MS / 1000UL);
+  }
+  char cb[12];
+  snprintf(cb, sizeof(cb), "%lds", remaining);
+  int cw = strlen(cb) * 12;
+  display.setCursor((SCREEN_W - cw) / 2, 34);
+  display.print(cb);
+
+  display.setTextSize(1);
+  display.setCursor(0, 56);
+  display.print(latestBatteryVoltage, 1);
+  display.print("V");
+
+  char tb[12];
+  formatTime12h_buf(currentEpoch(), tb, sizeof(tb));
+  display.setCursor(88, 56);
+  display.print(tb);
+
+  display.display();
+}
+
 // ---- dispatch ----
 
 void drawOLED() {
   display.clearDisplay();
+
+  extern bool riderReadyActive;
+  if (riderReadyActive) {
+    display.ssd1306_command(SSD1306_DISPLAYON);
+    drawRiderReadyScreen();
+    return;
+  }
 
   extern volatile bool bleUploadActive;
   if (bleUploadActive) {
@@ -319,7 +371,13 @@ void updateOLED_EdgeTriggered() {
   char key[48];
 
   extern volatile bool bleUploadActive;
-  if (bleUploadActive) {
+  extern bool riderReadyActive;
+  extern unsigned long riderReadyStart;
+  if (riderReadyActive) {
+    snprintf(key, sizeof(key), "RIDER|%lu",
+             (millis() - riderReadyStart) / 1000UL);
+  }
+  else if (bleUploadActive) {
     snprintf(key, sizeof(key), "BLEUP");
   }
   else if (otaRequest) {

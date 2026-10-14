@@ -59,6 +59,10 @@ RTC_DATA_ATTR bool lowBattMailLatched = false;
 // Same pattern as otaRequest.
 RTC_DATA_ATTR bool maintRequest = false;
 
+// V5.44: button-triggered 120s awake window (field mode only).
+RTC_DATA_ATTR bool riderReadyActive = false;
+RTC_DATA_ATTR unsigned long riderReadyStart = 0;
+
 // V5.37.6: manual upload trigger from OSA. Set by the {"cmd":"upload"}
 // BLE write, consumed by doStateWork on the next pass.
 RTC_DATA_ATTR bool bleUploadNowRequested = false;
@@ -249,6 +253,16 @@ static bool shouldSleep() {
   if (wifiActive) return false;
   if (serverIsRunning()) return false;
   if (maintRequest) return false;
+
+  // V5.44: Rider for Rider hold window.
+  if (riderReadyActive) {
+    unsigned long elapsed = millis() - riderReadyStart;
+    if (elapsed < RIDER_READY_MS) {
+      return false;
+    }
+    riderReadyActive = false;
+    tprint("[RIDER] ended after %lus", elapsed / 1000UL);
+  }
   // V5.40: bench mode holds the full 30 s window from bootMillis.
   // Field mode sleeps as soon as work is done.
   if (config.benchMode) {
@@ -306,6 +320,27 @@ static void goToSleep() {
   tprint("[SLEEP] mode=%s V=%.2f conn=%d wake=%lus",
          mode, latestBatteryVoltage,
          isActuallyConnected() ? 1 : 0, wakeSec);
+
+  // V5.44: button handling on the way to sleep.
+  //  - wait for release so a held button doesn't insta-wake
+  //  - if it's still held after the wait, don't arm GPIO wake
+  //  - field mode only
+  {
+    unsigned long t0 = millis();
+    while (digitalRead(WAKE_BTN_PIN) == LOW && millis() - t0 < 10000UL) {
+      delay(10);
+    }
+    delay(200);   // debounce settle
+    bool btnHeld = (digitalRead(WAKE_BTN_PIN) == LOW);
+    if (!config.benchMode && !btnHeld) {
+      esp_deep_sleep_enable_gpio_wakeup(
+          1ULL << WAKE_BTN_PIN, ESP_GPIO_WAKEUP_GPIO_LOW);
+      tprint("[RIDER] GPIO wake armed");
+    } else if (btnHeld) {
+      tprint("[RIDER] button held at sleep, GPIO wake disabled");
+    }
+  }
+
   Serial.flush();
   esp_sleep_enable_timer_wakeup((uint64_t)wakeMs * 1000ULL);
   esp_deep_sleep_start();
@@ -366,6 +401,8 @@ void updateStateTransitions(unsigned long now) {
     if (!engineWasRunning && !isCountingDown) {
       engineWasRunning = true;
       isArmingCountdown = false;
+      riderReadyActive = false;   // V5.45: rider arrived, end ready window
+      tprint("[RIDER] engine start, ready window cleared");
       alarmSequenceActive = true; alarmStep = 0; alarmStepTimer = now;
       isCountingDown = true;
       countdownStartMillis = millis();
@@ -652,6 +689,15 @@ void setup() {
     panicLatchCount = 0;
   } else {
     totalSeconds += currentWakeMs() / 1000;
+
+    // V5.44: GPIO wake from the button. Field only.
+    if (cause == ESP_SLEEP_WAKEUP_GPIO &&
+        !config.benchMode &&
+        !riderReadyActive) {
+      riderReadyActive = true;
+      riderReadyStart = millis();
+      tprint("[RIDER] ready, %lus window", RIDER_READY_MS / 1000UL);
+    }
     tprint_verbose("timer wake: totalSeconds = %lu", (unsigned long)totalSeconds);
   }
 
@@ -719,6 +765,7 @@ void setup() {
   pinMode(ACC_LED_PIN, OUTPUT); digitalWrite(ACC_LED_PIN, LOW);
   pinMode(BUZZER_PIN, OUTPUT); digitalWrite(BUZZER_PIN, LOW);
   pinMode(STATUS_LED_PIN, OUTPUT); digitalWrite(STATUS_LED_PIN, LOW);
+  pinMode(WAKE_BTN_PIN, INPUT_PULLUP);
   ledcSetup(0, 2000, 8);
   ledcAttachPin(BUZZER_PIN, 0);
   ledcWrite(0, 0);

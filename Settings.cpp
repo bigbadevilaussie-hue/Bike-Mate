@@ -24,10 +24,10 @@ static void set_defaults() {
   config.benchMode      = true;
   config.offPeakStart   = 22;
   config.offPeakEnd     = 5;
-  config.offPeakWakeMin = 15;
+  config.offPeakWakeMin = 5;   // V5.47: uniform 5 min
   config.peakStart      = 10;
   config.peakEnd        = 13;
-  config.peakWakeMin    = 2;
+  config.peakWakeMin    = 5;   // V5.47: uniform 5 min
   config.dayWakeMin     = 5;
 
   // V5.31 UPLOAD SCHEDULE
@@ -68,6 +68,11 @@ void settingsLoad() {
   config.peakWakeMin    = getU8(p, "pk.wake",   config.peakWakeMin);
   config.dayWakeMin     = getU8(p, "day.wake",  config.dayWakeMin);
   config.uploadHour     = getU8(p, "up.hour",   config.uploadHour);
+
+  // V5.47: force uniform 5 min. Overrides any stale NVS value.
+  config.offPeakWakeMin = 5;
+  config.peakWakeMin    = 5;
+  config.dayWakeMin     = 5;
 
   p.end();
   tprint_verbose("[SETTINGS] run: on=%u off=%u un=%u ov=%u | mon: nrm=%u warn=%u pan=%u",

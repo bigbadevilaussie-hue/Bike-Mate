@@ -910,15 +910,9 @@ class App:
         add_row("Warning",       "warning", m.get("warning", 12.4), "V")
         add_row("Panic",         "panic",   m.get("panic",   12.2), "V")
 
-        section("😴 SLEEP SCHEDULE")
-        add_int_row("Bench (1=yes)",  "bench", s["bench"],    "0/1")
-        add_int_row("Off-peak start", "ops",   s["ops"],      "hr")
-        add_int_row("Off-peak end",   "ope",   s["ope"],      "hr")
-        add_int_row("Off-peak wake",  "opw",   s["opw"],      "min")
-        add_int_row("Peak start",     "pks",   s["pks"],      "hr")
-        add_int_row("Peak end",       "pke",   s["pke"],      "hr")
-        add_int_row("Peak wake",      "pkw",   s["pkw"],      "min")
-        add_int_row("Day wake",       "dw",    s["dw"],       "min")
+        # V4.48: SLEEP SCHEDULE block hidden. Firmware default is
+        # 5 min everywhere. NVS keys and JSON still carry values
+        # for backward compatibility, not editable from here.
 
         section("📤 UPLOAD SCHEDULE")
         add_int_row("Upload hour",    "uh",    s["uh"],       "hr")

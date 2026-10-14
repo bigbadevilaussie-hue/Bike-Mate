@@ -13,7 +13,7 @@
 // V4.70: dead defines removed, section headers added.
 // Deploy-specific values (UPLOAD_URL, SMTP_*) still live here pending move to Deploy.h.
 
-#define BIKE_MATE_VERSION "5.42"
+#define BIKE_MATE_VERSION "5.47"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
@@ -32,6 +32,8 @@
 #define ACC_LED_PIN 1
 #define BUZZER_PIN 4
 #define STATUS_LED_PIN 10
+#define WAKE_BTN_PIN 5   // V5.43: wake button
+#define RIDER_READY_MS 120000UL   // V5.44: button hold window
 
 // ---- GPS UART ----
 #define GPS_RX_PIN 2

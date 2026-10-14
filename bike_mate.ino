@@ -69,6 +69,13 @@ RTC_DATA_ATTR unsigned long riderReadyStart = 0;
 // BLE write, consumed by doStateWork on the next pass.
 RTC_DATA_ATTR bool bleUploadNowRequested = false;
 
+// V5.56: cool-down mode. Runs after arming + chirps.
+RTC_DATA_ATTR bool cooldownPending = false;
+RTC_DATA_ATTR bool cooldownActive  = false;
+RTC_DATA_ATTR unsigned long cooldownStart   = 0;
+RTC_DATA_ATTR unsigned long cooldownLastRow = 0;
+RTC_DATA_ATTR unsigned long lastCooldownEnd = 0;
+
 bool isCountingDown = false;
 unsigned long countdownStartMillis = 0;
 extern const int countdownSeconds = 30;
@@ -170,6 +177,7 @@ static void tickSeconds() {
 }
 
 void clockSave() {
+  tickSeconds();   // V5.57: OTA upload/countdown block inside serverLoop()
   uint32_t e = currentEpoch();
   if (e == 0) return;
   Preferences p;
@@ -284,6 +292,11 @@ static bool shouldSleep() {
   }
 
   if (millis() - lastDisconnectMillis < 3000UL) return false;
+
+  // V5.56: Cool Down holds the bike awake and silent.
+  if (cooldownActive || cooldownPending) return false;
+  if (lastCooldownEnd > 0 &&
+      (millis() - lastCooldownEnd) < COOLDOWN_BLE_GRACE_MS) return false;
 
   return true;
 }
@@ -409,7 +422,7 @@ void updateStateTransitions(unsigned long now) {
     tprint("[MAIL] latch cleared (recovered %.2f)", V);
   }
 
-  if (V >= (config.runningEnter_mv / 1000.0f)) {
+  if (V >= (config.runningEnter_mv / 1000.0f) && !cooldownActive && !cooldownPending) {
     parkedTimerActive = false;
     if (!engineWasRunning && !isCountingDown) {
       bool wasArming = isArmingCountdown;
@@ -496,6 +509,9 @@ void updateStateTransitions(unsigned long now) {
     tprint("[STATE] arming complete");
     wakeLoggerResume();
     wakeLoggerForceWrite();
+
+    // V5.56: start Cool Down once the chirps play out.
+    cooldownPending = true;
   }
 }
 
@@ -566,7 +582,9 @@ void doStateWork(unsigned long now, bool wasWake) {
 
   publishBLE();
 
-  wakeLoggerTick();
+  // V5.57: during Cool Down, the 1 Hz forceWrite(5) rows are the only
+  // wake-log entries. The 30 s tick would interleave state=0 rows.
+  if (!cooldownActive) wakeLoggerTick();
 
   tprint("[SENSOR] V=%.2f raw=%d ntc=%d temp=%.1fC",
          latestBatteryVoltage, latestRawVoltage,
@@ -839,7 +857,8 @@ void setup() {
   }
   lastPublish = 0;
   lastAdvRestart = millis();
-  lastSecondMark = millis();
+  // V5.57: lastSecondMark stays 0, so the first tickSeconds() counts
+  // the boot time spent in setup() instead of dropping it.
   lastTick = millis();
   bootMillis = millis();
   lastDisconnectMillis = 0;
@@ -887,6 +906,33 @@ void loop() {
   lastStage = millis();
   updateBeeps(now);
   if (millis() - lastStage > 100UL) tprint("[LOOP] updateBeeps took %lums", millis() - lastStage);
+
+  // V5.56: Cool Down begins once chirps have played out
+  if (cooldownPending && !alarmSequenceActive && !cooldownActive) {
+    cooldownPending = false;
+    cooldownActive = true;
+    cooldownStart = millis();
+    cooldownLastRow = millis();
+    tprint("[COOLDOWN] start, %lus window", COOLDOWN_MS / 1000UL);
+    if (pServer) pServer->getAdvertising()->stop();
+    display.ssd1306_command(SSD1306_DISPLAYOFF);
+    digitalWrite(ACC_LED_PIN, LOW);
+    digitalWrite(STATUS_LED_PIN, LOW);
+  }
+
+  // V5.56: Cool Down tick + end
+  if (cooldownActive) {
+    unsigned long cnow = millis();
+    if (cnow - cooldownStart >= COOLDOWN_MS) {
+      cooldownActive = false;
+      lastCooldownEnd = cnow;
+      tprint("[COOLDOWN] end");
+      if (pServer) pServer->getAdvertising()->start();
+    } else if (cnow - cooldownLastRow >= 1000UL) {
+      cooldownLastRow = cnow;
+      wakeLoggerForceWrite(5);
+    }
+  }
 
   lastStage = millis();
   updateOLED_EdgeTriggered();
@@ -1084,7 +1130,8 @@ void loop() {
   bool inActiveWork = engineWasRunning || accState ||
                       isCountingDown || isArmingCountdown ||
                       isLogging || alarmSequenceActive ||
-                      lowBattBeepActive;
+                      lowBattBeepActive ||
+                      cooldownActive || cooldownPending;
 
   // V4.85: the guard measures idle time, not total awake time.
   // When we transition from busy to idle, reset the guard clock so
@@ -1102,7 +1149,8 @@ void loop() {
 
   // V4.87: hard exempt - even if inActiveWork misclassifies for one
   // iteration, never force-sleep mid-ride.
-  bool hardExempt = isLogging || engineWasRunning || accState;
+  bool hardExempt = isLogging || engineWasRunning || accState ||
+                    cooldownActive || cooldownPending;
 
   if (!otaRequest && !serverIsRunning() && !inActiveWork &&
       !hardExempt && guardIdleSince > 0 &&

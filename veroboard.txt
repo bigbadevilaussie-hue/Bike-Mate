@@ -1,0 +1,275 @@
+BIKE-MATE V5.63 — VERO BOARD LAYOUT
+====================================
+40 × 40 × 100 mm enclosure
+Vero board trimmed to fit inside
+
+PIN MAP
+-------
+GPIO 0  — Battery voltage divider → ADC
+GPIO 1  — IRF4905 driver (2N2222 base)
+GPIO 2  — GPS TX + 10kΩ pull-up to 3V3
+GPIO 3  — NTC + 10kΩ to GND
+GPIO 4  — Buzzer driver (2N2222 base)
+GPIO 5  — Wake button → GND (internal pull-up)
+GPIO 6  — OLED SDA
+GPIO 9  — OLED SCL
+GPIO 10 — Alarm red LED (via 330Ω)
+3V3     — OLED VCC, GPS pull-up, NTC top
+5V      — ESP32 power from MP1584EN
+
+
+POWER CHAIN (12V input)
+-----------------------
+
+SAE ── Kill switch ── Fuse 1A ── Vero 12V rail
+                                      │
+                  ┌───────────────────┼───────────────────┬──────────────┐
+                  │                   │                   │              │
+              ┌───┴───┐           ┌───┴───┐           ┌───┴───┐          │
+              │SA16CA │           │ 98.8k │           │MP1584 │          │
+              │  TVS  │           │       │           │  EN   │          │
+              └───┬───┘           └───┬───┘           └──┬─┬──┘          │
+                  │                   │                   │ │             │
+                 GND              ┌───┴──── GPIO 0       5V GND           │
+                                  │                                       │
+                              ┌───┴───┐                                   │
+                              │ 9.98k │                                   │
+                              └───┬───┘                                   │
+                                  │                                       │
+                                 GND                                      │
+                                                                          │
+                                                  ┌───────────────────────┘
+                                                  │
+                                          IRF4905 SOURCE
+                                                  │
+                                          IRF4905 DRAIN
+                                                  │
+                                          Switched 12V rail
+                                                  │
+                              ┌───────────────────┼──────────────────┐
+                              │                   │                  │
+                          ┌───┴────┐         ┌────┴────┐             │
+                          │Mini 360│         │  USB    │             │
+                          │12V → 5V│         │ charger │             │
+                          └───┬─┬──┘         └────┬────┘             │
+                              │ │                 │                  │
+                             5V GND              USB-A ×2            │
+                              │                                      │
+                              ├──── GPS VCC                          │
+                              │                                      │
+                              └──── Fan (+)                          │
+                                                                     │
+                          (all grounds → common GND) ────────────────┘
+
+
+IRF4905 DRIVER
+--------------
+
+12V (source) ── 10kΩ ── IRF4905 GATE
+                            │
+                       2N2222 COLLECTOR
+                            │
+                       EMITTER ── GND
+                       BASE ── 1kΩ ── GPIO 1
+                       BASE ── 10kΩ ── GND
+
+
+BUZZER CIRCUIT
+--------------
+
+12V ── SFM-27 red (+)
+            │
+       SFM-27 black (−)
+            │
+       2N2222 COLLECTOR
+            │
+       EMITTER ── GND
+       BASE ── 1kΩ ── GPIO 4
+       BASE ── 10kΩ ── GND
+
+
+LEDs
+----
+GPIO 10 ── 330Ω ── Red LED (alarm) ── GND
+
+
+FAN
+---
+Mini 360 5V ──┬── Fan red
+              │
+              ├── 1N4148 cathode
+              │
+              └── Fan black ──┬── 1N4148 anode
+                              │
+                              └── GND
+
+Place the diode at the fan's terminals, not on the
+vero, to keep the flyback path short.
+
+
+GPS
+---
+Mini 360 5V ── GPS VCC
+GND ────────── GPS GND
+GPS TX ─────── GPIO 2
+GPS RX ─────── (not connected)
+
+
+OLED (PANEL ONLY — off-board)
+-----------------------------
+Breakout board inside box, wired to ESP32:
+  VCC ── 3V3
+  GND ── GND
+  SDA ── GPIO 6
+  SCL ── GPIO 9
+
+Check the breakout for I2C pull-ups (4.7kΩ on SDA/SCL
+to 3V3). Add if missing.
+
+
+============================================================
+BILL OF MATERIALS
+============================================================
+
+Vero board:
+#   Component              Value/Part          Qty  Notes
+──  ─────────────────────  ──────────────────  ───  ─────────────────────
+1   ESP32-C3               XCW Super Mini      1    8.5 dBm TX clamp
+2   Buck (always-on)       MP1584EN module     1    Verify 5.0V output
+3   Buck (switched)        Mini 360 module     1    Verify 5.0V output
+4   USB charger            Dual USB-A 12V      1    On switched 12V
+5   P-MOSFET               IRF4905             1    Output switch
+6   NPN transistor         2N2222              2    One for IRF4905, one for buzzer
+7   TVS diode              SA16CA              1    Bidirectional 16V
+8   Resistor               98.8kΩ              1    Divider top
+9   Resistor               9.98kΩ              1    Divider bottom
+10  Resistor               10kΩ                1    NTC series to GND
+11  Resistor               10kΩ                1    GPIO 2 pull-up to 3V3
+12  Resistor               10kΩ                1    IRF4905 gate pull-up to source
+13  Resistor               10kΩ                1    IRF4905 2N2222 base pull-down
+14  Resistor               10kΩ                1    Buzzer 2N2222 base pull-down
+15  Resistor               1kΩ                 1    IRF4905 2N2222 base
+16  Resistor               1kΩ                 1    Buzzer 2N2222 base
+17  Resistor               330Ω                1    Red alarm LED
+18  LED                    Red 5mm             1    Alarm (GPIO 10)
+19  Buzzer                 SFM-27 3–24V        1    Self-oscillating
+20  Diode                  1N4148              1    Fan flyback (at fan)
+21  GPS module             NEO-6M breakout     1    With ceramic antenna
+22  Fan                    40mm 5V             1    On switched 5V
+
+Off-board:
+#   Component              Value/Part          Qty  Notes
+──  ─────────────────────  ──────────────────  ───  ─────────────────────
+23  SAE connector          Standard 2-pin      1    12V input
+24  Kill switch            12V rocker          1    Master on/off
+25  Fuse                   1A slow-blow        1    Inline
+26  NTC thermistor         MF52AT 10k B=3950   1    2 leads to vero
+27  Push button            Momentary NO        1    Wake button
+28  OLED panel             0.96" SSD1315       1    Front panel
+29  OLED breakout          SSD1315 + FFC       1    Inside box
+
+
+============================================================
+FRONT PANEL (40 × 40)
+============================================================
+
+   ┌─────────────────────────────────┐
+   │                                 │
+   │  ┌───────────────────────────┐  │
+   │  │     OLED window           │  │
+   │  │     22 × 11.5 mm          │  │
+   │  └───────────────────────────┘  │
+   │                                 │
+   │  ○       ◉                      │
+   │  Red     NTC                    │
+   │                                 │
+   │  ┌─────────┐                    │
+   │  │  USB-A  │  13 × 6 mm         │
+   │  └─────────┘                    │
+   │                                 │
+   └─────────────────────────────────┘
+
+Red LED:   5 mm hole
+NTC:       3 mm hole
+USB-A:     13 × 6 mm cutout
+OLED:      22 × 11.5 mm window
+
+
+============================================================
+RIGHT LONG SIDE (40 × 100)
+============================================================
+
+   ┌─────────────────────────────────┐
+   │                                 │
+   │  ○  ← buzzer grille             │
+   │                                 │
+   │  ○  ← kill switch               │
+   │                                 │
+   │  ─  ─  ─  ← vents               │
+   │  ─  ─  ─                        │
+   │                                 │
+   │  ○  ← SAE pigtail exit          │
+   │                                 │
+   └─────────────────────────────────┘
+
+
+============================================================
+BACK FACE (40 × 40)
+============================================================
+
+40mm fan mounted externally.
+4 × M3 screw holes at fan corners (32 mm spacing).
+Airflow: exhaust out the back.
+
+
+============================================================
+BEFORE POWER-UP
+============================================================
+
+1. Verify MP1584EN output is 5.0 V (multimeter, no load).
+2. Verify Mini 360 output is 5.0 V (multimeter, no load).
+3. Check OLED FFC pitch matches breakout socket.
+4. Check OLED breakout has I2C pull-ups. Add if missing.
+5. Confirm IRF4905 drain does NOT connect to 12V (that's source).
+6. For SA16CA bidirectional there is no banded end — either leg
+   to 12V, either leg to GND.
+7. Check fan flyback diode orientation: cathode to fan (+), anode
+   to fan (−).
+
+
+============================================================
+POWER BUDGET
+============================================================
+
+Always-on rail (kill switch ON, accState OFF):
+  MP1584EN quiescent      ~100 µA
+  Voltage divider         ~116 µA
+  ESP32 light sleep       ~30 µA
+  ────────────────────────────────
+  Total                   ~250 µA
+
+  On 10.5 Ah AGM battery: ~2.6 % per month.
+
+Switched rail (accState ON):
+  Mini 360 → GPS          45 mA
+  Mini 360 → Fan          150 mA
+  USB charger             up to 2 A (phone)
+  ────────────────────────────────
+  Total                   up to ~2.2 A
+
+
+============================================================
+KNOWN ISSUES / TODO
+============================================================
+
+- ACC indicator LED removed. GPIO 1 now drives IRF4905 only.
+  If a visual ACC indicator is wanted, use a spare GPIO
+  (e.g. GPIO 11) with a 330Ω resistor + green LED.
+- Fan is external to the 40mm face. If inside, box ID must
+  be at least 42mm.
+- GPS cold-start takes 30–60 s. Ride start may log before
+  a fix is acquired.
+- NTC B value in firmware is 4600, physical part is B=3950.
+  Temperature readings are ~1.5 °C off.
+- Firmware bit-bangs GPIO 4 at 2.8 kHz. SFM-27 is
+  self-oscillating; the bit-bang just gates it.

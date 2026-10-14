@@ -766,9 +766,7 @@ void setup() {
   pinMode(BUZZER_PIN, OUTPUT); digitalWrite(BUZZER_PIN, LOW);
   pinMode(STATUS_LED_PIN, OUTPUT); digitalWrite(STATUS_LED_PIN, LOW);
   pinMode(WAKE_BTN_PIN, INPUT_PULLUP);
-  ledcSetup(0, 2000, 8);
-  ledcAttachPin(BUZZER_PIN, 0);
-  ledcWrite(0, 0);
+  // V5.49: LEDC not used; buzzer is bit-banged in Buzzer.cpp
   analogSetAttenuation(ADC_11db);
   delay(50);
   analogRead(VOLTAGE_PIN);

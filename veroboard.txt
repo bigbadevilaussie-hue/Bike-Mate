@@ -1,444 +1,189 @@
-BIKE-MATE V5.63 — VERO BOARD LAYOUT
-====================================
+BIKE-MATE V5.63 — VERO BOARD LAYOUT (A–T FULL MODULE)
+====================================================
 
-40 × 40 × 100 mm enclosure
-Vero board trimmed to fit inside
+Rows A–T (20 strips ≈ 51 mm wide)
+Length: 35 holes (≈ 89 mm)
+Enclosure: open — choose any box that fits ~55 × 95 mm board
 
-(Revised: fuse 1A → 3A, added GPIO 0 filter cap, corrected power budget,
- added strapping-pin / GPS-leak / reverse-polarity notes. See KNOWN ISSUES.)
-
-
-PIN MAP
--------
-
-GPIO 0  — Battery voltage divider → ADC  (100 nF to GND at the pin)
-GPIO 1  — IRF4905 driver (2N2222 base)
-GPIO 2  — GPS RX (from GPS TX) + 10kΩ pull-up to 3V3   (strapping pin, must be HIGH at boot)
-GPIO 3  — NTC + 10kΩ to GND
-GPIO 4  — Buzzer driver (2N2222 base)
-GPIO 5  — Wake button → GND (internal pull-up)
-GPIO 6  — OLED SDA
-GPIO 9  — OLED SCL                       (strapping/BOOT pin, must be HIGH at reset)
-GPIO 10 — Alarm red LED (via 330Ω)
-
-3V3 — OLED VCC, GPS pull-up, NTC top
-5V  — ESP32 power from MP1584EN
-
-
-POWER CHAIN (12V input)
------------------------
-
-SAE ── Kill switch ── Fuse 3A ── Vero 12V rail (always-on)
-                                       │
-      ┌────────────────┬───────────────┼──────────────────┐
-      │                │               │                  │
-   SA16CA            98.8k          MP1584EN         IRF4905 SOURCE
-    TVS                 │            IN+ / IN-            │
-      │                 │               │             IRF4905 DRAIN
-     GND             GPIO 0 ──┬── 100nF  │                │
-                        │     │  to GND  5V → ESP32   Switched 12V rail
-                      9.98k   │          GND               │
-                        │     │                  ┌─────────┴─────────┐
-                       GND   (filter)            │                   │
-                                              Mini 360           USB charger
-                                              12V → 5V           dual USB-A
-                                                 │                   │
-                                          ┌──────┴──────┐          USB-A ×2
-                                          │             │
-                                         5V ──┬── GPS VCC
-                                              └── Fan (+)
-                                         GND
-
-(all grounds → common GND)
-
-
-IRF4905 DRIVER
---------------
-
-12V (source) ── 10kΩ ── IRF4905 GATE
-                              │
-                        2N2222 COLLECTOR
-                              │
-                        EMITTER ── GND
-
-BASE ── 1kΩ  ── GPIO 1
-BASE ── 10kΩ ── GND
-
-
-BUZZER CIRCUIT
---------------
-
-12V ── SFM-27 red (+)
-            │
-       SFM-27 black (−)
-            │
-       2N2222 COLLECTOR
-            │
-       EMITTER ── GND
-
-BASE ── 1kΩ  ── GPIO 4
-BASE ── 10kΩ ── GND
-
-
-LEDs
+GOAL
 ----
+All practical modules live ON the stripboard.
+Only front-panel / external items use short flying leads.
 
-GPIO 10 ── 330Ω ── Red LED (alarm) ── GND
+ON-BOARD MODULES
+  ESP32-C3 SuperMini
+  MP1584EN (always-on 12→5 V)
+  Mini 360 (switched 12→5 V)
+  Dual USB-A charger module
+  NEO-6M GPS
+  IRF4905 + 2× 2N2222
+  Voltage divider, filter, all resistors, C1–C4, TVS
 
-
-FAN
----
-
-Mini 360 5V ──┬── Fan red
-              │
-              ├── 1N4148 cathode
-              │
-              └── Fan black ──┬── 1N4148 anode
-                              │
-                              └── GND
-
-Place the diode at the fan's terminals, not on the
-vero, to keep the flyback path short.
+OFF-BOARD (flying leads)
+  OLED, NTC, wake button, alarm LED, buzzer, fan
 
 
-GPS
----
-
-Mini 360 5V ── GPS VCC
-GND ────────── GPS GND
-GPS TX ─────── GPIO 2   (10kΩ pull-up to 3V3 — see KNOWN ISSUES)
-GPS RX ─────── (not connected)
-
-
-OLED (PANEL ONLY — off-board)
------------------------------
-
-Breakout board inside box, wired to ESP32:
-
-VCC ── 3V3
-GND ── GND
-SDA ── GPIO 6
-SCL ── GPIO 9
-
-Check the breakout for I2C pull-ups (4.7kΩ on SDA/SCL
-to 3V3). Add if missing. GPIO 9 is the BOOT strapping pin:
-the pull-up must hold it HIGH at reset or the chip will enter
-download mode.
+PIN MAP (firmware unchanged)
+----------------------------
+GPIO 0  — Battery voltage divider → ADC  (+ 100 nF)
+GPIO 1  — IRF4905 driver (2N2222 base)
+GPIO 2  — GPS RX (from GPS TX) + 10 kΩ pull-up to 3V3
+GPIO 3  — NTC
+GPIO 4  — Buzzer driver (2N2222 base)
+GPIO 5  — Wake button
+GPIO 6  — OLED SDA
+GPIO 9  — OLED SCL
+GPIO 10 — Alarm LED
 
 
-============================================================
-BILL OF MATERIALS
-============================================================
-
-Vero board:
-
-#   Component             Value/Part          Qty Notes
-──  ───────────────────── ──────────────────  ─── ─────────────────────
-1   ESP32-C3              XCW Super Mini      1   8.5 dBm TX clamp
-2   Buck (always-on)      MP1584EN module     1   Verify 5.0V output
-3   Buck (switched)       Mini 360 module     1   Verify 5.0V output
-4   USB charger           Dual USB-A 12V      1   On switched 12V
-5   P-MOSFET              IRF4905             1   Output switch
-6   NPN transistor        2N2222              2   One for IRF4905, one for buzzer
-7   TVS diode             SA16CA              1   Bidirectional 16V
-8   Resistor              98.8kΩ              1   Divider top
-9   Resistor              9.98kΩ              1   Divider bottom
-10  Resistor              10kΩ                1   NTC series to GND
-11  Resistor              10kΩ                1   GPIO 2 pull-up to 3V3
-12  Resistor              10kΩ                1   IRF4905 gate pull-up to source
-13  Resistor              10kΩ                1   IRF4905 2N2222 base pull-down
-14  Resistor              10kΩ                1   Buzzer 2N2222 base pull-down
-15  Resistor              1kΩ                 1   IRF4905 2N2222 base
-16  Resistor              1kΩ                 1   Buzzer 2N2222 base
-17  Resistor              330Ω                1   Red alarm LED
-18  LED                   Red 5mm             1   Alarm (GPIO 10)
-19  Buzzer                SFM-27 3–24V        1   Self-oscillating
-20  Diode                 1N4148              1   Fan flyback (at fan)
-21  GPS module            NEO-6M breakout     1   With ceramic antenna
-22  Fan                   40mm 5V             1   On switched 5V
-23  Capacitor             100nF ceramic       1   GPIO 0 to GND (ADC filter)
-24  Capacitor             100nF ceramic       1   SuperMini 5V to GND (C2)
-25  Capacitor             10-47uF, 16V+       1   5V rail bulk (C3), + to 5V
-26  Capacitor (optional)  100nF ceramic       1   Switched 12V to GND (C4)
-
-Off-board:
-
-#   Component             Value/Part          Qty Notes
-──  ───────────────────── ──────────────────  ─── ─────────────────────
-27  SAE connector         Standard 2-pin      1   12V input
-28  Kill switch           12V rocker          1   Master on/off
-29  Fuse                  3A slow-blow        1   Inline (was 1A, see issues)
-30  NTC thermistor        MF52AT 10k B=3950   1   2 leads to vero
-31  Push button           Momentary NO        1   Wake button
-32  OLED panel            0.96" SSD1315       1   Front panel
-33  OLED breakout         SSD1315 + FFC       1   Inside box
-
-
-============================================================
-FRONT PANEL (40 × 40)
-============================================================
-
-┌─────────────────────────────────┐
-│                                 │
-│   ┌───────────────────────────┐ │
-│   │        OLED window        │ │
-│   │        22 × 11.5 mm       │ │
-│   └───────────────────────────┘ │
-│                                 │
-│       ○               ◉         │
-│      Red             NTC        │
-│                                 │
-│         ┌─────────┐             │
-│         │  USB-A  │  13 × 6 mm  │
-│         └─────────┘             │
-│                                 │
-└─────────────────────────────────┘
-
-Red LED: 5 mm hole
-NTC:     3 mm hole
-USB-A:   13 × 6 mm cutout
-OLED:    22 × 11.5 mm window
-
-
-============================================================
-RIGHT LONG SIDE (40 × 100)
-============================================================
-
-┌─────────────────────────────────┐
-│                                 │
-│     ○  ← buzzer grille          │
-│                                 │
-│     ○  ← kill switch            │
-│                                 │
-│     ─ ─ ─  ← vents              │
-│     ─ ─ ─                       │
-│                                 │
-│     ○  ← SAE pigtail exit       │
-│                                 │
-└─────────────────────────────────┘
-
-
-============================================================
-BACK FACE (40 × 40)
-============================================================
-
-40mm fan mounted externally.
-4 × M3 screw holes at fan corners (32 mm spacing).
-Airflow: exhaust out the back.
-
-
-============================================================
-BEFORE POWER-UP
-============================================================
-
-1. Verify MP1584EN output is 5.0 V (multimeter, no load).
-2. Verify Mini 360 output is 5.0 V (multimeter, no load).
-3. Check OLED FFC pitch matches breakout socket.
-4. Check OLED breakout has I2C pull-ups. Add if missing.
-5. Confirm IRF4905 drain does NOT connect to 12V (that's source).
-6. For SA16CA bidirectional there is no banded end — either leg
-   to 12V, either leg to GND.
-7. Check fan flyback diode orientation: cathode to fan (+), anode
-   to fan (−).
-8. Check the divider node (GPIO 0) reads about 1.3 V at 14 V in,
-   with the 100 nF cap fitted.
-9. With ACC off and GPS unpowered, measure total sleep current
-   from the battery (see POWER BUDGET and KNOWN ISSUES).
-
-
-============================================================
-POWER BUDGET
-============================================================
-
-Always-on rail (kill switch ON, accState OFF):
-
-  MP1584EN quiescent     ~100 µA   (measure the real module)
-  Voltage divider        ~116 µA   (12.6 V / 108.78 kΩ)
-  ESP32 light sleep       ~30 µA   (measure: SuperMini power LED and
-                                    onboard LDO can add far more)
-  ────────────────────────────────
-  Total                  ~250 µA
-
-  On 10.5 Ah AGM battery: 250 µA × 720 h = 180 mAh ≈ 1.7 % per month.
-  (If your measured total is nearer 380 µA, that is ≈ 2.6 % per month.)
-
-Switched rail (accState ON), current drawn from the 12 V side:
-
-  Mini 360 → GPS 45 mA @ 5V, Fan 150 mA @ 5V   ≈ 0.1 A @ 12V
-  USB charger, 2 A @ 5V out (≈10 W, ~85 % eff.) ≈ 1.0 A @ 12V
-  ────────────────────────────────
-  Total up to                                   ≈ 1.1 A @ 12V
-
-  This is why the inline fuse is 3A, not 1A: a 1A slow-blow
-  fuse would nuisance-blow during a full-rate phone charge.
-  Wire gauge from fuse to vero must be rated for the fuse.
-
-
-============================================================
-KNOWN ISSUES / TODO
-============================================================
-
-- ACC indicator LED removed. GPIO 1 now drives IRF4905 only.
-  If a visual ACC indicator is wanted, use a spare GPIO
-  (e.g. GPIO 11) with a 330Ω resistor + green LED.
-
-- Fan is external to the 40mm face. If inside, box ID must
-  be at least 42mm.
-
-- GPS cold-start takes 30–60 s. Ride start may log before
-  a fix is acquired.
-
-- NTC B value in firmware is 4600, physical part is B=3950.
-  Temperature readings are ~1.5 °C off. Fix: set B to 3950
-  in Config.h and verify against a reference thermometer.
-
-- Firmware bit-bangs GPIO 4 at 2.8 kHz. SFM-27 is
-  self-oscillating; the bit-bang just gates it.
-
-- GPS TX pull-up leak (to verify). The 10kΩ pull-up from 3V3
-  on GPIO 2 may push 0.1–0.3 mA into the GPS TX pin's protection
-  diodes while the GPS is unpowered (ACC off). That is as large as
-  the whole sleep budget. Measure sleep current with ACC off; if
-  high, try a series resistor between GPS TX and GPIO 2, or another
-  way to hold GPIO 2 high at boot. GPIO 2 is a strapping pin and
-  must be HIGH at reset.
-
-- GPIO 9 (OLED SCL) is the BOOT strapping pin. I2C pull-ups must
-  hold it HIGH at reset. If the breakout pulls it LOW, the chip
-  enters download mode.
-
-- No reverse-polarity protection. The bidirectional SA16CA does
-  not block a reversed battery, and the IRF4905 body diode passes
-  it to the switched rail. The polarised SAE plug makes this
-  unlikely; a series Schottky or P-MOSFET on the input would close
-  the gap.
-
-- SuperMini power LED / LDO. Many SuperMini boards have an
-  always-on red power LED and a weak regulator. Check yours; if
-  sleep current is high, desolder the LED.
-
-- ADC source impedance is ~9 kΩ (98.8k || 9.98k). The 100 nF cap
-  on GPIO 0 steadies readings. Re-check voltage calibration after
-  fitting it.
-
-- Heat and water. A 2 A USB charger plus two bucks and a GPS in
-  a 40×40×100 mm box will run warm. Side vents need water
-  protection (baffle, mesh, or a drain path) for motorcycle use.
-
-- Extra capacitors added to the stripboard layout (C2, C3, C4):
-  100 nF ceramic across SuperMini 5V / GND at the header (C2), a
-  10-47 uF bulk capacitor on the same 5V rail (C3), and an optional
-  100 nF on the switched 12V rail near the IRF4905 (C4).
-
-============================================================
-STRIPBOARD LAYOUT (13 strips A-M x 30 holes, about 33 x 76 mm)
-============================================================
-
-Picture: bike_mate_veroboard_layout.png (same folder).
-Untested design: check every cut and connection with a continuity
-tester before powering.
-
-Strips run left to right. Row A = +12V rail, row M = GND rail.
-Holes are referenced as ROW+COLUMN, e.g. D5 = row D, column 5.
-
-ESP32-C3 SuperMini sits on female headers at columns 11 and 17,
-rows D-K, USB-C end toward the GND rail.
-
-  Row   Left header (col 11)   Right header (col 17)
-  ---   --------------------   ---------------------
-  D     GPIO 0                 GPIO 21 (unused)
-  E     GPIO 1                 GPIO 20 (unused)
-  F     GPIO 2                 GPIO 10 (alarm LED)
-  G     GPIO 3                 GPIO 9  (OLED SCL)
-  H     GPIO 4                 GPIO 8  (unused)
-  I     3V3                    GPIO 7  (unused)
-  J     GND                    GPIO 6  (OLED SDA)
-  K     5V                     GPIO 5  (wake button)
-
-Verify pin order against your board's silkscreen. Header rows
-assumed 6 holes apart; if yours are 7, shift everything right of
-the module by one column and move the first cut to the midpoint.
-
-STRIP CUTS (17) - remove the copper at the hole
------------------------------------------------
-Column 14, rows D to K   (8 cuts)  split left/right header groups
-Column 22, rows D to K   (8 cuts)  split pad area from driver zone
-I18                      (1 cut)   isolate unused GPIO 7 pin
-
-PARTS
+RAILS
 -----
-Code  Part              Holes             Notes
-----  ----------------  ----------------  --------------------------
-D1    SA16CA TVS        A2 - M2           lay along column 2
-R1    98.8k             A5 - D5           divider top
-R2    9.98k             D6 - J6           divider bottom
-C1    100nF             D7 - J7           ADC filter on GPIO 0
-R3    10k               F8 - I8           GPS TX pull-up to 3V3
-R4    10k               G10 - J10         NTC series to GND
-R5    330R              F20 - I20         alarm LED resistor
-R6    10k               A26 - C26         gate pull-up, mount upright
-R7    1k                D28 - G28         Q1 base resistor
-R8    10k               D29 - E29         Q1 base pull-down, upright
-R9    1k                H26 - K26         Q2 base resistor
-R10   10k               K29 - M29         Q2 base pull-down, upright
-U1    IRF4905           col 24, A-B-C     A=source B=drain C=gate
-Q1    2N2222            col 27, C-D-E     C=collector D=base E=emitter
-Q2    2N2222            col 27, J-K-L     J=collector K=base L=emitter
-C2    100nF             J9 - K9           5V/GND decoupling (K=5V, J=GND)
-C3    10-47uF           J5 - K5           5V bulk, + to K5, - to J5
-C4    100nF (optional)  B30 - E30         switched 12V to GND; shares E30 with W4
+Row A  = +12 V always-on rail
+Row T  = GND rail
+Row B  = switched 12 V bus (after IRF4905)
 
-Check 2N2222 and IRF4905 pin order; flip 180 degrees if needed.
 
-JUMPER WIRES (insulated)
-------------------------
-W1  J12 - M12   module GND row to GND rail
-W2  E13 - G23   GPIO 1 to IRF4905 driver (route above module pins)
-W3  H13 - H23   GPIO 4 to buzzer driver (route below module pins)
-W4  E30 - M30   Q1 emitter row to GND rail
-W5  L28 - M28   Q2 emitter row to GND rail
+ZONE MAP
+--------
+Cols  1– 8   Power input + MP1584 + divider
+Cols  9–18   ESP32-C3 SuperMini + local decoupling
+Cols 19–27   IRF4905 drivers + switched 12 V
+Cols 28–35   Mini 360 + USB charger + GPS
 
-SOLDER PADS (wires to off-board parts)
---------------------------------------
-A1   12V in (after fuse and kill switch)
-M1   GND in
-A3   MP1584 IN+
-M3   MP1584 IN-
-K3   MP1584 OUT+ (5V)
-J3   MP1584 OUT-
-F9   GPS TX
-G9   NTC lead 1 (GPIO 3)
-I9   NTC lead 2 (3V3)
-I12  OLED VCC (3V3)
-G19  OLED SCL
-J19  OLED SDA
-M20  OLED GND
-K19  Wake button
-M19  Wake button return (GND)
-I21  Red alarm LED anode
-M21  Red alarm LED cathode (GND)
-B25  Switched 12V out (Mini 360 IN+ or USB charger +)
-B29  Switched 12V out (the other one)
-M23  Mini 360 IN-
-M24  USB charger -
-A30  Buzzer + (12V)
-J25  Buzzer - (Q2 collector row)
 
-MP1584, Mini 360, USB charger, GPS, fan, OLED, buzzer, NTC, button
-and LED connect by wire to these pads. Their footprints are not
-on the board.
+============================================================
+PARTS LIST (on-board)
+============================================================
 
+Code  Part                  Value / Module          Holes / Placement                  Notes
+----  --------------------  ----------------------  ---------------------------------  --------------------------
+D1    TVS diode             SA16CA                  A2 – T2                            across 12 V rail
+R1    Resistor              98.8 kΩ                 A5 – D5                            divider top
+R2    Resistor              9.98 kΩ                 D6 – J6                            divider bottom
+C1    Capacitor             100 nF ceramic          D7 – J7                            ADC filter on GPIO 0
+R3    Resistor              10 kΩ                   F8 – I8                            GPS TX pull-up to 3V3
+R4    Resistor              10 kΩ                   G10 – J10                          NTC series to GND
+R5    Resistor              330 Ω                   F20 – I20                          alarm LED (pad still used)
+R6    Resistor              10 kΩ                   A26 – C26                          IRF4905 gate pull-up (upright)
+R7    Resistor              1 kΩ                    D28 – G28                          Q1 base
+R8    Resistor              10 kΩ                   D29 – E29                          Q1 base pull-down (upright)
+R9    Resistor              1 kΩ                    H26 – K26                          Q2 base
+R10   Resistor              10 kΩ                   K29 – M29                          Q2 base pull-down (upright)
+U1    P-MOSFET              IRF4905                 col 24, A–B–C                      A=source B=drain C=gate
+Q1    NPN                   2N2222                  col 27, C–D–E                      IRF driver
+Q2    NPN                   2N2222                  col 27, J–K–L                      buzzer driver
+C2    Capacitor             100 nF ceramic          J9 – K9                            SuperMini 5V/GND decoupling
+C3    Capacitor             10–47 µF 16 V+          J5 – K5                            5 V bulk (+ to K)
+C4    Capacitor (optional)  100 nF ceramic          B30 – E30                          switched 12 V near IRF
+
+M1    Buck module           MP1584EN                cols 3–6, rows C–H                 IN+ A3, IN– T3, OUT+ K3, OUT– J3
+M2    Buck module           Mini 360                cols 29–32, rows C–H               IN+ from B-rail, OUT 5 V to GPS
+M3    USB charger           Dual USB-A              cols 29–33, rows I–N               IN+ from B-rail
+M4    GPS                   NEO-6M                  cols 29–33, rows O–S               VCC from Mini 360 5 V, TX→GPIO2
+
+Headers for SuperMini: female, columns 11 and 17, rows D–K
+  (same pin order as previous layout — USB-C toward GND rail)
+
+
+============================================================
+STRIP CUTS
+============================================================
+
+Column 14, rows D–K     (8 cuts)  isolate left/right SuperMini header groups
+Column 22, rows D–K     (8 cuts)  isolate driver zone from ESP zone
+Column 18, row I only   (1 cut)   isolate unused GPIO 7
+Additional cuts under module footprints as required by the actual module pinouts
+(measure each module and cut any strip that would short its pins)
+
+
+============================================================
+JUMPERS (insulated wire)
+============================================================
+
+W1  J12 – T12     SuperMini GND row to GND rail
+W2  E13 – G23     GPIO 1 to IRF4905 driver
+W3  H13 – H23     GPIO 4 to buzzer driver
+W4  E30 – T30     Q1 emitter to GND
+W5  L28 – T28     Q2 emitter to GND
+W6  B24 – B29     switched 12 V bus from IRF drain to Mini 360 / USB zone
+W7  K3  – K11     5 V from MP1584 to SuperMini 5 V pin
+W8  J3  – J12     GND from MP1584 to SuperMini GND area
+
+
+============================================================
+SOLDER PADS / FLYING LEADS (off-board only)
+============================================================
+
+A1 / T1          12 V in / GND in (after fuse + kill switch)
+I12 / G19 / J19 / T20   OLED VCC / SCL / SDA / GND
+G9 / I9          NTC leads
+K19 / T19        Wake button
+I21 / T21        Alarm LED
+A30 / J25        Buzzer + / –
+(Fan + taken from Mini 360 5 V output pad)
+
+
+============================================================
+POWER CHAIN
+============================================================
+
+SAE ── Kill switch ── 3 A fuse ── A1 (always-on 12 V rail)
+                                       │
+              ┌────────────────────────┼──────────────────────┐
+              │                        │                      │
+           SA16CA                   MP1584EN               IRF4905 SOURCE
+            TVS                        │                      │
+              │                     5 V out                IRF4905 DRAIN
+             GND                   SuperMini                 │
+                                                       switched 12 V (row B)
+                                                              │
+                                              ┌───────────────┴──────────────┐
+                                              │                              │
+                                           Mini 360                     USB charger
+                                              │
+                                         5 V → GPS + Fan pad
+
+
+============================================================
 BUILD ORDER
------------
-1. Trim board to 13 strips x 30 holes.
-2. Make the 17 cuts; check each with continuity.
-3. Fit female headers at columns 11 and 17 (rows D-K).
-4. Fit resistors, C1 and D1 (R6, R8, R10 upright).
-5. Fit U1, Q1, Q2.
-6. Add the five jumpers.
-7. Wire the pads.
-8. Continuity check: no short between rail A and rail M, no
-   unintended links between rows.
-9. Power up without the SuperMini: confirm 5V, 3V3 and GND at its
-   sockets.
-10. Insert the SuperMini, check voltage reading and sleep current.
+============================================================
+
+1. Trim board to 20 strips × 35 holes (A–T).
+2. Make all cuts; continuity-check every one.
+3. Fit female headers for SuperMini (cols 11 & 17, rows D–K).
+4. Fit all discrete resistors, capacitors, TVS, IRF4905, 2N2222s.
+5. Fit the five (or more) jumpers.
+6. Mount MP1584EN, Mini 360, USB charger, GPS modules (use pin headers or direct solder).
+7. Continuity check: no short between A and T, no unintended links.
+8. Power up without SuperMini: confirm 5 V from MP1584 and from Mini 360 (when driven).
+9. Insert SuperMini, measure sleep current (ACC off).
+10. Wire the remaining flying leads (OLED, NTC, button, LED, buzzer, fan).
+
+
+============================================================
+KNOWN ISSUES / NOTES
+============================================================
+
+- Board is ~51 mm wide. Previous 40 mm enclosure will not fit — choose a larger box.
+- GPS antenna should face an open face or the top of the enclosure.
+- C3 electrolytic is the tallest part on the left; check lid clearance.
+- GPIO 2 10 kΩ pull-up leak into unpowered GPS still applies — measure sleep current.
+- GPIO 9 (BOOT) must be held high by OLED I²C pull-ups at reset.
+- No reverse-polarity protection beyond the polarised SAE connector.
+- SuperMini power LED / LDO may dominate sleep current — measure and desolder if needed.
+- Firmware pin map and software are unchanged from the previous 13-strip version.
+
+
+============================================================
+POWER BUDGET (unchanged)
+============================================================
+
+Always-on (ACC off):
+  MP1584EN          ~0–100 µA
+  Divider           ~116 µA
+  ESP32 light sleep ~30–300 µA (board dependent)
+  Total             measure on the real board
+
+Switched rail (ACC on):
+  Mini 360 + GPS + Fan + USB charger  up to ~1.1 A @ 12 V
+  3 A fuse is correct.

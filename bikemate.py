@@ -1,9 +1,9 @@
 """Bike-Mate GUI launcher."""
-import tkinter as tk
+import customtkinter as ctk
 from bikemate.app import App
 
 
 if __name__ == "__main__":
-    root = tk.Tk()
+    root = ctk.CTk()
     App(root)
     root.mainloop()

@@ -4,6 +4,7 @@
 import tkinter as tk
 import tkinter.ttk
 from tkinter import messagebox
+import customtkinter as ctk
 import threading, time, os, sys, json, asyncio, shutil, requests, webbrowser
 from datetime import datetime
 from .config import *
@@ -25,69 +26,128 @@ class App:
         root.title("Bike-Mate")
         root.configure(bg=self.theme["bg"])
         root.resizable(False, False)
+        ctk.set_appearance_mode("dark" if not self.is_day else "light")
+        ctk.set_default_color_theme("blue")
         start_ota_server()
         start_drive_server()
         self.worker = BLEWorker()
-        mb = tk.Menu(root)
-        am = tk.Menu(mb, tearoff=0)
-        drive_menu = tk.Menu(am, tearoff=0)
-        drive_menu.add_command(label="☁️  Open Cloud Drive",
-                               command=self.open_drive)
-        drive_menu.add_command(label="💾  Open Local Drive",
-                               command=self.open_local_drive)
-        drive_menu.add_separator()
-        drive_menu.add_command(label="⬇️  Sync from Drive",
-                               command=self.menu_sync)
-        am.add_cascade(label="☁️ Drive", menu=drive_menu)
-        am.add_separator()
-        # V4.26: maint actions consolidated under one submenu.
-        maint_menu = tk.Menu(am, tearoff=0)
-        maint_menu.add_command(label="🔧  Activate",
-                               command=self.activate_maintenance)
-        maint_menu.add_command(label="🛑  Deactivate",
-                               command=self.deactivate_maintenance)
-        maint_menu.add_command(label="🔄  Sync Bike-Mate",
-                               command=self.force_upload)
-        maint_menu.add_separator()
-        maint_menu.add_command(label="📤  Update Firmware",
-                               command=self.menu_ota)
-        maint_menu.add_command(label="⚙️  Settings",
-                               command=self.open_settings)
-        maint_menu.add_separator()
-        maint_menu.add_command(label="📟  Open Serial Page",
-                               command=self._open_serial_page)
-        am.add_cascade(label="🔧 Maintenance", menu=maint_menu)
-        self.maint_menu = maint_menu
-        am.add_separator()
-        reports_menu = tk.Menu(am, tearoff=0)
-        reports_menu.add_command(label="Last 2 Hours", command=lambda: self.open_report("2h"))
-        reports_menu.add_command(label="Daily",        command=lambda: self.open_report("day"))
-        reports_menu.add_command(label="Weekly",       command=lambda: self.open_report("week"))
-        am.add_cascade(label="📊 Reports", menu=reports_menu)
-        am.add_separator()
-        am.add_command(label="🛠️  Dyna Tune", command=self.open_dynatune)
-        am.add_separator()
-        am.add_command(label="🌗 Toggle Day/Night", command=self.toggle_theme)
-        am.add_separator()
-        # V4.44: secret test button. Fires a BLE-triggered upload on the
-        # next bike connection. Do not press.
-        am.add_command(label="do not press", command=self.do_not_press)
-        am.add_separator()
-        am.add_command(label="Quit", command=self.on_quit)
-        mb.add_cascade(label="🏍️ Bike-Mate", menu=am)
-        root.config(menu=mb)
-        tk.Label(root, text="🏍️ Bike-Mate", bg=BG, fg=BLUE,
-                 font=("Helvetica", 26, "bold")).pack(pady=(20, 4))
-        self.weather_label = tk.Label(root, text="Atkinsons Dam · --.-° ⏳",
-                                      bg=BG, fg=FG,
-                                      font=("Helvetica", 20, "bold"))
-        self.weather_label.pack(pady=(0, 12))
-        bc = tk.Frame(root, bg=CARD); bc.pack(fill="x", padx=20, pady=6)
+        # V5.47: menus are inline in the sidebar, no tk.Menu trees.
+        # _update_maint_menu() has no widget to touch anymore; it
+        # becomes a no-op, kept for callers.
+
+        # V5.47: slide sidebar. Adapted from slide_menu.py.
+        self._sidebar_w = 190
+        self._sidebar_x = -self._sidebar_w
+        self._sidebar_job = None
+        self._sidebar_open = False
+
+        # body fills the whole window, underneath the sidebar
+        body = ctk.CTkFrame(root, fg_color="transparent")
+        body.pack(fill="both", expand=True)
+        self._body = body
+
+        # burger button at the top-left of the body
+        hdr = ctk.CTkFrame(body, fg_color="transparent")
+        hdr.pack(fill="x", padx=10, pady=(10, 0))
+        burger = ctk.CTkButton(hdr, text="☰", width=44, height=36,
+                               fg_color=("#ffffff", "#232334"),
+                               text_color=("#1e1e2e", "#cdd6f4"),
+                               hover_color=("#d8dde8", "#313145"),
+                               font=ctk.CTkFont(size=18),
+                               command=self._sidebar_toggle)
+        burger.pack(side="left")
+
+        # sidebar placed off-screen to the left
+        sidebar = ctk.CTkFrame(root, width=self._sidebar_w,
+                               corner_radius=0,
+                               fg_color=("#d9dbe0", "#232334"))
+        sidebar.place(x=self._sidebar_x, y=0, relheight=1)
+        sidebar.pack_propagate(False)
+        self._sidebar = sidebar
+
+        SB_BG = ("#d9dbe0", "#232334")
+        SB_FG = ("#1e1e2e", "#cdd6f4")
+        SB_HOVER = ("#c8cbd3", "#313145")
+        SB_SUB_FG = ("#5a5f70", "#9399b2")
+
+        def _sb_action(parent, text, command, fg=None, hover=None, indent=10):
+            return ctk.CTkButton(parent, text=text,
+                                 command=command,
+                                 anchor="w", height=40,
+                                 corner_radius=8,
+                                 fg_color=SB_BG,
+                                 hover_color=hover or SB_HOVER,
+                                 text_color=fg or SB_FG,
+                                 font=ctk.CTkFont(size=14),
+                                 cursor="hand2")
+
+        def _sb_group(parent, text, items):
+            sub = ctk.CTkFrame(parent, fg_color="transparent")
+            btn = _sb_action(parent, text + "   ▸", None)
+            state = {"open": False}
+
+            def toggle():
+                if state["open"]:
+                    sub.pack_forget()
+                    btn.configure(text=text + "   ▸")
+                    state["open"] = False
+                else:
+                    sub.pack(after=btn, fill="x")
+                    btn.configure(text=text + "   ▾")
+                    state["open"] = True
+
+            btn.configure(command=toggle)
+            for label, cmd in items:
+                ctk.CTkButton(
+                    sub, text=label, command=cmd, anchor="w", height=32,
+                    fg_color=SB_BG, text_color=SB_SUB_FG,
+                    hover_color=SB_HOVER, corner_radius=8,
+                    font=ctk.CTkFont(size=13), cursor="hand2",
+                ).pack(fill="x", padx=(28, 10), pady=1)
+            return btn
+
+        ctk.CTkLabel(sidebar, text="🏍️  Bike-Mate",
+                     font=ctk.CTkFont(size=16, weight="bold"),
+                     text_color=("#1e66f5", "#89b4fa"),
+                     anchor="w").pack(fill="x", padx=14, pady=(18, 16))
+
+        _sb_group(sidebar, "🔧  Maintenance", [
+            ("Activate",        self.activate_maintenance),
+            ("Deactivate",      self.deactivate_maintenance),
+            ("Sync Bike-Mate",  self.force_upload),
+            ("Update Firmware", self.menu_ota),
+            ("Settings",        self.open_settings),
+            ("Open Serial Page", self._open_serial_page),
+        ]).pack(fill="x", padx=10, pady=2)
+
+        _sb_group(sidebar, "📊  Reports", [
+            ("Last 2 Hours", lambda: self.open_report("2h")),
+            ("Daily",        lambda: self.open_report("day")),
+            ("Weekly",       lambda: self.open_report("week")),
+        ]).pack(fill="x", padx=10, pady=2)
+
+        _sb_action(sidebar, "🛠️  Dyna Tune", self.open_dynatune).pack(fill="x", padx=10, pady=2)
+        _sb_action(sidebar, "🌗  Theme",     self.toggle_theme).pack(fill="x", padx=10, pady=2)
+
+        ctk.CTkFrame(sidebar, height=1, fg_color=("#c8cbd3", "#313145")).pack(fill="x", padx=16, pady=18)
+
+        _sb_action(sidebar, "✕  Quit",       self.on_quit,
+                   fg=("#d20f39", "#e64553"),
+                   hover=("#f0d0d4", "#3a1a20")).pack(fill="x", padx=10, pady=2)
+
+        # click anywhere outside the sidebar closes it; Escape too
+        root.bind("<Button-1>", self._sidebar_outside_click, add="+")
+        root.bind("<Escape>",   lambda e: self._sidebar_close())
+
+        self.weather_label = ctk.CTkLabel(body, text="Atkinsons Dam · --.-° ⏳",
+                                          font=ctk.CTkFont(size=18, weight="bold"))
+        self.weather_label.pack(pady=(16, 10))
+        bc = tk.Frame(body, bg=CARD); bc.pack(fill="x", padx=20, pady=6)
         br = tk.Frame(bc, bg=CARD); br.pack(fill="x", pady=10)
         self.acc_lbl = self._col(br, "ACC", "--")
         self.eng_lbl = self._col(br, "Engine", "--")
         self.warn_lbl = self._col(br, "Warn", "--")
-        sf = tk.Frame(root, bg=CARD); sf.pack(fill="x", padx=20, pady=6)
+        sf = tk.Frame(body, bg=CARD); sf.pack(fill="x", padx=20, pady=6)
         self.state_lbl = tk.Label(sf, text="💤 MONITOR", bg=CARD, fg=BLUE,
                                   font=("Helvetica", 26, "bold"))
         self.state_lbl.pack(pady=(14, 0))
@@ -99,19 +159,19 @@ class App:
                                   font=("Helvetica", 13, "bold"),
                                   padx=12, pady=4)
         self.maint_lbl.pack(pady=(0, 8))
-        vc = tk.Frame(root, bg=CARD); vc.pack(fill="x", padx=20, pady=6)
+        vc = tk.Frame(body, bg=CARD); vc.pack(fill="x", padx=20, pady=6)
         self.volt_lbl = tk.Label(vc, text="--.-- V", bg=CARD, fg=GREEN,
                                  font=("Helvetica", 46, "bold"))
         self.volt_lbl.pack(pady=14)
-        rc = tk.Frame(root, bg=CARD); rc.pack(fill="x", padx=20, pady=6)
+        rc = tk.Frame(body, bg=CARD); rc.pack(fill="x", padx=20, pady=6)
         ri = tk.Frame(rc, bg=CARD); ri.pack(fill="x", pady=6)
         self.temp_lbl = self._col(ri, "🏍️ Temp", "--.-C")
         self.stor_lbl = self._col(ri, "💾 Stor", "--%")
         self.time_lbl = self._col(ri, "Time", "--:--")
-        vgc = tk.Frame(root, bg=CARD); vgc.pack(fill="x", padx=20, pady=6)
+        vgc = tk.Frame(body, bg=CARD); vgc.pack(fill="x", padx=20, pady=6)
         self.volt_graph = Graph(vgc, self, color_key="green", y_min=11.5, y_max=15.0)
         self.volt_graph.pack(padx=8, pady=8)
-        tgc = tk.Frame(root, bg=CARD); tgc.pack(fill="x", padx=20, pady=6)
+        tgc = tk.Frame(body, bg=CARD); tgc.pack(fill="x", padx=20, pady=6)
         self.temp_graph = Graph(tgc, self, color_key="orange", y_min=15.0, y_max=40.0)
         self.temp_graph.pack(padx=8, pady=8)
         self.footer_lbl = tk.Label(root, text=f"GUI v{GUI_VERSION}",
@@ -125,6 +185,53 @@ class App:
         self.theme_check()
         self._check_maint_on_startup()
         self.tick()
+
+    # ---- V5.47: slide sidebar animation ----
+    _SIDEBAR_STEP_MS = 12
+    _SIDEBAR_EASE = 0.28
+
+    def _sidebar_outside_click(self, event):
+        # Any click that lands outside the sidebar closes it.
+        if not self._sidebar_open:
+            return
+        sx = self._sidebar.winfo_rootx()
+        sw = self._sidebar.winfo_width()
+        if event.x_root < sx or event.x_root > sx + sw:
+            self._sidebar_close()
+
+    def _sidebar_toggle(self):
+        if self._sidebar_open:
+            self._sidebar_close()
+        else:
+            self._sidebar_open_now()
+
+    def _sidebar_open_now(self):
+        self._sidebar_open = True
+        self._sidebar.lift()
+        self._sidebar_animate(0)
+
+    def _sidebar_close(self):
+        if self._sidebar_open:
+            self._sidebar_open = False
+            self._sidebar_animate(-self._sidebar_w)
+
+    def _sidebar_animate(self, target):
+        if self._sidebar_job:
+            self.root.after_cancel(self._sidebar_job)
+            self._sidebar_job = None
+        self._sidebar_step(target)
+
+    def _sidebar_step(self, target):
+        dist = target - self._sidebar_x
+        if abs(dist) < 1:
+            self._sidebar_x = target
+            self._sidebar.place(x=int(self._sidebar_x), y=0, relheight=1)
+            self._sidebar_job = None
+            return
+        self._sidebar_x += dist * self._SIDEBAR_EASE
+        self._sidebar.place(x=int(self._sidebar_x), y=0, relheight=1)
+        self._sidebar_job = self.root.after(
+            self._SIDEBAR_STEP_MS, lambda: self._sidebar_step(target))
 
     def _col(self, parent, label, value):
         c = tk.Frame(parent, bg=CARD); c.pack(side="left", expand=True, fill="x")
@@ -446,30 +553,8 @@ class App:
         print("=" * 50)
 
     def _update_maint_menu(self):
-        # V4.28: enable/disable maint submenu items based on state.
-        # Indices in the maint submenu:
-        #   0 = Activate
-        #   1 = Deactivate
-        #   2 = separator
-        #   3 = Update Firmware
-        #   4 = Settings
-        #   5 = separator
-        #   6 = Open Serial Page
-        if not hasattr(self, "maint_menu"):
-            return
-        with state.maintenance_lock:
-            m = state.maintenance_state
-        on = (m == "ON")
-        off = (m == "OFF")
-        self.maint_menu.entryconfig(0, state=("normal" if off else "disabled"))
-        self.maint_menu.entryconfig(1, state=("normal" if on  else "disabled"))
-        st = "normal" if on else "disabled"
-        # V4.36: Sync Bike-Mate (2) added. Indices shifted below it.
-        for idx in (2, 4, 5, 7):
-            try:
-                self.maint_menu.entryconfig(idx, state=st)
-            except Exception:
-                pass
+        # V5.47: maint items are inline sidebar buttons, no menu tree.
+        return
 
     def activate_maintenance(self):
         with state.maintenance_lock:
@@ -1129,7 +1214,7 @@ class App:
                             fg=GREEN if d.get("e") else MUTED)
         self.warn_lbl.config(text="YES" if d.get("w") else "NO",
                              fg=RED if d.get("w") else MUTED)
-        self.weather_label.config(
+        self.weather_label.configure(
             text=f"Atkinsons Dam · {state.weather['temp']:.1f}° {state.weather['emoji']}")
         fw = state.latest_data.get("fv", "?")
         self.footer_lbl.config(text=f"GUI v{GUI_VERSION}  ·  FW v{fw}")

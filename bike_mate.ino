@@ -782,9 +782,11 @@ void loop() {
 
   gpsModuleTick();
 
-  // V4.45 debug - print GPS state every 5s
+  // V5.40: GPS debug print gated on accState. The MOSFET powers
+  // the module only after the 30 s settle, so anything before that
+  // is cached zeroes from a dead UART. Hides the parked-mode spam.
   static unsigned long lastGpsPrint = 0;
-  if (millis() - lastGpsPrint > 5000) {
+  if (accState && millis() - lastGpsPrint > 5000) {
     lastGpsPrint = millis();
     tprint_verbose("[GPS] fix=%d sats=%d spd=%.1f lat=%ld lon=%ld utc=%s hdg=%.1f alt=%.1f",
            gpsHasFix() ? 1 : 0, gpsSats(), gpsSpeed_kmh(),

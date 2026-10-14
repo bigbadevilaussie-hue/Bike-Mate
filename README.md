@@ -5,20 +5,23 @@ this. Keep it accurate so the next session starts clean.
 
 Motorcycle battery, temperature and ride logger. ESP32-C3 + BLE + OLED.
 
-**Prime directive: Bike-Mate must not drain the bike battery past the point
-where it will not crank the engine.** On the Sprint ST 1050 with a VTX12-BS
-AGM, the practical cranking floor is ~12.2 V rested.
+**Prime directive: Bike-Mate must not drain the bike battery past the
+point where it will not crank the engine.** On the Sprint ST 1050 with
+a VTX12-BS AGM, the practical cranking floor is ~12.2 V rested.
 
 ---
 
 ## Current state
 
-- **Firmware:** `Config.h` → `BIKE_MATE_VERSION`
-- **GUI:** `bikemate/config.py` → `GUI_VERSION`
-- **OSA:** `osa_server.py` → `__version__` (separate repo, runs 24/7 on the Mac)
+- **Firmware source:** `Config.h` -> `BIKE_MATE_VERSION` = **5.57**
+- **Firmware on bike:** **V5.56** (last flashed; V5.57 compiled, not
+  yet OTA'd)
+- **GUI:** `bikemate/config.py` -> `GUI_VERSION` = **4.48**
+- **OSA:** `osa_server.py` -> `__version__` = **1.16** (separate repo,
+  runs 24/7 on the Mac)
 - **Repo:** https://github.com/bigbadevilaussie-hue/Bike-Mate
 - **OSA repo:** https://github.com/bigbadevilaussie-hue/OSA-Server
-- **Logs repo:** https://github.com/bigbadevilaussie-hue/Bike-Mate-Uploads (off-site log backup)
+- **Logs repo:** https://github.com/bigbadevilaussie-hue/Bike-Mate-Uploads
 - **Local:** `~/Documents/Arduino/bike_mate/`
 - **Bike:** Triumph Sprint ST 1050 (breadboard build)
 
@@ -27,33 +30,44 @@ AGM, the practical cranking floor is ~12.2 V rested.
 ## Hardware
 
 - ESP32-C3 SuperMini + 0.96" SSD1306 OLED (I2C, 0x3C)
-- MP1584EN 12→5 V buck, 12 V bench PSU
+- MP1584EN 12->5 V buck, 12 V bench PSU
 - Divider 98.8k/9.98k on GPIO 0, MF52AT NTC 10k on GPIO 3
 - NEO-6M GPS (RX/TX GPIO 2/21)
+- Push button on GPIO 5 (wake / Rider for Rider)
+- Piezo buzzer on GPIO 4 (bit-bang 2.8 kHz, no LEDC)
 
-**Pin map:** 0=voltage, 1=ACC LED, 3=thermistor, 4=buzzer, 6=SDA, 9=SCL,
-10=status LED.
+**Pin map:** 0=voltage, 1=ACC LED, 3=thermistor, 4=buzzer, 5=wake
+button, 6=SDA, 9=SCL, 10=status LED.
 
-GPIO 9 is a boot-strapping pin — no strong pull-downs or caps.
+GPIO 9 is a boot-strapping pin - no strong pull-downs or caps.
 
 ---
 
 ## What it does
 
-- Timer wake (30 s bench, 300/600 s field) → read V/T → state machine → log row.
+- Timer wake (30 s bench, uniform 5 min field) -> read V/T -> state
+  machine -> log row.
 - Engine start >13.8 V, stop <13.0 V. Ride CSV while engine is running.
-- BLE telemetry (26a8) consumed by OSA, not the GUI. The GUI polls
+- BLE telemetry (26a8) consumed by **OSA, not the GUI**. The GUI polls
   OSA's `/bike/status` over HTTP.
-- **Auto upload path (BLE → OSA).** On the 04:00 schedule, or on a manual
-  `{"cmd":"upload"}` written to 26ae, the bike seals + gzips its wake and
-  ride files, then ships each over **26b1** in 180-byte chunks. OSA
-  reassembles and writes to `~/bike-mate-drive/` on the Mac, then pushes
-  to `Bike-Mate-Uploads` in the background.
-- **Manual upload path (WiFi → GitHub).** `POST /seal` + `POST /upload`
-  during maint. Same GitHub Contents API destination, over WiFi.
+- **Auto upload path (BLE -> OSA).** On the 04:00 schedule, or on a
+  manual `{"cmd":"upload"}` written to 26ae, the bike seals + gzips
+  its wake and ride files, then ships each over **26b1** in 180-byte
+  chunks. OSA reassembles and writes to `~/bike-mate-drive/` on the
+  Mac. GitHub push by OSA: **# TODO: verify**.
+- **Manual upload path (WiFi -> GitHub).** `POST /seal` + `POST
+  /upload` during maint. Same GitHub Contents API destination, over
+  WiFi.
 - Every file gzipped; raw deleted after gzip. Newest ride held back
   (Rule 7) for the GUI's pull path.
 - Gmail SMTP alerts on low battery / PANIC.
+- **Reader for Rider:** button press wakes the bike for 120 s,
+  OLED shows RIDER / READY countdown. Field mode only.
+- **Stall detection:** short ride (< 60 s engine run) flagged
+  `FLAG_STALL` in the ride summary, logged in wake file.
+- **Cool Down Mode:** after a real ride and arming, 120 s awake with
+  1 Hz wake-log rows (`state=5`). BLE off, OLED off, LEDs off,
+  buzzer silent. Engine restart ignored.
 - Deep sleeps between wakes. Prime directive: never drain the battery.
 - Maint mode brings WiFi up on demand for serial + OTA.
 
@@ -63,18 +77,19 @@ GPIO 9 is a boot-strapping pin — no strong pull-downs or caps.
 
 - Arduino IDE 2.x, ESP32 core **2.0.17** (3.x unsupported)
 - Partition: **Minimal SPIFFS**
-- Build: `arduino-cli compile --fqbn "esp32:esp32:esp32c3:PartitionScheme=min_spiffs" .`
+- Build: `arduino-cli compile --fqbn "esp32:esp32:esp32c3:PartitionScheme=min_spiffs,CDCOnBoot=cdc" .`
 - Serial: 115200
-- `BENCH_MODE` in `Config.h`: 1 = 30 s wakes (bench), 0 = 300/600 s (field)
+- `benchMode` in NVS: 1 = 30 s wakes (bench), 0 = 5 min (field)
 
 ### Firmware modules
+
 | File | Purpose |
 |---|---|
-| `bike_mate.ino` | Coordinator: setup, loop, state machine, sleep, maint consume |
+| `bike_mate.ino` | Coordinator: setup, loop, state machine, sleep, maint consume, Cool Down Mode |
 | `Config.h` | Pins, UUIDs, thresholds, structs, feature flags |
 | `Config.local.h` | Gitignored. WiFi/Gmail credentials |
 | `Sensors.cpp` | ADC reads for voltage and thermistor |
-| `Buzzer.cpp` | Alarm + low-batt beep sequences |
+| `Buzzer.cpp` | Bit-bang 2.8 kHz chirp pairs (no LEDC) |
 | `RideLogger.cpp` | Ride lifecycle, summary to NVS |
 | `RideStorage.cpp` | LittleFS ride CSV writer |
 | `WakeLogger.cpp` | LittleFS wake CSV writer (date-keyed) |
@@ -86,10 +101,11 @@ GPIO 9 is a boot-strapping pin — no strong pull-downs or caps.
 | `OtaManager.cpp` | Legacy BLE-URL OTA path. Retired for OTA, but `OtaCallbacks` in BleManager still parses the OTA JSON envelope |
 | `Settings.cpp` | Runtime settings in NVS `bikeset` |
 | `GpsModule.cpp` | NMEA parser for NEO-6M, no external library |
-| `SerialBuffer.cpp` | Ring buffer feeding /serial-raw |
+| `SerialBuffer.cpp` | Ring buffer feeding `/serial-raw` |
 | `WebServer.cpp` | HTTP server for maintenance mode |
 
 ### HTTP endpoints (live during maint only)
+
 | Route | Method | Purpose |
 |---|---|---|
 | `/serial` | GET | HTML serial page (live tail) |
@@ -108,20 +124,21 @@ GPIO 9 is a boot-strapping pin — no strong pull-downs or caps.
 
 ## Maintenance mode
 
-Bike must be woken into maint for interactive work: WiFi up, HTTP server,
-BLE off, bounded window.
+Bike must be woken into maint for interactive work: WiFi up, HTTP
+server, BLE off, bounded window.
 
-- **Enter:** GUI → Maintenance → Activate. BLE writes `{"maint":"on"}`.
+- **Enter:** GUI -> Maintenance -> Activate. OSA queues
+  `{"maint":"on"}` and writes it on the next bike connect.
 - **Exit:** `/maint/off`, engine start, or `MAINT_MAX_MS` (5 min).
-- **Clock:** Opal LAN Date header (`http://<gateway>/`), NTP fallback.
-  Overridable via `POST /clock`. Never hard-gate on NTP.
+- **Clock:** Opal LAN Date header (`http://<gateway>/`), NTP
+  fallback. Overridable via `POST /clock`. Never hard-gate on NTP.
 - **WiFi:** static IP `192.168.8.196`, gateway `192.168.8.1`.
-- **TX:** 8.5 dBm (`esp_wifi_set_max_tx_power(34)`) — mandatory.
+- **TX:** 8.5 dBm (`esp_wifi_set_max_tx_power(34)`) - mandatory.
 - **Coex:** C3 core 2.0.17 fails WiFi after BLE sometimes.
-  `wifiBringUp()` retries 2× with a 3 s settle.
+  `wifiBringUp()` retries 2x with a 3 s settle. `wifiPingTest()`
+  retries up to 4x with 3 s gaps (V5.55).
 
-OTA is HTTP only. GUI POSTs `.bin` to `/ota?ver=X.YZ`. Old BLE-URL path
-retired.
+OTA is HTTP only. GUI POSTs `.bin` to `/ota?ver=X.YZ`.
 
 ---
 
@@ -131,11 +148,14 @@ Python/Tk package `bikemate/`: `config`, `state`, `helpers`, `weather`,
 `widgets`, `ota`, `drive`, `ble`, `reports`, `app`. Launcher is
 `bikemate.py`. Edit modules, not the launcher.
 
-Requires: `bleak`, `requests`, Python 3.8+, Tk.
+Requires: `bleak`, `requests`, Python 3.8+, Tk, customtkinter.
 
-Features: BLE telemetry + ride pull, maint control, serial page, HTTP OTA
-with progress, settings, storage badge, Drive sync, local servers 8000
-(OTA) + 8001 (Drive).
+Features: HTTP poll of OSA `/bike/status` (no BLE client), maint
+control via OSA queue, serial page, HTTP OTA with progress, settings,
+storage badge, Drive sync, local servers 8000 (OTA) + 8001 (Drive).
+
+GUI 4.46 committed as `cfb8a65`. 4.47/4.48 on disk, **# TODO: verify**
+whether committed.
 
 ---
 
@@ -158,7 +178,7 @@ Non-negotiable. Read first.
 - Never say "working tree clean" unless asked for status.
 - Never ask to re-check output already pasted.
 
-### Shell — zsh
+### Shell - zsh
 
 - Multi-line pastes break. `#` triggers history expansion.
 - **Write patches as Python scripts to `/tmp/` and run with `python3
@@ -166,7 +186,7 @@ Non-negotiable. Read first.
 - Every patch script must exit non-zero on anchor miss. Silent no-ops are
   worse than crashes.
 - Bike-Mate compile requires `:PartitionScheme=min_spiffs`.
-- zsh bracketed-paste mangles multi-line pastes even inside heredocs — lines
+- zsh bracketed-paste mangles multi-line pastes even inside heredocs - lines
   at the boundary get eaten silently. Fix once:
   `echo 'unset zle_bracketed_paste' >> ~/.zshrc` then `exec zsh`. Or run
   `bash` for the session.
@@ -200,7 +220,7 @@ Non-negotiable. Read first.
   regressed, `git log --oneline -- <file>` and `git log -L` show when.
 - **If a subsystem has a comment like "proven 72/72" or "two days and four
   AIs", do not touch it on a theory.** Ask why it's that shape first.
-- **Intermittent ≠ broken.** The fix is usually a retry, not a rewrite.
+- **Intermittent != broken.** The fix is usually a retry, not a rewrite.
 
 ### Communication
 

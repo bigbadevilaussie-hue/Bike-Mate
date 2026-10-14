@@ -6,3 +6,11 @@ bikemate.py.new
 bikemate.py.bak
 Config.local.h
 build/
+
+# V5.55: patch-script backups
+*.bak
+*.bak[0-9]*
+*_bak
+*.gui_bak
+*.rider_bak
+*.rider_fix_bak

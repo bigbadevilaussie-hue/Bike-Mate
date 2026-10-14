@@ -114,7 +114,7 @@ bool wifiPingTest() {
   // V5.53: retry the LAN probe. The first TCP connect after a flaky
   // association often fails because the ARP cache is cold. Retrying
   // warms it. Three attempts, 400 ms apart.
-  for (int attempt = 1; attempt <= 3; attempt++) {
+  for (int attempt = 1; attempt <= 4; attempt++) {
     WiFiClient test;
     bool ok = test.connect(gw, 80, 2000);   // V5.54: ms connect timeout
     test.stop();
@@ -124,7 +124,7 @@ bool wifiPingTest() {
       }
       return true;
     }
-    if (attempt < 3) delay(400);
+    if (attempt < 4) delay(3000);   // V5.55: longer settle after post-reset association
   }
   return false;
 }
@@ -174,11 +174,17 @@ static bool opalClockSync() {
   const char* hdrs[] = { "Date" };
   http.collectHeaders(hdrs, 1);
 
+  // V5.55: ping before the first GET. The post-OTA window is flaky;
+  // the gateway becomes reachable a second before the first HTTP GET
+  // would have timed out.
+  wifiPingTest();
+
   int code = http.GET();
   if (code <= 0) {
-    tprint("[CLOCK] Opal GET code=%d, retry in 2s", code);
+    tprint("[CLOCK] Opal GET code=%d, retry in 4s", code);
     http.end();
-    delay(2000);
+    delay(4000);
+    wifiPingTest();   // V5.55: warm the ARP before the retry
     if (!http.begin(url)) {
       tprint("[CLOCK] retry begin failed");
       return false;

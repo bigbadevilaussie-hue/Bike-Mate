@@ -158,6 +158,17 @@ uint32_t currentEpoch() {
 // V5.18: persist the clock to NVS so a cold boot doesn't lose
 // the epoch. Without this, a ride started after a cold boot has
 // currentEpoch()==0, startRideLog() bails, and the ride is lost.
+// V5.55: catch totalSeconds up to real time. loop() used to add 1 per
+// pass, so blocking sections (maint, wifi bring-up, sleep prep) lost
+// their whole duration.
+static void tickSeconds() {
+  unsigned long n = millis();
+  while (n - lastSecondMark >= 1000UL) {
+    lastSecondMark += 1000UL;
+    totalSeconds++;
+  }
+}
+
 void clockSave() {
   uint32_t e = currentEpoch();
   if (e == 0) return;
@@ -303,6 +314,7 @@ static void goToSleep() {
     return;
   }
 
+  tickSeconds();   // V5.55: count the sleep-prep delays
   clockSave();
 
   const char* mode = currentWakeMode();
@@ -844,10 +856,7 @@ void loop() {
   }
 
   unsigned long now = millis();
-  if (now - lastSecondMark >= 1000) {
-    lastSecondMark = now;
-    totalSeconds++;
-  }
+  tickSeconds();   // V5.55
 
   gpsModuleTick();
 
@@ -986,6 +995,7 @@ void loop() {
       extern volatile bool uploadNowRequested;
       static unsigned long lastMaintHb = 0;
       while (serverIsRunning()) {
+        tickSeconds();   // V5.55: keep the clock running in maint
         unsigned long _t0 = millis();
         serverLoop();
         unsigned long _dt = millis() - _t0;

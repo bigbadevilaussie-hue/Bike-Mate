@@ -157,18 +157,21 @@ Vero board:
 21  GPS module            NEO-6M breakout     1   With ceramic antenna
 22  Fan                   40mm 5V             1   On switched 5V
 23  Capacitor             100nF ceramic       1   GPIO 0 to GND (ADC filter)
+24  Capacitor             100nF ceramic       1   SuperMini 5V to GND (C2)
+25  Capacitor             10-47uF, 16V+       1   5V rail bulk (C3), + to 5V
+26  Capacitor (optional)  100nF ceramic       1   Switched 12V to GND (C4)
 
 Off-board:
 
 #   Component             Value/Part          Qty Notes
 ──  ───────────────────── ──────────────────  ─── ─────────────────────
-24  SAE connector         Standard 2-pin      1   12V input
-25  Kill switch           12V rocker          1   Master on/off
-26  Fuse                  3A slow-blow        1   Inline (was 1A, see issues)
-27  NTC thermistor        MF52AT 10k B=3950   1   2 leads to vero
-28  Push button           Momentary NO        1   Wake button
-29  OLED panel            0.96" SSD1315       1   Front panel
-30  OLED breakout         SSD1315 + FFC       1   Inside box
+27  SAE connector         Standard 2-pin      1   12V input
+28  Kill switch           12V rocker          1   Master on/off
+29  Fuse                  3A slow-blow        1   Inline (was 1A, see issues)
+30  NTC thermistor        MF52AT 10k B=3950   1   2 leads to vero
+31  Push button           Momentary NO        1   Wake button
+32  OLED panel            0.96" SSD1315       1   Front panel
+33  OLED breakout         SSD1315 + FFC       1   Inside box
 
 
 ============================================================
@@ -318,16 +321,14 @@ KNOWN ISSUES / TODO
   on GPIO 0 steadies readings. Re-check voltage calibration after
   fitting it.
 
-- Heat and water.
-
-- Recommended extra capacitors (not on the original layout):
-  - 100 nF ceramic across SuperMini 5V / GND at the header
-  - 10–47 µF bulk on the same 5V rail near the SuperMini
-  - Optional 100 nF on the switched 12V rail near the IRF4905
- A 2 A USB charger plus two bucks and a GPS in
+- Heat and water. A 2 A USB charger plus two bucks and a GPS in
   a 40×40×100 mm box will run warm. Side vents need water
   protection (baffle, mesh, or a drain path) for motorcycle use.
 
+- Extra capacitors added to the stripboard layout (C2, C3, C4):
+  100 nF ceramic across SuperMini 5V / GND at the header (C2), a
+  10-47 uF bulk capacitor on the same 5V rail (C3), and an optional
+  100 nF on the switched 12V rail near the IRF4905 (C4).
 
 ============================================================
 STRIPBOARD LAYOUT (13 strips A-M x 30 holes, about 33 x 76 mm)
@@ -383,6 +384,9 @@ R10   10k               K29 - M29         Q2 base pull-down, upright
 U1    IRF4905           col 24, A-B-C     A=source B=drain C=gate
 Q1    2N2222            col 27, C-D-E     C=collector D=base E=emitter
 Q2    2N2222            col 27, J-K-L     J=collector K=base L=emitter
+C2    100nF             J9 - K9           5V/GND decoupling (K=5V, J=GND)
+C3    10-47uF           J5 - K5           5V bulk, + to K5, - to J5
+C4    100nF (optional)  B30 - E30         switched 12V to GND; shares E30 with W4
 
 Check 2N2222 and IRF4905 pin order; flip 180 degrees if needed.
 

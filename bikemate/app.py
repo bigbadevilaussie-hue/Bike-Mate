@@ -70,7 +70,16 @@ class App:
         SB_HOVER = ("#c8cbd3", "#313145")
         SB_SUB_FG = ("#5a5f70", "#9399b2")
 
-        def _sb_action(parent, text, command, fg=None, hover=None, indent=10):
+        def _wrap(cmd):
+            # V4.47: run the command, then close the sidebar.
+            def _run():
+                try:
+                    cmd()
+                finally:
+                    self._sidebar_close()
+            return _run
+
+        def _sb_action(parent, text, command, fg=None, hover=None):
             return ctk.CTkButton(parent, text=text,
                                  command=command,
                                  anchor="w", height=40,
@@ -84,22 +93,22 @@ class App:
         def _sb_group(parent, text, items):
             sub = ctk.CTkFrame(parent, fg_color="transparent")
             btn = _sb_action(parent, text + "   ▸", None)
-            state = {"open": False}
+            st = {"open": False}
 
             def toggle():
-                if state["open"]:
+                if st["open"]:
                     sub.pack_forget()
                     btn.configure(text=text + "   ▸")
-                    state["open"] = False
+                    st["open"] = False
                 else:
                     sub.pack(after=btn, fill="x")
                     btn.configure(text=text + "   ▾")
-                    state["open"] = True
+                    st["open"] = True
 
             btn.configure(command=toggle)
             for label, cmd in items:
                 ctk.CTkButton(
-                    sub, text=label, command=cmd, anchor="w", height=32,
+                    sub, text=label, command=_wrap(cmd), anchor="w", height=32,
                     fg_color=SB_BG, text_color=SB_SUB_FG,
                     hover_color=SB_HOVER, corner_radius=8,
                     font=ctk.CTkFont(size=13), cursor="hand2",
@@ -126,12 +135,12 @@ class App:
             ("Weekly",       lambda: self.open_report("week")),
         ]).pack(fill="x", padx=10, pady=2)
 
-        _sb_action(sidebar, "🛠️  Dyna Tune", self.open_dynatune).pack(fill="x", padx=10, pady=2)
-        _sb_action(sidebar, "🌗  Theme",     self.toggle_theme).pack(fill="x", padx=10, pady=2)
+        _sb_action(sidebar, "🛠️  Dyna Tune", _wrap(self.open_dynatune)).pack(fill="x", padx=10, pady=2)
+        _sb_action(sidebar, "🌗  Theme",     _wrap(self.toggle_theme)).pack(fill="x", padx=10, pady=2)
 
         ctk.CTkFrame(sidebar, height=1, fg_color=("#c8cbd3", "#313145")).pack(fill="x", padx=16, pady=18)
 
-        _sb_action(sidebar, "✕  Quit",       self.on_quit,
+        _sb_action(sidebar, "✕  Quit",       _wrap(self.on_quit),
                    fg=("#d20f39", "#e64553"),
                    hover=("#f0d0d4", "#3a1a20")).pack(fill="x", padx=10, pady=2)
 

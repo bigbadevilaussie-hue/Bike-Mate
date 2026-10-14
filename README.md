@@ -249,3 +249,90 @@ Non-negotiable. Read first.
   containing it.
 - Reports module (`bikemate/reports.py`) is functional but basic. No KPI
   board, no cross-ride trends. That is planned work, not a bug.
+
+---
+
+## Refactor in progress (V5.58+)
+
+Migration to "OSA is the hub". Not yet started on the firmware side.
+This section is the plan for the next session.
+
+**Target architecture:**
+
+    Bike (BLE 26b1) → OSA → GitHub (Bike-Mate-Uploads)
+                       ↓
+                      GUI (HTTP poll)
+
+- Bike ships wake/ride/dyna/bin files over BLE to OSA. Already works.
+- OSA writes them to `~/bike-mate-drive/{wakes,rides,dyna,bin}/`.
+  Already works.
+- **OSA pushes to `Bike-Mate-Uploads` on a 2-hour timer.** Not built.
+- **GUI reports read from OSA over HTTP** (`GET /bike/files`).
+  Not built.
+- The WiFi → GitHub upload path from the bike retires. `DriveUpload.cpp`
+  becomes a stub or gets deleted.
+- The GUI's three orphan Drive functions (`open_drive`,
+  `open_local_drive`, `menu_sync`) get removed.
+
+**5 steps, in order:**
+
+1. OSA v1.17 — GitHub pusher thread (2h timer)
+2. OSA v1.18 — `GET /bike/files` for the GUI's reports
+3. Firmware V5.58 — retire `DriveUpload.cpp`, route manual upload
+   through BLE
+4. GUI 4.49 — reports read from OSA, delete Drive code
+5. Docs — this README and the OSA README, after all four land
+
+Each step gets its own patch → compile → verify cycle.
+
+**Decisions pending (Q1-Q7):**
+
+| # | Question | Proposed default |
+|---|---|---|
+| Q1 | `reconcileLittleFS()` caller after retirement | every wake |
+| Q2 | `GH_TOKEN` source for OSA | read `Config.local.h` |
+| Q3 | 2h timer semantics | push at startup + every 2h |
+| Q4 | Manifest location | one `.pushed.json` at `~/bike-mate-drive/` top |
+| Q5 | 422 (file exists on GitHub) | mark as pushed |
+| Q6 | `driveUploadPerform` | retire entirely |
+| Q7 | GitHub folder case | uppercase (`BIN/`) matching firmware |
+
+Answers needed before step 1 starts. Next AI: ask Nick for these if
+they aren't answered in the session.
+
+**What does NOT change:**
+
+- The 04:00 scheduled auto-upload trigger on the bike (only the
+  transport changes, WiFi → BLE)
+- `bleSendFile()` in `BleManager.cpp`
+- `wakeLoggerSealManual()`
+- `/seal` endpoint
+- OSA's BLE central thread
+- OSA's `_bike_on_upload` reassembly + local write
+
+---
+
+## Rules (amended)
+
+Same rules as above, plus:
+
+- **zsh `?` glob trap.** A `?` in an unquoted command line (e.g. in a
+  `#` comment on the same line as a `grep`) triggers filename globbing
+  and aborts the whole command with `no matches found`. Fix: quote the
+  argument, or drop the comment, or `setopt +o nomatch`. Cost a
+  debugging cycle on 2026-10-14.
+
+- **Multi-line shell blocks via `cat >> file <<'EOF'`** work in zsh
+  if the heredoc tag is single-quoted. Never use `<<EOF` unquoted.
+
+---
+
+## # TODO: verify
+
+- Fan-Mate HB black box — claimed by Nick as running on OSA, but
+  `osa_server.py` shows `HB_LOG_DIR` hardcoded to `~/bike-mate-hb/`
+  and `_hb_append` is only called from `_bike_on_notify`. Next AI:
+  confirm whether Fan-Mate HB is planned, in a different file, or
+  merged into the bike-mate HB log.
+- GUI 4.47/4.48 commit state — HEAD of this repo is the V5.57 commit.
+  Check whether 4.47/4.48 came in with it or are still uncommitted.

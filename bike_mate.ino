@@ -12,6 +12,7 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 #include <time.h>
+#include <WiFi.h>
 #include <Preferences.h>
 #include <esp_arduino_version.h>
 #include <LittleFS.h>
@@ -1069,8 +1070,9 @@ void loop() {
 
         if (millis() - lastMaintHb >= 5000UL) {
           lastMaintHb = millis();
-          tprint("[MAINT] alive %lus remaining",
-                 (MAINT_MAX_MS - (millis() - maintStartMs)) / 1000UL);
+          tprint("[MAINT] alive %lus remaining (RSSI %d)",
+                 (MAINT_MAX_MS - (millis() - maintStartMs)) / 1000UL,
+                 WiFi.RSSI());
         }
 
         if (uploadNowRequested) {

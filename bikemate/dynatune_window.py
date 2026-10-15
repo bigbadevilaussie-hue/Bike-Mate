@@ -44,7 +44,7 @@ class DynaTuneWindow(tk.Toplevel):
         self.analysis = analysis or {}
         self.meta = meta or {}
         self.theme = app.theme
-        self.is_day = app.is_day
+        self.is_day = True  # V4.49: day-only
 
         self.title("Dyna Tune — Bike-Mate")
         self.resizable(True, True)
@@ -56,8 +56,7 @@ class DynaTuneWindow(tk.Toplevel):
         self._build()
 
     def _palette(self):
-        key = "day" if self.is_day else "night"
-        return STATUS_COLORS[key], self.theme
+        return STATUS_COLORS["day"], self.theme
 
     def _build(self):
         status_colours, t = self._palette()

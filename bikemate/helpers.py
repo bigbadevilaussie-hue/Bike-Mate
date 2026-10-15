@@ -8,12 +8,7 @@ from .config import *
 from . import state
 
 
-def is_daytime():
-    return DAY_START_HOUR <= datetime.now().hour < DAY_END_HOUR
-
-
-def current_theme():
-    return THEME_DAY if is_daytime() else THEME_NIGHT
+# V4.49: day-only. No theme switching.
 
 
 def is_bike_daytime():

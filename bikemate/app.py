@@ -21,12 +21,11 @@ from .reports import *
 class App:
     def __init__(self, root):
         self.root = root
-        self.theme = current_theme()
-        self.is_day = is_daytime()
+        self.theme = THEME
         root.title("Bike-Mate")
         root.configure(bg=self.theme["bg"])
         root.resizable(False, False)
-        ctk.set_appearance_mode("dark" if not self.is_day else "light")
+        ctk.set_appearance_mode("light")  # V4.49: day-only
         ctk.set_default_color_theme("blue")
         start_ota_server()
         start_drive_server()
@@ -40,6 +39,7 @@ class App:
         self._sidebar_x = -self._sidebar_w
         self._sidebar_job = None
         self._sidebar_open = False
+        self._maint_buttons = {}   # populated below, walked on each tick
 
         # body fills the whole window, underneath the sidebar
         body = ctk.CTkFrame(root, fg_color="transparent")
@@ -60,15 +60,15 @@ class App:
         # sidebar placed off-screen to the left
         sidebar = ctk.CTkFrame(root, width=self._sidebar_w,
                                corner_radius=0,
-                               fg_color=("#d9dbe0", "#232334"))
+                               fg_color="#f5f6fa")
         sidebar.place(x=self._sidebar_x, y=0, relheight=1)
         sidebar.pack_propagate(False)
         self._sidebar = sidebar
 
-        SB_BG = ("#d9dbe0", "#232334")
-        SB_FG = ("#1e1e2e", "#cdd6f4")
-        SB_HOVER = ("#c8cbd3", "#313145")
-        SB_SUB_FG = ("#5a5f70", "#9399b2")
+        SB_BG = "#f5f6fa"
+        SB_FG = "#1e1e2e"
+        SB_HOVER = "#e6e9f0"
+        SB_SUB_FG = "#5a5f70"
 
         def _wrap(cmd):
             # V4.47: run the command, then close the sidebar.
@@ -90,7 +90,7 @@ class App:
                                  font=ctk.CTkFont(size=14),
                                  cursor="hand2")
 
-        def _sb_group(parent, text, items):
+        def _sb_group(parent, text, items, capture_to=None):
             sub = ctk.CTkFrame(parent, fg_color="transparent")
             btn = _sb_action(parent, text + "   ▸", None)
             st = {"open": False}
@@ -107,18 +107,18 @@ class App:
 
             btn.configure(command=toggle)
             for label, cmd in items:
-                ctk.CTkButton(
+                b = ctk.CTkButton(
                     sub, text=label, command=_wrap(cmd), anchor="w", height=32,
                     fg_color=SB_BG, text_color=SB_SUB_FG,
                     hover_color=SB_HOVER, corner_radius=8,
                     font=ctk.CTkFont(size=13), cursor="hand2",
-                ).pack(fill="x", padx=(28, 10), pady=1)
+                )
+                b.pack(fill="x", padx=(28, 10), pady=1)
+                if capture_to is not None:
+                    capture_to[label] = b
             return btn
 
-        ctk.CTkLabel(sidebar, text="🏍️  Bike-Mate",
-                     font=ctk.CTkFont(size=16, weight="bold"),
-                     text_color=("#1e66f5", "#89b4fa"),
-                     anchor="w").pack(fill="x", padx=14, pady=(18, 16))
+        ctk.CTkFrame(sidebar, height=12, fg_color="transparent").pack(fill="x")
 
         _sb_group(sidebar, "🔧  Maintenance", [
             ("Activate",        self.activate_maintenance),
@@ -127,7 +127,7 @@ class App:
             ("Update Firmware", self.menu_ota),
             ("Settings",        self.open_settings),
             ("Open Serial Page", self._open_serial_page),
-        ]).pack(fill="x", padx=10, pady=2)
+        ], capture_to=self._maint_buttons).pack(fill="x", padx=10, pady=2)
 
         _sb_group(sidebar, "📊  Reports", [
             ("Last 2 Hours", lambda: self.open_report("2h")),
@@ -136,9 +136,8 @@ class App:
         ]).pack(fill="x", padx=10, pady=2)
 
         _sb_action(sidebar, "🛠️  Dyna Tune", _wrap(self.open_dynatune)).pack(fill="x", padx=10, pady=2)
-        _sb_action(sidebar, "🌗  Theme",     _wrap(self.toggle_theme)).pack(fill="x", padx=10, pady=2)
 
-        ctk.CTkFrame(sidebar, height=1, fg_color=("#c8cbd3", "#313145")).pack(fill="x", padx=16, pady=18)
+        ctk.CTkFrame(sidebar, height=1, fg_color="#d8dde8").pack(fill="x", padx=16, pady=18)
 
         _sb_action(sidebar, "✕  Quit",       _wrap(self.on_quit),
                    fg=("#d20f39", "#e64553"),
@@ -148,9 +147,12 @@ class App:
         root.bind("<Button-1>", self._sidebar_outside_click, add="+")
         root.bind("<Escape>",   lambda e: self._sidebar_close())
 
+        ctk.CTkLabel(body, text="🏍️  Bike-Mate",
+                     font=ctk.CTkFont(size=22, weight="bold"),
+                     text_color=("#1e66f5", "#89b4fa")).pack(pady=(8, 2))
         self.weather_label = ctk.CTkLabel(body, text="Atkinsons Dam · --.-° ⏳",
                                           font=ctk.CTkFont(size=18, weight="bold"))
-        self.weather_label.pack(pady=(16, 10))
+        self.weather_label.pack(pady=(2, 10))
         bc = tk.Frame(body, bg=CARD); bc.pack(fill="x", padx=20, pady=6)
         br = tk.Frame(bc, bg=CARD); br.pack(fill="x", pady=10)
         self.acc_lbl = self._col(br, "ACC", "--")
@@ -191,7 +193,6 @@ class App:
         threading.Thread(target=weather_thread_loop, daemon=True).start()
         self.worker.start()
         self.apply_theme()
-        self.theme_check()
         self._check_maint_on_startup()
         self.tick()
 
@@ -250,20 +251,6 @@ class App:
                      font=("Helvetica", 16, "bold"))
         v.pack(pady=(0, 4))
         return v
-
-    def toggle_theme(self):
-        self.is_day = not self.is_day
-        self.theme = THEME_DAY if self.is_day else THEME_NIGHT
-        print(f"[THEME] toggled to {'day' if self.is_day else 'night'}")
-        self.apply_theme()
-
-    def theme_check(self):
-        if is_daytime() != self.is_day:
-            self.is_day = is_daytime()
-            self.theme = current_theme()
-            print(f"[THEME] auto-switched to {'day' if self.is_day else 'night'}")
-            self.apply_theme()
-        self.root.after(60_000, self.theme_check)
 
     def apply_theme(self):
         t = self.theme
@@ -562,8 +549,26 @@ class App:
         print("=" * 50)
 
     def _update_maint_menu(self):
-        # V5.47: maint items are inline sidebar buttons, no menu tree.
-        return
+        # V4.49: grey out Maintenance items that can't be clicked
+        # in the current state. Same logic 4.43's tk.Menu used.
+        if not getattr(self, "_maint_buttons", None):
+            return
+        with state.maintenance_lock:
+            m = state.maintenance_state
+        enable = {
+            "Activate":         (m == "OFF"),
+            "Deactivate":       (m == "ON"),
+            "Sync Bike-Mate":   (m == "ON"),
+            "Update Firmware":  (m == "ON"),
+            "Settings":         (m == "ON"),
+            "Open Serial Page": (m == "ON"),
+        }
+        for label, btn in self._maint_buttons.items():
+            want = enable.get(label, False)
+            try:
+                btn.configure(state=("normal" if want else "disabled"))
+            except Exception:
+                pass
 
     def activate_maintenance(self):
         with state.maintenance_lock:
@@ -848,6 +853,15 @@ class App:
         dlg.title("Bike-Mate Settings")
         dlg.configure(bg=BG)
         dlg.resizable(False, False)
+        dlg.transient(self.root)   # V4.49: stay attached to parent
+        dlg.grab_set()             # modal
+        dlg.focus_force()          # bring to front
+        def _close():
+            try:
+                dlg.grab_release()
+            except Exception:
+                pass
+            dlg.destroy()
         fields = {}
         def section(title):
             tk.Label(dlg, text=title, bg=BG, fg=BLUE,
@@ -933,14 +947,16 @@ class App:
                         "pan": float(fields["panic"].get()),
                     },
                     "s": {
-                        "b":   int(fields["bench"].get()),
-                        "ops": int(fields["ops"].get()),
-                        "ope": int(fields["ope"].get()),
-                        "opw": int(fields["opw"].get()),
-                        "pks": int(fields["pks"].get()),
-                        "pke": int(fields["pke"].get()),
-                        "pkw": int(fields["pkw"].get()),
-                        "dw":  int(fields["dw"].get()),
+                        # V4.49: only editable field is 'uh'.
+                        # Resend everything else from the snapshot.
+                        "b":   int(s["bench"]),
+                        "ops": int(s["ops"]),
+                        "ope": int(s["ope"]),
+                        "opw": int(s["opw"]),
+                        "pks": int(s["pks"]),
+                        "pke": int(s["pke"]),
+                        "pkw": int(s["pkw"]),
+                        "dw":  int(s["dw"]),
                         "uh":  int(fields["uh"].get()),
                     },
                 }
@@ -962,7 +978,7 @@ class App:
                         if r.status_code == 200:
                             set_status("Settings applied (HTTP)")
                             print("[SET-DBG] settings applied, closing dialog")
-                            self.root.after(0, dlg.destroy)
+                            self.root.after(0, _close)
                         else:
                             body = r.text[:200]
                             self.root.after(0, lambda b=body: messagebox.showerror("Settings", f"Device rejected settings.\n{b}"))
@@ -1001,7 +1017,7 @@ class App:
                     if status == "ok":
                         set_status("Settings applied (ACK)")
                         print("[SET-DBG] settings applied (BLE ACK), closing dialog")
-                        self.root.after(0, dlg.destroy)
+                        self.root.after(0, _close)
                     elif status == "fail":
                         self.root.after(0, lambda: messagebox.showerror("Settings", "Device rejected settings (0x%02X). Check ranges — Exit must be < Enter." % code))
                     else:
@@ -1010,7 +1026,7 @@ class App:
                     msg = f"Write failed:\n{exc}"
                     self.root.after(0, lambda m=msg: messagebox.showerror("Settings", m))
             threading.Thread(target=_write, daemon=True).start()
-        tk.Button(btn_row, text="Cancel", command=dlg.destroy, width=10,
+        tk.Button(btn_row, text="Cancel", command=_close, width=10,
                   font=("Helvetica", 11)).pack(side="left", padx=8)
         tk.Button(btn_row, text="Apply", command=apply, width=10,
                   font=("Helvetica", 11)).pack(side="left", padx=8)

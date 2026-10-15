@@ -13,11 +13,10 @@ a VTX12-BS AGM, the practical cranking floor is ~12.2 V rested.
 
 ## Current state
 
-- **Firmware source:** `Config.h` -> `BIKE_MATE_VERSION` = **5.57**
-- **Firmware on bike:** **V5.56** (last flashed; V5.57 compiled, not
-  yet OTA'd)
-- **GUI:** `bikemate/config.py` -> `GUI_VERSION` = **4.48**
-- **OSA:** `osa_server.py` -> `__version__` = **1.16** (separate repo,
+- **Firmware source:** `Config.h` -> `BIKE_MATE_VERSION` = **5.65**
+- **Firmware on bike:** **V5.65** (flashed 2026-10-16 00:59)
+- **GUI:** `bikemate/config.py` -> `GUI_VERSION` = **4.50**
+- **OSA:** `osa_server.py` -> `__version__` = **1.18** (separate repo,
   runs 24/7 on the Mac)
 - **Repo:** https://github.com/bigbadevilaussie-hue/Bike-Mate
 - **OSA repo:** https://github.com/bigbadevilaussie-hue/OSA-Server
@@ -154,8 +153,13 @@ Features: HTTP poll of OSA `/bike/status` (no BLE client), maint
 control via OSA queue, serial page, HTTP OTA with progress, settings,
 storage badge, Drive sync, local servers 8000 (OTA) + 8001 (Drive).
 
-GUI 4.46 committed as `cfb8a65`. 4.47/4.48 on disk, **# TODO: verify**
-whether committed.
+GUI 4.50 committed as `6a6639c`. Changelog:
+- 4.47 — slide sidebar
+- 4.48 — hide sleep schedule block in Settings
+- 4.49 — day-only theme; settings dialog fixes (KeyError on hidden
+  fields, transient+grab, Apply closes); top title restored; sidebar
+  polish; Maintenance items grey out per state
+- 4.50 — in-GUI serial popup polling /serial-raw
 
 ---
 
@@ -254,8 +258,9 @@ Non-negotiable. Read first.
 
 ## Refactor in progress (V5.58+)
 
-Migration to "OSA is the hub". Not yet started on the firmware side.
-This section is the plan for the next session.
+Migration to "OSA is the hub". **OSA side is done (v1.17 + v1.18).**
+Firmware and GUI sides still pending. This section is the plan for
+the next session.
 
 **Target architecture:**
 
@@ -276,11 +281,14 @@ This section is the plan for the next session.
 
 **5 steps, in order:**
 
-1. OSA v1.17 — GitHub pusher thread (2h timer)
-2. OSA v1.18 — `GET /bike/files` for the GUI's reports
+1. **OSA v1.17 — GitHub pusher thread (2h timer)** — ✅ shipped
+   (verified live: 177 commits in Bike-Mate-Uploads, runs at :09
+   past odd hours, pushes wakes/rides/dyna/bin)
+2. **OSA v1.18 — `GET /bike/files` for the GUI's reports** — ✅
+   shipped (used by `bikemate/reports.py::_osa_list` and `_parse`)
 3. Firmware V5.58 — retire `DriveUpload.cpp`, route manual upload
    through BLE
-4. GUI 4.49 — reports read from OSA, delete Drive code
+4. GUI 4.51 — reports read from OSA, delete Drive code
 5. Docs — this README and the OSA README, after all four land
 
 Each step gets its own patch → compile → verify cycle.
@@ -334,8 +342,8 @@ Same rules as above, plus:
   and `_hb_append` is only called from `_bike_on_notify`. Next AI:
   confirm whether Fan-Mate HB is planned, in a different file, or
   merged into the bike-mate HB log.
-- GUI 4.47/4.48 commit state — HEAD of this repo is the V5.57 commit.
-  Check whether 4.47/4.48 came in with it or are still uncommitted.
+- ~~GUI 4.47/4.48 commit state~~ — resolved. 4.50 committed as
+  `6a6639c`.
 
 ---
 

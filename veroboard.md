@@ -250,3 +250,29 @@ U1 ESP32-C3
 - bike_mate_veroboard_layout.png — visual strip map
 - bike_mate_veroboard_layout.svg — vector version
 - bike_mate_veroboard.xlsx — build tracker
+
+---
+
+## 14. ESP32-C3 antenna mod
+
+The XCW SuperMini's onboard PCB antenna is poorly matched. Its
+documented failure mode is WiFi association failing after a BLE
+session (see README V4.91 and WifiManager.cpp).
+
+**Fix applied to this build:**
+- Onboard antenna disconnected (trace cut / ceramic chip removed)
+- 31 mm straight wire soldered to the ANT feed point
+- 31 mm = quarter-wave at 2.4 GHz (125 mm / 4 = 31.25 mm)
+
+**Wire routing:**
+- Straight, not coiled
+- Clear of stripboard and case walls by >=5 mm
+- Vertical in use if possible
+- Case may need a notch or internal standoff for clearance
+
+**Expected effect:**
+- WiFi range: 10-30 m improvement typical
+- BLE stability: fewer disconnects, more reliable uploads
+- May reduce or eliminate the WiFi-after-BLE association
+  failures the V5.55 retry logic was added for. Leave the
+  retries in place regardless.

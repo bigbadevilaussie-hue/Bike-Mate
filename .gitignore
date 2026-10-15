@@ -15,3 +15,6 @@ build/
 *.rider_bak
 *.rider_fix_bak
 .history/
+dist/
+build/
+*.app

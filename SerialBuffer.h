@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
-#define SERIAL_BUF_LINES 50
+#define SERIAL_BUF_LINES 20
 
 void   serialBufInit();
 void   serialBufWrite(const char* s);

@@ -729,10 +729,10 @@ class App:
     # Maintenance menu only.
 
     def _open_serial_page(self):
-        import webbrowser
-        url = f"http://{BIKE_IP}/serial"
-        print(f"[MAINT] opening {url}")
-        webbrowser.open(url)
+        # V4.50: in-GUI serial popup, day-themed, polls /serial-raw.
+        from .serial_window import SerialWindow
+        print("[MAINT] opening serial popup")
+        SerialWindow(self.root, self)
 
     def _maint_ack_timeout(self, requested):
         with state.maintenance_lock:

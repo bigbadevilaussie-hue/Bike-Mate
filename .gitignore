@@ -14,3 +14,4 @@ build/
 *.gui_bak
 *.rider_bak
 *.rider_fix_bak
+.history/

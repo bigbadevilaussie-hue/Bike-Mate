@@ -97,6 +97,16 @@ void writeRideRow() {
   row.volt_x100 = v100;
   row.temp      = t;
   row.state     = 1;
+  // V5.66: capture GPS speed/alt/course. Already read every loop for
+  // the OLED and serial log — just hadn't been written to the row.
+  row.speed_kmh_x10 = (uint16_t)(gpsSpeed_kmh() * 10.0f);
+  row.alt_m         = (int16_t)gpsAltitude_m();
+  row.course_x10    = (uint16_t)(gpsCourseDeg() * 10.0f);
+  // V5.66: capture GPS speed/alt/course. Already read every loop for
+  // the OLED and serial log — just hadn't been written to the row.
+  row.speed_kmh_x10 = (uint16_t)(gpsSpeed_kmh() * 10.0f);
+  row.alt_m         = (int16_t)gpsAltitude_m();
+  row.course_x10    = (uint16_t)(gpsCourseDeg() * 10.0f);
 
   if (!rideStorageAppendRow(row)) {
     tprint("[RIDE] append failed");

@@ -93,7 +93,8 @@ static void writeHeader(File& f, uint32_t startEpoch, float preRideVoltage) {
     f.println(slbuf);
   }
 
-  f.println("epoch,lat,lon,volt,temp,state");
+  // V5.66: added GPS columns.
+  f.println("epoch,lat,lon,volt,temp,state,speed,alt,course");
 }
 
 // ---- create ----
@@ -158,18 +159,21 @@ bool rideStorageAppendRow(const RideRow& row) {
     return false;
   }
 
-  char line[96];
+  char line[128];
 
   int n = snprintf(
       line,
       sizeof(line),
-      "%lu,%ld,%ld,%.2f,%d,%d\n",
+      "%lu,%ld,%ld,%.2f,%d,%d,%.1f,%d,%.1f\n",
       (unsigned long)row.epoch,
       (long)row.lat_x1e7,
       (long)row.lon_x1e7,
       row.volt_x100 / 100.0,
       (int)row.temp,
-      (int)row.state
+      (int)row.state,
+      row.speed_kmh_x10 / 10.0,
+      (int)row.alt_m,
+      row.course_x10 / 10.0
   );
 
   if (n <= 0) {

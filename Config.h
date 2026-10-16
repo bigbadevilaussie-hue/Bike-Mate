@@ -13,7 +13,7 @@
 // V4.70: dead defines removed, section headers added.
 // Deploy-specific values (UPLOAD_URL, SMTP_*) still live here pending move to Deploy.h.
 
-#define BIKE_MATE_VERSION "5.65"
+#define BIKE_MATE_VERSION "5.66"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 1
@@ -90,6 +90,13 @@ struct RideRow {
   uint16_t volt_x100;
   int8_t   temp;
   uint8_t  state;
+  // V5.66: GPS fields added. Speed and course in tenths, alt in
+  // signed metres. All three come from GpsModule.cpp, which the
+  // firmware has been reading every loop since V4.45 — just never
+  // logged to the CSV.
+  uint16_t speed_kmh_x10;
+  int16_t  alt_m;
+  uint16_t course_x10;
 };
 
 struct RideSummary {

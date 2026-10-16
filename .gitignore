@@ -18,3 +18,4 @@ build/
 dist/
 build/
 *.app
+*.kicad_prl

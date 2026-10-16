@@ -27,8 +27,6 @@ class App:
         root.resizable(False, False)
         ctk.set_appearance_mode("light")  # V4.49: day-only
         ctk.set_default_color_theme("blue")
-        start_ota_server()
-        start_drive_server()
         self.worker = BLEWorker()
         # V5.47: menus are inline in the sidebar, no tk.Menu trees.
         # _update_maint_menu() has no widget to touch anymore; it
@@ -365,8 +363,6 @@ class App:
         threading.Thread(target=_post, daemon=True).start()
 
     def on_quit(self):
-        stop_ota_server()
-        stop_drive_server()
         self.root.destroy()
 
     def open_drive(self):

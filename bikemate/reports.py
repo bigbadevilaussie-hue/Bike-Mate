@@ -68,50 +68,56 @@ class BikeReport(tk.Toplevel):
             return None
 
     def _find_files(self):
-        # V4.49: source is OSA, not the local filesystem. Returns
-        # a list of (sub, name) tuples.
+        # V4.51: one parser for all four modes. Buckets files by date
+        # and picks the newest file per day. Filters out garbage dates
+        # (e.g. 2038 clock-bug files) and truncated files.
+        from datetime import date, timedelta
+
         wakes = self._osa_list("wakes")
         if wakes is None:
             return None   # OSA unreachable — caller shows an error
-        # wakes filenames: wakes_YYYY-MM-DD_HHMMSS.csv.gz
-        all_wakes = sorted(wakes, key=lambda f: f["name"])
 
+        year = date.today().year
+
+        def _valid(f):
+            # wakes_YYYY-MM-DD[_HHMMSS].csv.gz  or  wakes_YYYY-MM-DD.csv.gz
+            try:
+                y = int(f["name"][6:10])
+                return abs(y - year) <= 1
+            except Exception:
+                return False
+
+        # skip 0-byte files too
+        valid = [f for f in wakes if _valid(f) and f.get("size", 0) > 0]
+        all_wakes = sorted(valid, key=lambda f: f["name"])
         if not all_wakes:
             return []
 
+        # bucket by date; last write wins -> newest per day
+        by_day = {}
+        for f in all_wakes:
+            day = f["name"][6:16]
+            by_day[day] = f["name"]
+        days_newest_first = sorted(by_day.keys(), reverse=True)
+
         if self.mode == "2h":
-            from datetime import date
-            y = date.today().strftime("%Y-%m-%d")
-            for f in all_wakes:
-                if f["name"].startswith(f"wakes_{y}"):
-                    return [("wakes", f["name"])]
-            return [("wakes", all_wakes[-1]["name"])]
+            today = date.today().strftime("wakes_%Y-%m-%d")
+            return [("wakes", by_day.get(today, by_day[days_newest_first[0]]))]
 
         if self.mode == "day":
-            from datetime import date, timedelta
-            y = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-            for f in all_wakes:
-                if f["name"].startswith(f"wakes_{y}"):
-                    return [("wakes", f["name"])]
-            return [("wakes", all_wakes[-1]["name"])]
+            y = (date.today() - timedelta(days=1)).strftime("wakes_%Y-%m-%d")
+            return [("wakes", by_day.get(y, by_day[days_newest_first[0]]))]
 
-        elif self.mode == "week":
-            from datetime import date, timedelta
-            out = []
-            for i in range(7):
-                d = (date.today() - timedelta(days=i+1)).strftime("%Y-%m-%d")
-                for f in all_wakes:
-                    if f["name"].startswith(f"wakes_{d}"):
-                        out.append(("wakes", f["name"]))
-                        break
-            return out if out else [("wakes", all_wakes[-7 + j]["name"]) for j in range(min(7, len(all_wakes)))]
+        if self.mode == "week":
+            out = [("wakes", by_day[d]) for d in days_newest_first[:7]]
+            return out if out else [("wakes", by_day[days_newest_first[0]])]
 
-        elif self.mode == "ride":
+        if self.mode == "ride":
             rides = self._osa_list("rides")
             if rides is None:
                 return None
             if not rides:
-                return [("wakes", all_wakes[-1]["name"])]
+                return [("wakes", by_day[days_newest_first[0]])]
             rides_sorted = sorted(rides, key=lambda f: f["name"])
             return [("rides", rides_sorted[-1]["name"])]
 
@@ -134,9 +140,16 @@ class BikeReport(tk.Toplevel):
                 if not r or r[0].startswith("#") or r[0] == "epoch":
                     continue
                 try:
+                    v = float(r[3])
+                    # V4.51: skip garbage volt readings. A real 12V
+                    # battery never reads below ~5V. The 0.00 rows
+                    # (ADC glitch, divider disconnect) force the Y
+                    # axis to span 0-14 and squash real data flat.
+                    if v < 5.0:
+                        continue
                     rows.append({
                         "epoch": int(r[0]),
-                        "volt":  float(r[3]),
+                        "volt":  v,
                         "temp":  int(r[4]),
                     })
                 except (ValueError, IndexError):

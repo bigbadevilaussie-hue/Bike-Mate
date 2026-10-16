@@ -8,35 +8,8 @@ from . import state
 from .helpers import *
 
 
-drive_server_proc = None
-
-
-def start_drive_server():
-    global drive_server_proc
-    if drive_server_proc is not None:
-        return drive_server_proc
-    try:
-        os.makedirs(DRIVE_DIR, exist_ok=True)
-        for sub in ("wakes", "rides", "bin", "dyna", "other"):
-            os.makedirs(os.path.join(DRIVE_DIR, sub), exist_ok=True)
-        drive_server_proc = subprocess.Popen(
-            ["python3", "-m", "http.server", str(DRIVE_PORT),
-             "--directory", DRIVE_DIR, "--bind", "0.0.0.0"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print(f"[DRIVE] server started on port {DRIVE_PORT}, dir {DRIVE_DIR}")
-    except Exception as e:
-        print(f"[DRIVE] server start failed: {e}")
-    return drive_server_proc
-
-
-def stop_drive_server():
-    global drive_server_proc
-    if drive_server_proc:
-        try:
-            drive_server_proc.terminate()
-        except Exception:
-            pass
-        drive_server_proc = None
+# V4.52: local drive server removed. Reports read from OSA. Files can
+# be browsed in Finder at ~/bike-mate-drive/ if needed.
 
 
 GH_FOLDERS = ("WAKES", "RIDES", "BIN", "DYNA")

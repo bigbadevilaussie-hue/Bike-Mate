@@ -88,7 +88,7 @@ ALARM LED
 ]
 [
 M1
-WOM
+MP1584EN
 MP1584EN black module 12V to 5V
 
 
@@ -96,7 +96,7 @@ MP1584EN black module 12V to 5V
 ]
 [
 M2
-WOM
+MINI360
 Mini 360 12V to 5V
 
 
@@ -104,7 +104,7 @@ Mini 360 12V to 5V
 ]
 [
 M3
-WOM
+USBCHARGER
 Dual USB-A Charger Module
 
 
@@ -112,7 +112,7 @@ Dual USB-A Charger Module
 ]
 [
 M4
-SIP4
+GPS
 NEO-6M GPS
 
 
@@ -232,7 +232,7 @@ SIP2
 ]
 [
 U1
-DIP28
+SUPERMINI
 XCW ESP32-C3 SuperMini
 
 

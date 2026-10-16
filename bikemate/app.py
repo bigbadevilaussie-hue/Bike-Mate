@@ -128,12 +128,14 @@ class App:
         ], capture_to=self._maint_buttons).pack(fill="x", padx=10, pady=2)
 
         _sb_group(sidebar, "📊  Reports", [
-            ("Last 2 Hours", lambda: self.open_report("2h")),
-            ("Daily",        lambda: self.open_report("day")),
-            ("Weekly",       lambda: self.open_report("week")),
+            ("Last Day of Rides", lambda: self.open_ride_picker()),
+            ("Daily Report",      lambda: self.open_report("day")),
+            ("Weekly Report",     lambda: self.open_report("week")),
         ]).pack(fill="x", padx=10, pady=2)
 
-        _sb_action(sidebar, "🛠️  Dyna Tune", _wrap(self.open_dynatune)).pack(fill="x", padx=10, pady=2)
+        _sb_action(sidebar, "🗺️  Ride Finder", _wrap(self.open_ride_finder)).pack(fill="x", padx=10, pady=2)
+        _sb_action(sidebar, "🏍️  DynaRide",    _wrap(self.open_dynaride)).pack(fill="x", padx=10, pady=2)
+        _sb_action(sidebar, "🔋  DynaBike",    _wrap(self.open_dynabike)).pack(fill="x", padx=10, pady=2)
 
         ctk.CTkFrame(sidebar, height=1, fg_color="#d8dde8").pack(fill="x", padx=16, pady=18)
 
@@ -1052,6 +1054,63 @@ class App:
             for c in w.winfo_children():
                 theme_walk(c)
         theme_walk(dlg)
+
+    def open_ride_picker(self):
+        from .ride_picker import RidePicker
+        RidePicker(self.root, self)
+
+    def open_ride_finder(self):
+        from tkinter import messagebox
+        messagebox.showinfo("Ride Finder", "Not yet implemented.")
+
+    def open_dynaride(self):
+        fake = {
+            "ride": {
+                "charge_delta":     {"status": "PASS", "metric": "1.32 V", "detail": "avg running 14.21 - pre-ride 12.89"},
+                "crank_sag":        {"status": "PASS", "metric": "10.8 V", "detail": "min in first 30 s"},
+                "sag_recovery":     {"status": "PASS", "metric": "1.4 s"},
+                "charge_high":      {"status": "PASS", "metric": "14.31 V"},
+                "charge_stability": {"status": "PASS", "metric": "0.09 V"},
+                "under_duration":   {"status": "PASS", "metric": "0 s"},
+                "over_duration":    {"status": "PASS", "metric": "0 s"},
+            },
+        }
+        meta = {
+            "fw": state.latest_data.get('fv', '?'),
+            "time_range": "—", "hours": "—", "samples": "—",
+            "runway_note": "placeholder - real analysis pending",
+        }
+        from .dynatune_window import DynaTuneWindow
+        DynaTuneWindow(self.root, self, fake, meta)
+
+    def open_dynabike(self):
+        fake = {
+            "data": {
+                "clock_validity": {"status": "PASS"},
+                "upload_success": {"status": "PASS"},
+                "gps_fix_rate":   {"status": "IDLE"},
+            },
+            "device": {
+                "panic_count":    {"status": "PASS"},
+                "storage_usage":  {"status": "PASS"},
+            },
+            "hardware": {
+                "ntc_plausible":     {"status": "PASS"},
+                "divider_plausible": {"status": "PASS"},
+            },
+            "config": {
+                "run_order":     {"status": "PASS"},
+                "monitor_order": {"status": "PASS"},
+                "sag_floor":     {"status": "PASS"},
+            },
+        }
+        meta = {
+            "fw": state.latest_data.get('fv', '?'),
+            "time_range": "—", "hours": "—", "samples": "—",
+            "runway_note": "placeholder - real analysis pending",
+        }
+        from .dynatune_window import DynaTuneWindow
+        DynaTuneWindow(self.root, self, fake, meta)
 
     def open_dynatune(self):
         fake = {

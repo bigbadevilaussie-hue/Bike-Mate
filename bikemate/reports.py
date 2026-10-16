@@ -142,16 +142,24 @@ class BikeReport(tk.Toplevel):
                 try:
                     v = float(r[3])
                     # V4.51: skip garbage volt readings. A real 12V
-                    # battery never reads below ~5V. The 0.00 rows
-                    # (ADC glitch, divider disconnect) force the Y
-                    # axis to span 0-14 and squash real data flat.
+                    # battery never reads below ~5V.
                     if v < 5.0:
                         continue
-                    rows.append({
+                    row = {
                         "epoch": int(r[0]),
                         "volt":  v,
                         "temp":  int(r[4]),
-                    })
+                    }
+                    # V5.66: ride rows gained lat/lon/state/speed/alt/course.
+                    # Wake rows still 6-col. Detect by length.
+                    if len(r) >= 6:
+                        row["lat"] = int(r[1]) / 1e7
+                        row["lon"] = int(r[2]) / 1e7
+                    if len(r) >= 9:
+                        row["speed"]  = float(r[6])
+                        row["alt"]    = int(r[7])
+                        row["course"] = float(r[8])
+                    rows.append(row)
                 except (ValueError, IndexError):
                     continue
         except Exception as e:

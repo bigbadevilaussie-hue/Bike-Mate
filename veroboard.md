@@ -76,33 +76,49 @@ Continuity-check every cut with a multimeter after cutting.
 | Q1 | 1 | NPN transistor | 2N2222 or PN2222, TO-92 | Zone C |
 | Q2 | 1 | NPN transistor | 2N2222 or PN2222, TO-92 | Zone C |
 | D1 | 1 | TVS diode | SA16CA | Zone A |
-| D2 | 1 | LED | Red, 5 mm, panel mount | Front panel |
-| D3 | 1 | LED | Green, 5 mm, panel mount | Front panel |
-| RT1 | 1 | Thermistor | MF52AT 10k NTC, B=3950 | Front panel, 3 mm hole |
-| R1 | 1 | Resistor | 98.8 kohm | Zone B |
-| R2 | 1 | Resistor | 9.98 kohm | Zone B |
+| D2 | 1 | LED red | 5 mm, panel mount | Front panel (fly via J6) |
+| D4 | 1 | LED green | 5 mm, panel mount, "ACC on" | Front panel (fly via J7) |
+| RT1 | 1 | Thermistor | MF52AT 10k NTC, B=3950 | Front panel (fly via J3) |
+| R1 | 1 | Resistor | 100 kohm | Zone B |
+| R2 | 1 | Resistor | 10 kohm | Zone B |
 | R3 | 1 | Resistor | 10 kohm | Zone C |
 | R4 | 1 | Resistor | 10 kohm | Zone C |
-| R5 | 1 | Resistor | 330 ohm | Zone C |
+| R5 | 1 | Resistor | 330 ohm | Zone C, red LED |
 | R6 | 1 | Resistor | 10 kohm | Zone D gate pull-up |
 | R7 | 1 | Resistor | 1 kohm | Zone C Q1 base |
 | R8 | 1 | Resistor | 10 kohm | Zone C Q1 base pull-down |
 | R9 | 1 | Resistor | 1 kohm | Zone C Q2 base |
 | R10 | 1 | Resistor | 10 kohm | Zone C Q2 base pull-down |
-| R11 | 1 | Resistor | 4.7 kohm | Zone B I2C SDA pull-up |
-| R12 | 1 | Resistor | 4.7 kohm | Zone B I2C SCL pull-up |
+| R13 | 1 | Resistor | 330 ohm | Zone C, green LED (on GPIO1) |
 | C1 | 1 | Capacitor | 100 nF ceramic | Zone B ADC filter |
 | C2 | 1 | Capacitor | 100 nF ceramic | Zone B SuperMini decoupling |
-| C3 | 1 | Capacitor | 22 uF 16V electrolytic | Zone B 5V bulk |
-| C4 | 1 | Capacitor | 100 nF ceramic | Zone D switched rail |
-| BZ1 | 1 | Buzzer | SFM-27, 3-24V, 12V nominal | Internal flying lead |
+| BZ1 | 1 | Buzzer | SFM-27, 3-24V, 12V nominal | Fly via J5 |
 | SW1 | 1 | Rocker switch | YJ-SW019, SPST, 20A, 20 mm hole | Right side panel |
-| SW2 | 1 | Push button | Momentary, wake button | Right side panel |
-| F1 | 1 | Fuse + holder | 3 A | Zone A |
+| J1 | 1 | Connector | 2-pin, 12V battery input | Zone A |
+| J2 | 1 | Connector | 4-pin, OLED I2C | Fly to OLED |
+| J3 | 1 | Connector | 2-pin, NTC | Fly to panel |
+| J4 | 1 | Connector | 2-pin, 5V fan | Fly to fan |
+| J5 | 1 | Connector | 2-pin, buzzer | Fly to buzzer |
+| J6 | 1 | Connector | 2-pin, red LED | Fly to panel |
+| J7 | 1 | Connector | 2-pin, green LED | Fly to panel |
+| J8 | 1 | Connector | 2-pin, wake button | Fly to panel |
 | OLED | 1 | Display | SSD1306, 0.96 in, I2C, addr 0x3C | Front panel |
-| — | 1 | Stripboard | 100 x 35 mm, 18 strips x 40 holes | — |
+| — | 1 | Stripboard | 100 x 35 mm, 18 strips x 36 holes | — |
 | — | 1 | Enclosure | Remix of kaspergrontved ESP32 WROOM case | — |
 | — | — | Wire, solder, headers | 24 AWG solid, 0.6 mm solder, 2.54 mm female headers | — |
+
+### Dropped from the original design
+
+These parts appear in the KiCad schematic but are **not on the final vero board**:
+
+| Ref | Part | Value | Why |
+|---|---|---|---|
+| D3 | Zener diode | 1N4742A 12V 1W | Not fitted (gate clamp not needed) |
+| R11 | Resistor | 4.7 kohm | OLED has its own I2C pull-ups |
+| R12 | Resistor | 4.7 kohm | OLED has its own I2C pull-ups |
+| C3 | Capacitor | 22 uF 16V | Not fitted |
+| C4 | Capacitor | 100 nF | Not fitted |
+| F1 | Fuse | 3 A | External on the 12V wire, not on the board |
 
 ---
 

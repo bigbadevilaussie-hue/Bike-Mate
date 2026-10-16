@@ -1,0 +1,506 @@
+[Version]
+Product,2
+File,19
+{
+"Config" : {
+  "NetImportFormat" : "Protel"
+},
+"Board" : {
+  "Width" : 36,
+  "Height" : 18,
+  "Pattern" : "Strip"
+},
+"CelledOutlines" : [
+  { "Name" : "SIP2", "Locked" : false,
+    "Rows" : [
+    [{"Pin" : "1"}],
+    [{"Pin" : "2"}]
+    ]
+  },
+  { "Name" : "SIP4", "Locked" : false,
+    "Rows" : [
+    [{"Pin" : "1"}],
+    [{"Pin" : "2"}],
+    [{"Pin" : "3"}],
+    [{"Pin" : "4"}]
+    ]
+  }
+],
+"LeadedOutlines" : [
+  { "Name" : "AX3_1", "Locked" : false,
+    "BodyLength" : 3, "BodyWidth" : 1,
+    "Pin0Name" : "1", "Pin1Name" : "2", "ShowReference" : true
+  }
+],
+"RadialOutlines" : [
+],
+"CustomOutlines" : [
+  { "Name" : "LED", "Locked" : false,
+    "Pins" : [
+    { "Name" : "1", "X5" : 7, "Y5" : 2 },
+    { "Name" : "2", "X5" : 7, "Y5" : 7 }
+    ],
+    "Lines" : [
+    { "X5" : 4, "Y5" : 0, "DX5" : 6, "DY5" : 0},
+    { "X5" : 11, "Y5" : 1, "DX5" : 1, "DY5" : 2},
+    { "X5" : 6, "Y5" : 9, "DX5" : -2, "DY5" : -1},
+    { "X5" : 2, "Y5" : 3, "DX5" : 1, "DY5" : -2},
+    { "X5" : 2, "Y5" : 5, "DX5" : 1, "DY5" : 2},
+    { "X5" : 3, "Y5" : 7, "DX5" : 1, "DY5" : 1},
+    { "X5" : 11, "Y5" : 7, "DX5" : 1, "DY5" : -2},
+    { "X5" : 12, "Y5" : 5, "DX5" : 0, "DY5" : -2},
+    { "X5" : 10, "Y5" : 0, "DX5" : 1, "DY5" : 1},
+    { "X5" : 4, "Y5" : 0, "DX5" : -1, "DY5" : 1},
+    { "X5" : 10, "Y5" : 8, "DX5" : 1, "DY5" : -1},
+    { "X5" : 2, "Y5" : 3, "DX5" : 0, "DY5" : 2},
+    { "X5" : 8, "Y5" : 9, "DX5" : 2, "DY5" : -1},
+    { "X5" : 6, "Y5" : 9, "DX5" : 2, "DY5" : 0}
+    ]
+  },
+  { "Name" : "MP1584EN", "Locked" : false,
+    "Pins" : [
+    { "Name" : "1", "X5" : 7, "Y5" : 7 },
+    { "Name" : "2", "X5" : 17, "Y5" : 7 },
+    { "Name" : "3", "X5" : 17, "Y5" : 22 },
+    { "Name" : "4", "X5" : 7, "Y5" : 22 }
+    ],
+    "Lines" : [
+    { "X5" : 4, "Y5" : 4, "DX5" : 18, "DY5" : 0},
+    { "X5" : 22, "Y5" : 4, "DX5" : 0, "DY5" : 22},
+    { "X5" : 22, "Y5" : 26, "DX5" : -18, "DY5" : 0},
+    { "X5" : 4, "Y5" : 26, "DX5" : 0, "DY5" : -22}
+    ]
+  },
+  { "Name" : "MINI360", "Locked" : false,
+    "Pins" : [
+    { "Name" : "1", "X5" : 7, "Y5" : 7 },
+    { "Name" : "2", "X5" : 17, "Y5" : 7 },
+    { "Name" : "3", "X5" : 17, "Y5" : 22 },
+    { "Name" : "4", "X5" : 7, "Y5" : 22 }
+    ],
+    "Lines" : [
+    { "X5" : 4, "Y5" : 4, "DX5" : 16, "DY5" : 0},
+    { "X5" : 20, "Y5" : 4, "DX5" : 0, "DY5" : 20},
+    { "X5" : 20, "Y5" : 24, "DX5" : -16, "DY5" : 0},
+    { "X5" : 4, "Y5" : 24, "DX5" : 0, "DY5" : -20}
+    ]
+  },
+  { "Name" : "USBCHARGER", "Locked" : false,
+    "Pins" : [
+    { "Name" : "1", "X5" : 7, "Y5" : 7 },
+    { "Name" : "2", "X5" : 17, "Y5" : 7 }
+    ],
+    "Lines" : [
+    { "X5" : 4, "Y5" : 4, "DX5" : 16, "DY5" : 0},
+    { "X5" : 20, "Y5" : 4, "DX5" : 0, "DY5" : 40},
+    { "X5" : 20, "Y5" : 44, "DX5" : -16, "DY5" : 0},
+    { "X5" : 4, "Y5" : 44, "DX5" : 0, "DY5" : -40}
+    ]
+  },
+  { "Name" : "GPS", "Locked" : false,
+    "Pins" : [
+    { "Name" : "1", "X5" : 12, "Y5" : 32 },
+    { "Name" : "2", "X5" : 17, "Y5" : 32 },
+    { "Name" : "3", "X5" : 17, "Y5" : 32 },
+    { "Name" : "4", "X5" : 17, "Y5" : 32 },
+    { "Name" : "5", "X5" : 22, "Y5" : 32 }
+    ],
+    "Lines" : [
+    { "X5" : 4, "Y5" : 4, "DX5" : 26, "DY5" : 0},
+    { "X5" : 30, "Y5" : 4, "DX5" : 0, "DY5" : 28},
+    { "X5" : 30, "Y5" : 32, "DX5" : -26, "DY5" : 0},
+    { "X5" : 4, "Y5" : 32, "DX5" : 0, "DY5" : -28}
+    ]
+  },
+  { "Name" : "TO92", "Locked" : false,
+    "Pins" : [
+    { "Name" : "1", "X5" : 2, "Y5" : 12 },
+    { "Name" : "2", "X5" : 7, "Y5" : 7 },
+    { "Name" : "3", "X5" : 2, "Y5" : 2 }
+    ],
+    "Lines" : [
+    { "X5" : 0, "Y5" : 0, "DX5" : 5, "DY5" : 0},
+    { "X5" : 9, "Y5" : 4, "DX5" : 0, "DY5" : 6},
+    { "X5" : 5, "Y5" : 14, "DX5" : -5, "DY5" : 0},
+    { "X5" : 0, "Y5" : 14, "DX5" : 0, "DY5" : -14},
+    { "X5" : 5, "Y5" : 0, "DX5" : 4, "DY5" : 4},
+    { "X5" : 5, "Y5" : 14, "DX5" : 4, "DY5" : -4}
+    ]
+  },
+  { "Name" : "SUPERMINI", "Locked" : false,
+    "Pins" : [
+    { "Name" : "5V_1", "X5" : 7, "Y5" : 7 },
+    { "Name" : "GND1", "X5" : 7, "Y5" : 7 },
+    { "Name" : "3V3_1", "X5" : 7, "Y5" : 12 },
+    { "Name" : "GPIO4", "X5" : 7, "Y5" : 12 },
+    { "Name" : "GPIO3", "X5" : 7, "Y5" : 17 },
+    { "Name" : "GPIO2", "X5" : 7, "Y5" : 17 },
+    { "Name" : "GPIO1", "X5" : 7, "Y5" : 17 },
+    { "Name" : "GPIO0", "X5" : 7, "Y5" : 22 },
+    { "Name" : "GPIO5", "X5" : 17, "Y5" : 7 },
+    { "Name" : "GPIO6", "X5" : 17, "Y5" : 7 },
+    { "Name" : "GPIO7", "X5" : 17, "Y5" : 12 },
+    { "Name" : "GPIO8", "X5" : 17, "Y5" : 12 },
+    { "Name" : "GPIO9", "X5" : 17, "Y5" : 17 },
+    { "Name" : "GPIO10", "X5" : 17, "Y5" : 17 },
+    { "Name" : "GPIO20", "X5" : 17, "Y5" : 17 },
+    { "Name" : "GPIO21", "X5" : 17, "Y5" : 22 }
+    ],
+    "Lines" : [
+    { "X5" : 3, "Y5" : 3, "DX5" : 18, "DY5" : 0},
+    { "X5" : 21, "Y5" : 3, "DX5" : 0, "DY5" : 22},
+    { "X5" : 21, "Y5" : 25, "DX5" : -18, "DY5" : 0},
+    { "X5" : 3, "Y5" : 25, "DX5" : 0, "DY5" : -22}
+    ]
+  },
+  { "Name" : "TO220", "Locked" : false,
+    "Pins" : [
+    { "Name" : "1", "X5" : 2, "Y5" : 2 },
+    { "Name" : "2", "X5" : 2, "Y5" : 7 },
+    { "Name" : "3", "X5" : 2, "Y5" : 12 }
+    ],
+    "Lines" : [
+    { "X5" : 0, "Y5" : 0, "DX5" : 6, "DY5" : 0},
+    { "X5" : 6, "Y5" : 0, "DX5" : 0, "DY5" : 14},
+    { "X5" : 6, "Y5" : 14, "DX5" : -6, "DY5" : 0},
+    { "X5" : 0, "Y5" : 14, "DX5" : 0, "DY5" : -14},
+    { "X5" : 4, "Y5" : 0, "DX5" : 0, "DY5" : 14}
+    ]
+  }
+],
+"SmdOutlines" : [
+],
+"Components" : [
+  { "Designator" : "BZ1", "Value" : "SFM-27 12V nominal (3-24V DC)", "Outline" : "SIP2",
+  "X1000" : 35000, "Y1000" : 15000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "C1", "Value" : "100nF", "Outline" : "AX3_1",
+  "X1000" : 8000, "Y1000" : 11000, "EndDeltaX" : 0, "EndDeltaY" : 5,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "C2", "Value" : "100nF", "Outline" : "AX3_1",
+  "X1000" : 7000, "Y1000" : 11000, "EndDeltaX" : 0, "EndDeltaY" : 5,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "D1", "Value" : "SA16CA", "Outline" : "AX3_1",
+  "X1000" : 6000, "Y1000" : 11000, "EndDeltaX" : 0, "EndDeltaY" : 5,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "D2", "Value" : "RED", "Outline" : "LED",
+  "X1000" : 24000, "Y1000" : 15000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "J1", "Value" : "12V BATTERY INPUT", "Outline" : "SIP2",
+  "X1000" : 34000, "Y1000" : 15000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "J2", "Value" : "OLED I2C", "Outline" : "SIP4",
+  "X1000" : 14000, "Y1000" : 13000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "J3", "Value" : "NTC", "Outline" : "SIP2",
+  "X1000" : 33000, "Y1000" : 15000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "J4", "Value" : "5V FAN", "Outline" : "SIP2",
+  "X1000" : 32000, "Y1000" : 15000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "J5", "Value" : "BUZZER", "Outline" : "SIP2",
+  "X1000" : 31000, "Y1000" : 15000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "J6", "Value" : "ALARM LED", "Outline" : "SIP2",
+  "X1000" : 30000, "Y1000" : 15000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "M1", "Value" : "MP1584EN black module 12V to 5V", "Outline" : "MP1584EN",
+  "X1000" : 25000, "Y1000" : 5000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "M2", "Value" : "Mini 360 12V to 5V", "Outline" : "MINI360",
+  "X1000" : 9000, "Y1000" : 12000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "M3", "Value" : "Dual USB-A Charger Module", "Outline" : "USBCHARGER",
+  "X1000" : 8000, "Y1000" : 2000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "M4", "Value" : "NEO-6M GPS", "Outline" : "GPS",
+  "X1000" : 13000, "Y1000" : 4000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "Q1", "Value" : "2N2222", "Outline" : "TO92",
+  "X1000" : 17000, "Y1000" : 14000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "Q2", "Value" : "2N2222", "Outline" : "TO92",
+  "X1000" : 15000, "Y1000" : 14000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "R1", "Value" : "100k", "Outline" : "AX3_1",
+  "X1000" : 5000, "Y1000" : 11000, "EndDeltaX" : 0, "EndDeltaY" : 5,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "R2", "Value" : "10k", "Outline" : "AX3_1",
+  "X1000" : 4000, "Y1000" : 11000, "EndDeltaX" : 0, "EndDeltaY" : 5,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "R3", "Value" : "10k", "Outline" : "AX3_1",
+  "X1000" : 3000, "Y1000" : 11000, "EndDeltaX" : 0, "EndDeltaY" : 5,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "R4", "Value" : "10k", "Outline" : "AX3_1",
+  "X1000" : 2000, "Y1000" : 11000, "EndDeltaX" : 0, "EndDeltaY" : 5,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "R5", "Value" : "330", "Outline" : "AX3_1",
+  "X1000" : 1000, "Y1000" : 11000, "EndDeltaX" : 0, "EndDeltaY" : 5,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "R6", "Value" : "10k", "Outline" : "AX3_1",
+  "X1000" : 0, "Y1000" : 11000, "EndDeltaX" : 0, "EndDeltaY" : 5,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "R7", "Value" : "1k", "Outline" : "AX3_1",
+  "X1000" : 35000, "Y1000" : 5000, "EndDeltaX" : 0, "EndDeltaY" : 5,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "R8", "Value" : "10k", "Outline" : "AX3_1",
+  "X1000" : 34000, "Y1000" : 5000, "EndDeltaX" : 0, "EndDeltaY" : 5,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "R9", "Value" : "1k", "Outline" : "AX3_1",
+  "X1000" : 33000, "Y1000" : 5000, "EndDeltaX" : 0, "EndDeltaY" : 5,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "R10", "Value" : "10k", "Outline" : "AX3_1",
+  "X1000" : 32000, "Y1000" : 5000, "EndDeltaX" : 0, "EndDeltaY" : 5,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "RT1", "Value" : "10k NTC", "Outline" : "AX3_1",
+  "X1000" : 30000, "Y1000" : 5000, "EndDeltaX" : 0, "EndDeltaY" : 5,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "SW1", "Value" : "12V MASTER SWITCH", "Outline" : "SIP2",
+  "X1000" : 27000, "Y1000" : 15000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "U1", "Value" : "XCW ESP32-C3 SuperMini", "Outline" : "SUPERMINI",
+  "X1000" : 20000, "Y1000" : 5000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "U2", "Value" : "IRF4905", "Outline" : "TO220",
+  "X1000" : 19000, "Y1000" : 14000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "D4", "Value" : "GREEN", "Outline" : "LED",
+  "X1000" : 21000, "Y1000" : 15000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "R13", "Value" : "330", "Outline" : "AX3_1",
+  "X1000" : 31000, "Y1000" : 5000, "EndDeltaX" : 0, "EndDeltaY" : 5,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "J7", "Value" : "ACC LED", "Outline" : "SIP2",
+  "X1000" : 29000, "Y1000" : 15000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  },
+  { "Designator" : "J8", "Value" : "WAKE BUTTON", "Outline" : "SIP2",
+  "X1000" : 28000, "Y1000" : 15000, "EndDeltaX" : 0, "EndDeltaY" : 1,
+  "Text" : { "X" : 0, "Y" : -1, "Angle" : 0, "Visible" : true },
+  "Group" : 0
+  }
+],
+"Links" : [
+],
+"Breaks" : [
+],
+"Wires" : [
+],
+"Text" : [
+],
+"Nets" : [
+    { "Node" : "+12V_RAIL", "Components" : [
+    { "Name" : "BZ1", "Pins" : ["1"] },
+    { "Name" : "D1", "Pins" : ["1"] },
+    { "Name" : "J1", "Pins" : ["1"] },
+    { "Name" : "J5", "Pins" : ["1"] },
+    { "Name" : "M1", "Pins" : ["1"] },
+    { "Name" : "R1", "Pins" : ["1"] },
+    { "Name" : "R6", "Pins" : ["1"] },
+    { "Name" : "SW1", "Pins" : ["1"] },
+    { "Name" : "U2", "Pins" : ["3"] }
+    ] },
+    { "Node" : "+3V3", "Components" : [
+    { "Name" : "J2", "Pins" : ["1"] },
+    { "Name" : "R3", "Pins" : ["1"] },
+    { "Name" : "R4", "Pins" : ["1"] },
+    { "Name" : "U1", "Pins" : ["3V3_1"] }
+    ] },
+    { "Node" : "+5V_ALWAYS", "Components" : [
+    { "Name" : "C2", "Pins" : ["1"] },
+    { "Name" : "M1", "Pins" : ["3"] },
+    { "Name" : "U1", "Pins" : ["5V_1"] }
+    ] },
+    { "Node" : "+5V_SWITCHED", "Components" : [
+    { "Name" : "J4", "Pins" : ["1"] },
+    { "Name" : "M2", "Pins" : ["3"] },
+    { "Name" : "M4", "Pins" : ["1"] }
+    ] },
+    { "Node" : "ALARM_LED", "Components" : [
+    { "Name" : "D2", "Pins" : ["2"] },
+    { "Name" : "J6", "Pins" : ["1"] },
+    { "Name" : "R5", "Pins" : ["2"] }
+    ] },
+    { "Node" : "BATTERY_ADC", "Components" : [
+    { "Name" : "C1", "Pins" : ["1"] },
+    { "Name" : "R1", "Pins" : ["2"] },
+    { "Name" : "R2", "Pins" : ["1"] },
+    { "Name" : "U1", "Pins" : ["GPIO0"] }
+    ] },
+    { "Node" : "BUZZER_DRIVE", "Components" : [
+    { "Name" : "R9", "Pins" : ["1"] },
+    { "Name" : "U1", "Pins" : ["GPIO4"] }
+    ] },
+    { "Node" : "Gate", "Components" : [
+    { "Name" : "Q1", "Pins" : ["2"] },
+    { "Name" : "R6", "Pins" : ["2"] },
+    { "Name" : "U2", "Pins" : ["1"] }
+    ] },
+    { "Node" : "GND", "Components" : [
+    { "Name" : "C1", "Pins" : ["2"] },
+    { "Name" : "C2", "Pins" : ["2"] },
+    { "Name" : "D1", "Pins" : ["2"] },
+    { "Name" : "D2", "Pins" : ["1"] },
+    { "Name" : "D4", "Pins" : ["1"] },
+    { "Name" : "J1", "Pins" : ["2"] },
+    { "Name" : "J2", "Pins" : ["4"] },
+    { "Name" : "J3", "Pins" : ["2"] },
+    { "Name" : "J4", "Pins" : ["2"] },
+    { "Name" : "J5", "Pins" : ["2"] },
+    { "Name" : "J6", "Pins" : ["2"] },
+    { "Name" : "J7", "Pins" : ["2"] },
+    { "Name" : "J8", "Pins" : ["2"] },
+    { "Name" : "M1", "Pins" : ["2", "4"] },
+    { "Name" : "M2", "Pins" : ["2", "4"] },
+    { "Name" : "M3", "Pins" : ["2", "4"] },
+    { "Name" : "M4", "Pins" : ["2"] },
+    { "Name" : "Q1", "Pins" : ["3"] },
+    { "Name" : "Q2", "Pins" : ["3"] },
+    { "Name" : "R2", "Pins" : ["2"] },
+    { "Name" : "R8", "Pins" : ["2"] },
+    { "Name" : "R10", "Pins" : ["2"] },
+    { "Name" : "RT1", "Pins" : ["2"] },
+    { "Name" : "U1", "Pins" : ["GND1"] }
+    ] },
+    { "Node" : "GPS_RX", "Components" : [
+    { "Name" : "M4", "Pins" : ["3"] },
+    { "Name" : "R3", "Pins" : ["2"] },
+    { "Name" : "U1", "Pins" : ["GPIO2"] }
+    ] },
+    { "Node" : "GreenLED", "Components" : [
+    { "Name" : "D4", "Pins" : ["2"] },
+    { "Name" : "J7", "Pins" : ["1"] },
+    { "Name" : "R13", "Pins" : ["2"] }
+    ] },
+    { "Node" : "IRF_DRIVER", "Components" : [
+    { "Name" : "R7", "Pins" : ["1"] },
+    { "Name" : "R13", "Pins" : ["1"] },
+    { "Name" : "U1", "Pins" : ["GPIO1"] }
+    ] },
+    { "Node" : "M3_USB_OUTPUT", "Components" : [
+    { "Name" : "M3", "Pins" : ["3"] }
+    ] },
+    { "Node" : "Net-(BZ1--)", "Components" : [
+    { "Name" : "BZ1", "Pins" : ["2"] },
+    { "Name" : "Q2", "Pins" : ["2"] }
+    ] },
+    { "Node" : "Net-(F1-Pad1)", "Components" : [
+    { "Name" : "SW1", "Pins" : ["2"] }
+    ] },
+    { "Node" : "Net-(Q1-B)", "Components" : [
+    { "Name" : "Q1", "Pins" : ["1"] },
+    { "Name" : "R7", "Pins" : ["2"] },
+    { "Name" : "R8", "Pins" : ["1"] }
+    ] },
+    { "Node" : "Net-(Q2-B)", "Components" : [
+    { "Name" : "Q2", "Pins" : ["1"] },
+    { "Name" : "R9", "Pins" : ["2"] },
+    { "Name" : "R10", "Pins" : ["1"] }
+    ] },
+    { "Node" : "Net-(U1-IO10)", "Components" : [
+    { "Name" : "R5", "Pins" : ["1"] },
+    { "Name" : "U1", "Pins" : ["GPIO10"] }
+    ] },
+    { "Node" : "Net-(U1-IO5)", "Components" : [
+    { "Name" : "J8", "Pins" : ["1"] },
+    { "Name" : "U1", "Pins" : ["GPIO5"] }
+    ] },
+    { "Node" : "NTC_SENSE", "Components" : [
+    { "Name" : "J3", "Pins" : ["1"] },
+    { "Name" : "R4", "Pins" : ["2"] },
+    { "Name" : "RT1", "Pins" : ["1"] },
+    { "Name" : "U1", "Pins" : ["GPIO3"] }
+    ] },
+    { "Node" : "OLED_SCL", "Components" : [
+    { "Name" : "J2", "Pins" : ["2"] },
+    { "Name" : "U1", "Pins" : ["GPIO9"] }
+    ] },
+    { "Node" : "OLED_SDA", "Components" : [
+    { "Name" : "J2", "Pins" : ["3"] },
+    { "Name" : "U1", "Pins" : ["GPIO6"] }
+    ] },
+    { "Node" : "SWITCHED_12V", "Components" : [
+    { "Name" : "M2", "Pins" : ["1"] },
+    { "Name" : "M3", "Pins" : ["1"] },
+    { "Name" : "U2", "Pins" : ["2"] }
+    ] }
+],
+"NetColors" : [
+    { "Node" : "" },
+    { "Node" : "" },
+    { "Node" : "" },
+    { "Node" : "" },
+    { "Node" : "" },
+    { "Node" : "" }
+],
+"Notes" : {
+  "Lines" : ""
+}
+}

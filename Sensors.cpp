@@ -17,7 +17,7 @@ int latestNtcRaw = 0;
 #define BATTERY_SLOPE  0.008058f
 
 #define NTC_NOMINAL    10000.0f
-#define NTC_B          4600.0f
+#define NTC_B          3950.0f  // V5.66: MF52AT is B=3950, not 4600
 #define NTC_SERIES     10000.0f
 
 static int medianRawVoltage() {

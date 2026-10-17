@@ -8,16 +8,16 @@ Firmware V5.64 · Board revision V6 · 2026-10-15
 
 | Spec | Value |
 |---|---|
-| Length | 100 mm |
-| Width | 35 mm |
+| Length | 95 mm |
+| Width | 65 mm |
 | Thickness | ~1.6 mm |
-| Copper strips | 18, running lengthwise |
-| Holes per strip | 40 |
+| Copper strips | 37, running lengthwise (left to right) |
+| Holes per strip | 24 |
 | Hole pitch | 2.54 mm (0.1 in) |
 | Strip pitch | 2.54 mm |
 | Cutting required | Yes — from larger stock board |
 
-Count 40 holes on the actual board before cutting.
+Count 24 holes on the actual board before cutting.
 
 ---
 
@@ -70,7 +70,7 @@ Continuity-check every cut with a multimeter after cutting.
 | U1 | 1 | ESP32-C3 SuperMini | XCW, USB-C, 4 MB flash | Zone B |
 | M1 | 1 | Buck module | MP1584EN, 12V to 5V, always-on | Zone A |
 | M2 | 1 | Buck module | Mini360, 12V to 5V, switched | Zone D |
-| M3 | 1 | USB charger | Dual USB-A, 12V input | Zone E |
+| M3 | 1 | USB charger | Single USB-A, 12V input | Zone E |
 | M4 | 1 | GPS module | NEO-6M, 3.3-5V input | Zone E |
 | U2 | 1 | P-MOSFET | IRF4905, TO-220 | Zone D |
 | Q1 | 1 | NPN transistor | 2N2222 or PN2222, TO-92 | Zone C |
@@ -93,17 +93,17 @@ Continuity-check every cut with a multimeter after cutting.
 | C1 | 1 | Capacitor | 100 nF ceramic | Zone B ADC filter |
 | C2 | 1 | Capacitor | 100 nF ceramic | Zone B SuperMini decoupling |
 | BZ1 | 1 | Buzzer | SFM-27, 3-24V, 12V nominal | Fly via J5 |
-| SW1 | 1 | Rocker switch | YJ-SW019, SPST, 20A, 20 mm hole | Right side panel |
+| SW1 | 1 | Rocker switch | YJ-SW019, SPST, 20A, 20 mm hole | Right side panel (off-board, via J4) |
 | J1 | 1 | Connector | 2-pin, 12V battery input | Zone A |
 | J2 | 1 | Connector | 4-pin, OLED I2C | Fly to OLED |
 | J3 | 1 | Connector | 2-pin, NTC | Fly to panel |
-| J4 | 1 | Connector | 2-pin, 5V fan | Fly to fan |
+| J4 | 1 | Connector | 2-pin, 12V master switch | Fly to switch |
 | J5 | 1 | Connector | 2-pin, buzzer | Fly to buzzer |
 | J6 | 1 | Connector | 2-pin, red LED | Fly to panel |
 | J7 | 1 | Connector | 2-pin, green LED | Fly to panel |
 | J8 | 1 | Connector | 2-pin, wake button | Fly to panel |
 | OLED | 1 | Display | SSD1306, 0.96 in, I2C, addr 0x3C | Front panel |
-| — | 1 | Stripboard | 100 x 35 mm, 18 strips x 36 holes | — |
+| — | 1 | Stripboard | 95 x 65 mm, 37 strips x 24 holes | — |
 | — | 1 | Enclosure | Remix of kaspergrontved ESP32 WROOM case | — |
 | — | — | Wire, solder, headers | 24 AWG solid, 0.6 mm solder, 2.54 mm female headers | — |
 
@@ -132,12 +132,12 @@ These parts appear in the KiCad schematic but are **not on the final vero board*
 | OLED SCL | GPIO 9 | U1 pin GPIO9 | OLED SCL |
 | Red LED anode | GPIO 10 | R5 output | D2 anode |
 | Red LED cathode | — | GND | D2 cathode |
-| Green LED anode | — | +5V_SWITCHED | D3 anode |
-| Green LED cathode | — | GND | D3 cathode |
+| Green LED anode | — | R13 output (GPIO1) | D4 anode |
+| Green LED cathode | — | +12V | D4 cathode |
 | NTC lead 1 | GPIO 3 | top of R4 | RT1 pin 1 |
 | NTC lead 2 | — | GND | RT1 pin 2 |
-| Wake button 1 | GPIO 5 | U1 pin GPIO5 | SW2 pin 1 |
-| Wake button 2 | — | GND | SW2 pin 2 |
+| Wake button 1 | GPIO 5 | U1 pin GPIO5 | J8 pin 1 |
+| Wake button 2 | — | GND | J8 pin 2 |
 | Buzzer + | — | +12V_RAIL | BZ1 red |
 | Buzzer - | — | Q2 collector | BZ1 black |
 
@@ -155,7 +155,7 @@ Base design: remix of kaspergrontved ESP32 WROOM + SSD1306 + 18650 case.
 | Front | Red LED | 5 mm hole |
 | Front | NTC | 3 mm hole |
 | Front | Green LED | 5 mm hole |
-| Front | USB-A x2 cutout | ~15 x 15 mm |
+| Front | USB-A cutout | ~15 x 15 mm |
 | Right side | Wake button | Tactile switch hole |
 | Right side | On/off rocker | 20 mm hole |
 | Right end | 12V wire grommet | Grommet size TBD |
@@ -172,7 +172,7 @@ ESP32 USB-C hidden inside case — firmware via OTA only.
 12V in (grommet, right end)
 |
 v
-[Inline fuse 3A] -- [Master switch SW1] -- +12V_RAIL
+J1 --> J4-1 --> [SW1 off-board] --> J4-2 --> +12V_RAIL
 |
 +-------------------------------+---------------------------+
 | | |
@@ -190,7 +190,7 @@ GND +5V_ALWAYS U2 drain -> SWITCHED_12V
 | |
 | +-------+-------+
 | | |
-| M4 GPS J4 fan
+| M4 GPS
 | (3.3-5V in) (optional)
 |
 U1 ESP32-C3
@@ -257,7 +257,8 @@ U1 ESP32-C3
 | Version | Date | Change |
 |---|---|---|
 | V5.63 | 2026-10-15 09:50 | Old layout, 20 strips x 35 holes. Superseded. |
-| V6 | 2026-10-15 | New layout, 18 strips x 40 holes, flow order. This doc. |
+| V6 | 2026-10-15 | New layout, 18 strips x 40 holes, flow order. Superseded. |
+| V7 | 2026-10-17 | Board 37 strips x 24 holes, 95 x 65 mm. Module footprints added. J4 = 12V master switch header. M3 = single USB-A. Green LED = MOSFET-on indicator. Buzzer off-board via J5. |
 
 ---
 
@@ -292,3 +293,21 @@ session (see README V4.91 and WifiManager.cpp).
 - May reduce or eliminate the WiFi-after-BLE association
   failures the V5.55 retry logic was added for. Leave the
   retries in place regardless.
+
+---
+
+## 15. Module footprints
+
+Physical dimensions for the five on-board modules, in stripboard holes (2.54 mm pitch).
+
+| Ref | Module | Body W x H (holes) | Pin count | Pin layout |
+|---|---|---|---|---|
+| M1 | MP1584EN (black board) | 6 x 8 | 4 | 4 corners |
+| M2 | Mini360 | 5 x 7 | 4 | 4 corners |
+| M3 | USB charger (single USB-A) | 5 x 15 | 2 | top edge (IN+, GND) |
+| M4 | NEO-6M GPS | 9 x 13 | 5 | bottom edge (VCC, GND, TXD, RXD, PPS) |
+| U1 | ESP32-C3 SuperMini | 6 x 8 | 16 (8 per side) | left col top-to-bottom: 5V, GND, 3V3, GPIO4, GPIO3, GPIO2, GPIO1, GPIO0; right col top-to-bottom: GPIO5, GPIO6, GPIO7, GPIO8, GPIO9, GPIO10, GPIO20, GPIO21 |
+
+All other on-board parts use stock stripboard footprints and need no special sizing.
+
+All J-connectors are "pretend" — the wires solder directly to the board. The header blocks exist in the netlist to define connectivity, not as physical parts.

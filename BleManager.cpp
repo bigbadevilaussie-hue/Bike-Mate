@@ -41,6 +41,10 @@ volatile bool pushRequested = false;
 volatile bool pushInProgress = false;
 volatile uint32_t pushGuiEpoch = 0;
 
+// V5.77: Heartbeat tracking
+RTC_DATA_ATTR uint32_t _bootCount = 0;
+static unsigned long _lastHbMs = 0;
+
 // V5.76: ACK queue. onWrite just queues the filename.
 // The main loop processes it, so we don't run LittleFS inside the BT task.
 #define ACK_QUEUE_SIZE 8
@@ -638,6 +642,7 @@ class SettingsCallbacks : public BLECharacteristicCallbacks {
 
 void bleInit() {
   if (bleInited) return;
+  _bootCount++;
 
   BLEDevice::init(DEVICE_NAME);
   BLEDevice::setMTU(185);
@@ -888,4 +893,31 @@ void publishBLE() {
       root2.close();
     }
   }
+}
+
+// V5.77: Separate heartbeat notification over STREAM_UUID.
+// Keeps the main telemetry JSON small and avoids BLE MTU fragmentation.
+void publishHeartbeat() {
+  if (!pStreamChar || !bleInited) return;
+  if (!isActuallyConnected()) return;
+  if (pushInProgress) return; // don't interfere with GUI ride sync
+
+  unsigned long now = millis();
+  if (now - _lastHbMs < 2000) return;
+  _lastHbMs = now;
+
+  char hbBuf[160];
+  snprintf(hbBuf, sizeof(hbBuf),
+    "{\"hb\":{\"h\":%u,\"mn\":%u,\"st\":%u,\"up\":%lu,\"rst\":%u,\"pn\":%d,\"lg\":%d}}",
+    ESP.getFreeHeap(),
+    ESP.getMinFreeHeap(),
+    uxTaskGetStackHighWaterMark(NULL),
+    now / 1000,
+    _bootCount,
+    inPanic ? 1 : 0,
+    isLogging ? 1 : 0
+  );
+
+  pStreamChar->setValue((uint8_t*)hbBuf, strlen(hbBuf));
+  pStreamChar->notify();
 }

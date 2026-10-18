@@ -36,3 +36,6 @@ void bleStart();
 
 // V5.37: send a file over BLE in chunks.
 bool bleSendFile(const char* path, const char* uploadName);
+
+// V5.77: send HB on STREAM_UUID
+void publishHeartbeat();

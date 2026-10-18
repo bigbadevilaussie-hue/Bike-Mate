@@ -1006,6 +1006,7 @@ void loop() {
   if (isActuallyConnected() && now - lastPublish >= 2000) {
     lastPublish = now;
     publishBLE();
+    publishHeartbeat();
   }
 
   if (pushRequested && isActuallyConnected() && !pushInProgress) {

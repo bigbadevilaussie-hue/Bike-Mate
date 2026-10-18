@@ -3,7 +3,7 @@
 #include <Arduino.h>
 
 // Bike-Mate GPS module - NEO-6M NMEA parser
-// Reads UART on GPS_RX (default GPIO 20), parses NMEA sentences.
+// Reads UART on GPS_RX (default GPIO 2), parses NMEA sentences.
 // Provides position, altitude, speed, satellite count, fix status.
 //
 // V4.45

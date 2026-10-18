@@ -1,4 +1,5 @@
-// build stamp V5.37 (BLE upload)
+// build stamp V5.67 (separated MOSFET pin)
+// V5.67: MOSFET driver moved to GPIO7 (MOSFET_PIN). Green LED stays on GPIO1.
 // bike_mate.ino
 // Main coordinator: state machine, sleep, WiFi trigger, upload trigger.
 
@@ -838,6 +839,7 @@ void setup() {
   }
 
   pinMode(ACC_LED_PIN, OUTPUT); digitalWrite(ACC_LED_PIN, LOW);
+  pinMode(MOSFET_PIN, OUTPUT); digitalWrite(MOSFET_PIN, LOW);
   pinMode(BUZZER_PIN, OUTPUT); digitalWrite(BUZZER_PIN, LOW);
   pinMode(STATUS_LED_PIN, OUTPUT); digitalWrite(STATUS_LED_PIN, LOW);
   pinMode(WAKE_BTN_PIN, INPUT_PULLUP);
@@ -922,6 +924,7 @@ void loop() {
   if (millis() - lastStage > 100UL) tprint("[LOOP] updateStateTransitions took %lums", millis() - lastStage);
 
   digitalWrite(ACC_LED_PIN, accState ? HIGH : LOW);
+  digitalWrite(MOSFET_PIN, accState ? HIGH : LOW);
 
   lastStage = millis();
   updateBeeps(now);
@@ -937,6 +940,7 @@ void loop() {
     if (pServer) pServer->getAdvertising()->stop();
     display.ssd1306_command(SSD1306_DISPLAYOFF);
     digitalWrite(ACC_LED_PIN, LOW);
+    digitalWrite(MOSFET_PIN, LOW);
     digitalWrite(STATUS_LED_PIN, LOW);
   }
 

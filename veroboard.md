@@ -1,6 +1,6 @@
 # Bike-Mate — Veroboard Build Guide
 
-Hardware V8 (final) · Firmware V5.66 · 2026-10-18
+Hardware V8 (final) · Firmware V5.66 · 2026-10-17
 
 Final circuit unless the field test fails. The schematic in the stripboard
 editor is the source of truth. Names below match the schematic labels.
@@ -51,13 +51,13 @@ GPS RXD and PPS are not connected.
 | GPIO | Use | Config.h |
 |---|---|---|
 | 0 | Battery voltage | VOLTAGE_PIN |
-| 1 | Green LED | ACC_LED_PIN |
+| 1 | Green LED (follows accState) | ACC_LED_PIN |
 | 2 | GPS RX | GPS_RX_PIN |
 | 3 | NTC | THERMISTOR_PIN |
 | 4 | Buzzer (Q2) | BUZZER_PIN |
 | 5 | Wake button | WAKE_BTN_PIN |
 | 6 | OLED SDA | SDA_PIN |
-| 7 | MOSFET driver (Q1) | add a define |
+| 7 | MOSFET driver (Q1), same signal as ACC_LED_PIN | MOSFET_PIN |
 | 9 | OLED SCL | SCL_PIN |
 | 10 | Red LED | STATUS_LED_PIN |
 | 8, 20, 21 | Free | |
@@ -105,7 +105,7 @@ GPS RXD and PPS are not connected.
 ## 4. Notes
 
 - 12vSwitch kills everything, including the ESP32 and M1. No sleep or wake with it off.
-- MOSFET has never been in the firmware. Add a pin define for GPIO7 and the logic.
+- MOSFET driver is on GPIO7 (MOSFET_PIN). Green LED is on GPIO1 (ACC_LED_PIN). Both follow accState.
 - Wake button has no external pull-up. Enable the internal one in firmware.
 - R8 and R10 are pull-downs. They keep the MOSFET off and the buzzer quiet while the ESP32 sleeps or boots.
 - No reverse-polarity protection. Mark + on the SAE lead and the board.

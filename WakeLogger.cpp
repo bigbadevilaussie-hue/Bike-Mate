@@ -220,7 +220,7 @@ void wakeLoggerForceWrite(int state) {
   // V5.34: suppress the print when called from the 100ms capture
   // loop. Real events (engine start/stop, arming) still print.
   if (!_quietForce) {
-    tprint("[WAKE] force @ %lu", (unsigned long)now);
+    tprint_verbose("[WAKE] force @ %lu", (unsigned long)now);
   }
   _quietForce = false;
 }

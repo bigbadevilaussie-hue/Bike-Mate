@@ -302,6 +302,21 @@ class ServerCallbacks : public BLEServerCallbacks {
   void onDisconnect(BLEServer* s) {
     lastDisconnectMillis = millis();
 
+    int fileCount = 0;
+    File root = LittleFS.open("/");
+    if (root && root.isDirectory()) {
+      File e = root.openNextFile();
+      while (e) {
+        String n = String(e.name());
+        e.close();
+        if ((n.startsWith("/wakes_") || n.startsWith("wakes_")) && n.endsWith(".gz")) fileCount++;
+        else if ((n.startsWith("/ride_") || n.startsWith("ride_")) && n.endsWith(".gz")) fileCount++;
+        e = root.openNextFile();
+      }
+      root.close();
+    }
+    tprint("[BLE] Disconnected. Files left: %d", fileCount);
+
     if (!bleSuspended && pServer) {
       pServer->getAdvertising()->start();
     }
@@ -766,16 +781,29 @@ void publishBLE() {
                             ? (uint8_t)((_fsUsed * 100) / _fsTotal)
                             : 0;
 
-  char buf[240];
+  // V5.70: Count how many files need uploading
+  int fileCount = 0;
+  File root = LittleFS.open("/");
+  if (root && root.isDirectory()) {
+    File e = root.openNextFile();
+    while (e) {
+      String n = String(e.name());
+      e.close();
+      bool isWakeGz = (n.startsWith("/wakes_") || n.startsWith("wakes_")) && n.endsWith(".gz");
+      bool isRideGz = (n.startsWith("/ride_") || n.startsWith("ride_")) && n.endsWith(".gz");
+      if (isWakeGz || isRideGz) {
+        fileCount++;
+      }
+      e = root.openNextFile();
+    }
+    root.close();
+  }
 
-  // V5.11: fv travels with every telemetry notify so the GUI has the
-  // firmware version on the first connect, not on the third or fourth.
-  // The onConnect one-shot notify was racing the next publishBLE().
-  // V5.23: st = storage percent, GUI badge.
+  char buf[300];
   snprintf(
       buf,
       sizeof(buf),
-      "{\"v\":%.2f,\"t\":%.1f,\"a\":%d,\"e\":%d,\"w\":%d,\"s\":\"%s\",\"p\":%d,\"ll\":\"%ld.%04ld,%ld.%04ld\",\"lg\":%d,\"gs\":%d,\"fv\":\"%s\",\"st\":%u}",
+      "{\"v\":%.2f,\"t\":%.1f,\"a\":%d,\"e\":%d,\"w\":%d,\"s\":\"%s\",\"p\":%d,\"ll\":\"%ld.%04ld,%ld.%04ld\",\"lg\":%d,\"gs\":%d,\"fv\":\"%s\",\"st\":%u,\"n\":%d,\"wm\":\"%s\"}",
       latestBatteryVoltage,
       latestTemperatureC,
       accState ? 1 : 0,
@@ -790,44 +818,9 @@ void publishBLE() {
       isLogging ? 1 : 0,
       (int)gpsSats(),
       BIKE_MATE_VERSION,
-      (unsigned)storagePercent);
-
-  // V5.34: append HB fields so OSA caches them alongside telemetry.
-  {
-    size_t used = strlen(buf);
-    uint32_t free_heap  = ESP.getFreeHeap();
-    uint32_t min_heap   = ESP.getMinFreeHeap();
-    uint32_t stack_mark = uxTaskGetStackHighWaterMark(NULL);
-    extern bool isLogging;
-    extern bool inPanic;
-    char hb[160];
-    snprintf(hb, sizeof(hb),
-             ",\"hb\":{\"h\":%u,\"mn\":%u,\"st\":%u,\"up\":%lu,"
-             "\"rst\":%u,\"pn\":%d,\"lg\":%d}",
-             (unsigned)free_heap,
-             (unsigned)min_heap,
-             (unsigned)stack_mark,
-             (unsigned long)(millis() / 1000UL),
-             (unsigned)esp_reset_reason(),
-             inPanic ? 1 : 0,
-             isLogging ? 1 : 0);
-    // insert before the closing brace
-    if (used >= 2 && buf[used - 1] == '}') {
-      buf[used - 1] = 0;
-      strncat(buf, hb, sizeof(buf) - strlen(buf) - 2);
-      strncat(buf, "}", sizeof(buf) - strlen(buf) - 1);
-    }
-  }
-
-  // V5.35: append wake-mode string so OSA/GUI can show BENCH/OFFPEAK/PEAK/DAY.
-  {
-    size_t used = strlen(buf);
-    if (used > 0 && used < sizeof(buf) - 1 && buf[used - 1] == '}') {
-      buf[used - 1] = 0;
-      snprintf(buf + used - 1, sizeof(buf) - used + 1,
-               ",\"wm\":\"%s\"}", currentWakeMode());
-    }
-  }
+      (unsigned)storagePercent,
+      fileCount,
+      currentWakeMode());
 
   pDataChar->setValue(
       (uint8_t*)buf,

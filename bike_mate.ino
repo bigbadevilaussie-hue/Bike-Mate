@@ -80,10 +80,10 @@ RTC_DATA_ATTR unsigned long lastCooldownEnd = 0;
 
 bool isCountingDown = false;
 unsigned long countdownStartMillis = 0;
-extern const int countdownSeconds = 30;
+extern const int countdownSeconds = 15;
 bool isArmingCountdown = false;
 unsigned long armingStartMillis = 0;
-extern const int armingSeconds = 30;
+extern const int armingSeconds = 15;
 bool parkedTimerActive = false;
 unsigned long parkedTimerStart = 0;
 const unsigned long parkedDelayMs = 0;
@@ -475,6 +475,12 @@ void updateStateTransitions(unsigned long now) {
     accState = true;
     if (!isLogging) startRideLog();
     tprint("[STATE] settle complete ACC ON %.2f", V);
+    
+    // Prime Directive: Force BLE off now that the MOSFET is ON
+    wifiActive = false;
+    bleStop();
+    tprint("[STATE] BLE forced off for ride");
+    
     wakeLoggerForceWrite();
     wakeLoggerPause();
   }
@@ -517,6 +523,10 @@ void updateStateTransitions(unsigned long now) {
     tprint("[STATE] arming complete");
     wakeLoggerResume();
     wakeLoggerForceWrite();
+    
+    // Prime Directive: Resume BLE now that the ride is done
+    bleStart();
+    tprint("[STATE] BLE resumed after ride");
 
     // V5.56: start Cool Down once the chirps play out.
     cooldownPending = true;

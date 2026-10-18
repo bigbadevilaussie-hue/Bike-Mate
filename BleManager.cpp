@@ -302,21 +302,6 @@ class ServerCallbacks : public BLEServerCallbacks {
   void onDisconnect(BLEServer* s) {
     lastDisconnectMillis = millis();
 
-    int fileCount = 0;
-    File root = LittleFS.open("/");
-    if (root && root.isDirectory()) {
-      File e = root.openNextFile();
-      while (e) {
-        String n = String(e.name());
-        e.close();
-        if ((n.startsWith("/wakes_") || n.startsWith("wakes_")) && n.endsWith(".gz")) fileCount++;
-        else if ((n.startsWith("/ride_") || n.startsWith("ride_")) && n.endsWith(".gz")) fileCount++;
-        e = root.openNextFile();
-      }
-      root.close();
-    }
-    tprint("[BLE] Disconnected. Files left: %d", fileCount);
-
     if (!bleSuspended && pServer) {
       pServer->getAdvertising()->start();
     }

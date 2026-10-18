@@ -351,6 +351,22 @@ static void goToSleep() {
   // of real time. The floor in currentEpoch() then locked the epoch
   // at the raced value, and every seal collided on the same filename.
 
+  // Log how many files are left before we sleep
+  int filesLeft = 0;
+  File root = LittleFS.open("/");
+  if (root && root.isDirectory()) {
+    File e = root.openNextFile();
+    while (e) {
+      String n = String(e.name());
+      e.close();
+      if ((n.startsWith("/wakes_") || n.startsWith("wakes_")) && n.endsWith(".gz")) filesLeft++;
+      else if ((n.startsWith("/ride_") || n.startsWith("ride_")) && n.endsWith(".gz")) filesLeft++;
+      e = root.openNextFile();
+    }
+    root.close();
+  }
+  tprint("[SLEEP] Files left to sync: %d", filesLeft);
+
   tprint("[SLEEP] mode=%s V=%.2f conn=%d wake=%lus",
          mode, latestBatteryVoltage,
          isActuallyConnected() ? 1 : 0, wakeSec);

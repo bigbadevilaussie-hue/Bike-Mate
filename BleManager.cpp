@@ -41,6 +41,13 @@ volatile bool pushRequested = false;
 volatile bool pushInProgress = false;
 volatile uint32_t pushGuiEpoch = 0;
 
+// V5.76: ACK queue. onWrite just queues the filename.
+// The main loop processes it, so we don't run LittleFS inside the BT task.
+#define ACK_QUEUE_SIZE 8
+static char _ackQueue[ACK_QUEUE_SIZE][48];
+static volatile int _ackHead = 0;
+static volatile int _ackTail = 0;
+
 static volatile bool bleSuspended = false;
 
 extern float latestBatteryVoltage;
@@ -434,6 +441,30 @@ class OtaCallbacks : public BLECharacteristicCallbacks {
       }
     }
 
+    // V5.76: OSA acks a file transfer. Queue the filename.
+    // The main loop deletes it. Never touch LittleFS or tprint here.
+    if (v.length() > 1) {
+      String av = String(v.c_str());
+      int ai = av.indexOf("\"ack\":");
+      if (ai >= 0) {
+        int as = ai + 6;
+        while (as < (int)av.length() && av[as] == ' ') as++;
+        int q1 = av.indexOf("\"", as);
+        if (q1 >= as) {
+          int q2 = av.indexOf("\"", q1 + 1);
+          if (q2 > q1) {
+            String fname = av.substring(q1 + 1, q2);
+            int next = (_ackHead + 1) % ACK_QUEUE_SIZE;
+            if (next != _ackTail) {
+              snprintf(_ackQueue[_ackHead], sizeof(_ackQueue[_ackHead]), "%s", fname.c_str());
+              _ackHead = next;
+            }
+          }
+        }
+        return;
+      }
+    }
+
     if (v.length() < 8) {
       uint8_t nack = 0xFF;
 
@@ -751,6 +782,22 @@ bool bleSendFile(const char* path, const char* uploadName) {
   return (sent == total);
 }
 
+void processAckQueue() {
+  while (_ackTail != _ackHead) {
+    char fname[48];
+    strncpy(fname, _ackQueue[_ackTail], sizeof(fname) - 1);
+    fname[sizeof(fname) - 1] = 0;
+    _ackTail = (_ackTail + 1) % ACK_QUEUE_SIZE;
+
+    String path = fname;
+    if (!path.startsWith("/")) path = "/" + path;
+    if (LittleFS.exists(path)) {
+      LittleFS.remove(path);
+      tprint("[BLEUP] deleted %s", path.c_str());
+    }
+  }
+}
+
 void publishBLE() {
   if (!pDataChar || !bleInited) return;
   if (!isActuallyConnected()) return;
@@ -812,4 +859,33 @@ void publishBLE() {
       strlen(buf));
 
   pDataChar->notify();
+
+  // V5.74: If we have files, push them now, before sleeping.
+  if (fileCount > 0) {
+    extern bool bleSendFile(const char* path, const char* uploadName);
+    File root2 = LittleFS.open("/");
+    if (root2 && root2.isDirectory()) {
+      File e2 = root2.openNextFile();
+      while (e2) {
+        String n = String(e2.name());
+        size_t sz = e2.size();
+        e2.close();
+        bool isWakeGz = (n.startsWith("/wakes_") || n.startsWith("wakes_")) && n.endsWith(".gz");
+        bool isRideGz = (n.startsWith("/ride_") || n.startsWith("ride_")) && n.endsWith(".gz");
+        if ((isWakeGz || isRideGz) && sz > 0) {
+          String path = n.startsWith("/") ? n : "/" + n;
+          String uploadName = n;
+          int sealedIdx = uploadName.indexOf(".sealed");
+          if (sealedIdx >= 0) {
+            uploadName = uploadName.substring(0, sealedIdx) + ".gz";
+          }
+          tprint("[UPLOAD] BLE sending %s", uploadName.c_str());
+          bleSendFile(path.c_str(), uploadName.c_str());
+          delay(100);
+        }
+        e2 = root2.openNextFile();
+      }
+      root2.close();
+    }
+  }
 }

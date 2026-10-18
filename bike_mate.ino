@@ -1000,6 +1000,9 @@ void loop() {
     }
     wasConnected = conn;
   }
+  extern void processAckQueue();
+  processAckQueue();
+  
   if (isActuallyConnected() && now - lastPublish >= 2000) {
     lastPublish = now;
     publishBLE();

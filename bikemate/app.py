@@ -1060,8 +1060,8 @@ class App:
         RidePicker(self.root, self)
 
     def open_ride_finder(self):
-        from tkinter import messagebox
-        messagebox.showinfo("Ride Finder", "Not yet implemented.")
+        from .ride_finder import RideFinder
+        RideFinder(self.root, self)
 
     def open_dynaride(self):
         fake = {

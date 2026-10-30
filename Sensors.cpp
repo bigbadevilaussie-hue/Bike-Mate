@@ -14,7 +14,7 @@ int latestMilliVolts = 0;
 int latestNtcRaw = 0;
 
 #define MEDIAN_SAMPLES 21
-#define BATTERY_SLOPE  0.008058f
+#define BATTERY_SLOPE  0.007896f
 
 #define NTC_NOMINAL    10000.0f
 #define NTC_B          3950.0f  // V5.66: MF52AT is B=3950, not 4600
@@ -62,7 +62,7 @@ static float readNTC() {
                      log(rNtc / NTC_NOMINAL) / NTC_B);
   
   float tempC = tK - 273.15f;
-  return tempC - 4.8f;
+  return tempC - 2.5f;
 }
 
 void readSensors() {

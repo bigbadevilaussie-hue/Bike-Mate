@@ -13,16 +13,25 @@ a VTX12-BS AGM, the practical cranking floor is ~12.2 V rested.
 
 ## Current state
 
-- **Firmware source:** `Config.h` -> `BIKE_MATE_VERSION` = **5.65**
-- **Firmware on bike:** **V5.65** (flashed 2026-10-16 00:59)
-- **GUI:** `bikemate/config.py` -> `GUI_VERSION` = **4.50**
-- **OSA:** `osa_server.py` -> `__version__` = **1.18** (separate repo,
+- **Firmware source:** `Config.h` -> `BIKE_MATE_VERSION` = **5.81**
+- **Firmware on bike:** **V5.81** (bench testing, 2026-10-30)
+- **GUI:** `bikemate/config.py` -> `GUI_VERSION` = **4.58**
+- **OSA:** `osa_server.py` -> `__version__` = **1.33** (separate repo,
   runs 24/7 on the Mac)
 - **Repo:** https://github.com/bigbadevilaussie-hue/Bike-Mate
 - **OSA repo:** https://github.com/bigbadevilaussie-hue/OSA-Server
 - **Logs repo:** https://github.com/bigbadevilaussie-hue/Bike-Mate-Uploads
 - **Local:** `~/Documents/Arduino/bike_mate/`
-- **Bike:** Triumph Sprint ST 1050 (breadboard build)
+- **Bike:** Triumph Sprint ST 1050 (production veroboard build)
+
+### Hardware status
+
+The production veroboard board is built and on the bench:
+- All components soldered, tracks cut, and tested.
+- Voltage and temperature calibrated.
+- Sleep current: 1 mA. Awake (running): 77 mA.
+- MOSFET switch verified (turns GPS/USB off in sleep).
+- Ready for field test on the bike.
 
 ---
 

@@ -13,8 +13,8 @@ a VTX12-BS AGM, the practical cranking floor is ~12.2 V rested.
 
 ## Current state
 
-- **Firmware source:** `Config.h` -> `BIKE_MATE_VERSION` = **5.81**
-- **Firmware on bike:** **V5.81** (bench testing, 2026-10-30)
+- **Firmware source:** `Config.h` -> `BIKE_MATE_VERSION` = **6.00**
+- **Firmware on bike:** **V6.00** (bench testing, 2026-11-01)
 - **GUI:** `bikemate/config.py` -> `GUI_VERSION` = **4.58**
 - **OSA:** `osa_server.py` -> `__version__` = **1.33** (separate repo,
   runs 24/7 on the Mac)
@@ -31,7 +31,13 @@ The production veroboard board is built and on the bench:
 - Voltage and temperature calibrated.
 - Sleep current: 1 mA. Awake (running): 77 mA.
 - MOSFET switch verified (turns GPS/USB off in sleep).
-- Ready for field test on the bike.
+- Ready for 7-day field test on the bike.
+
+### Upcoming Tasks (Pre-Field Test)
+
+- Fix all OLED screens for the 128x32 display (some layouts are still clipping).
+- Remove the stall function (`FLAG_STALL`) from the ride logger.
+- Perform the 7-day field test.
 
 ---
 

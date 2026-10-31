@@ -339,12 +339,7 @@ void drawOLED() {
   }
 
   if (wifiActive) {
-    display.ssd1306_command(SSD1306_DISPLAYON);
-    if (serverIsRunning() && !otaRequest) {
-      drawMaintScreen();
-    } else {
-      drawUploadScreen();
-    }
+    display.ssd1306_command(SSD1306_DISPLAYOFF);
     return;
   }
 

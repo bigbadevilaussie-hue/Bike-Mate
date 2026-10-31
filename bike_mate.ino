@@ -1134,7 +1134,6 @@ void loop() {
         // maint looks identical to a sleeping bike.
         if (millis() - lastMaintOled >= 1000UL) {
           lastMaintOled = millis();
-          display.ssd1306_command(SSD1306_DISPLAYON);
           drawOLED();
         }
 

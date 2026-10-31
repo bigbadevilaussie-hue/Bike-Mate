@@ -31,7 +31,7 @@ class BLEWorker(threading.Thread):
                     body = r.read().decode()
                 js = json.loads(body)
                 data = js.get("data")
-                if data:
+                if js.get("alive") and data:
                     # same shape the BLE notify used to deliver
                     state.latest_data.update(data)
                     state.latest_seen_time = time.time()

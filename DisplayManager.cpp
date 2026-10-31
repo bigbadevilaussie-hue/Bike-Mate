@@ -28,7 +28,7 @@ extern void formatTime12h_buf(uint32_t e, char* out, size_t n);
 extern volatile bool wifiActive;
 extern char wifiMessage[24];
 
-Adafruit_SSD1306 display(SCREEN_W, SCREEN_H, &Wire, -1);
+Adafruit_SSD1306 display(SCREEN_W, SCREEN_H, &Wire, -1); // 128x32
 char lastOLEDState[48] = "";
 
 // ---- GPS — use the real functions from bike_mate.ino ----
@@ -53,142 +53,95 @@ static void drawGpsBox(int16_t x, int16_t y, bool hasFix) {
 
 // ---- screens ----
 
+extern bool gpsHasFix();
+extern float gpsSpeed_kmh();
+extern uint8_t gpsSats();
+
+
 void drawUploadScreen() {
   display.setTextColor(SSD1306_WHITE);
-
   display.setTextSize(1);
-  const char* title = "Maintenance";
-  int tw = strlen(title) * 6;
-  display.setCursor((SCREEN_W - tw) / 2, 8);
-  display.print(title);
-
-  display.drawLine(20, 22, SCREEN_W - 20, 22, SSD1306_WHITE);
-
+  display.setCursor(20, 8);
+  display.print("Maintenance");
+  display.drawLine(20, 20, 108, 20, SSD1306_WHITE);
   display.setTextSize(2);
-  const char* big = "Uploading";
-  int bw = strlen(big) * 12;
-  display.setCursor((SCREEN_W - bw) / 2, 34);
-  display.print(big);
-
-  display.display();
+  display.setCursor(24, 28);
+  display.print("Uploading");
 }
 
-// V5.37.7: shown while bleUploadActive. Bare screen, no progress.
 static void drawBleUploadScreen() {
   display.setTextColor(SSD1306_WHITE);
-
   display.setTextSize(2);
-  const char* big = "BLE";
-  int bw = strlen(big) * 12;
-  display.setCursor((SCREEN_W - bw) / 2, 20);
-  display.print(big);
-
+  display.setCursor(48, 8);
+  display.print("BLE");
   display.setTextSize(1);
-  const char* sub = "Uploading...";
-  int sw = strlen(sub) * 6;
-  display.setCursor((SCREEN_W - sw) / 2, 44);
-  display.print(sub);
-
-  display.display();
+  display.setCursor(28, 24);
+  display.print("Uploading...");
 }
 
 static void drawMaintScreen() {
   extern unsigned long maintStartMs;
   display.setTextColor(SSD1306_WHITE);
-
   display.setTextSize(2);
-  const char* big = "MAINT";
-  int bw = strlen(big) * 12;
-  display.setCursor((SCREEN_W - bw) / 2, 4);
-  display.print(big);
+  display.setCursor(32, 0);
+  display.print("MAINT");
 
-  display.setTextSize(1);
-  const char* sub = "MODE";
-  int sw = strlen(sub) * 6;
-  display.setCursor((SCREEN_W - sw) / 2, 24);
-  display.print(sub);
-
-  // V4.89: show wifiMessage, not WiFi.localIP(). Including <WiFi.h>
-  // here initialises the netif before wifiBringUp() can tear it down,
-  // which broke association on the C3. wifiMessage is set by
-  // WifiManager during bring-up.
   extern char wifiMessage[24];
   char msg[24];
   snprintf(msg, sizeof(msg), "%s", wifiMessage);
   int iw = strlen(msg) * 6;
   if (iw > SCREEN_W - 4) iw = SCREEN_W - 4;
-  display.setCursor((SCREEN_W - iw) / 2, 36);
+  display.setTextSize(1);
+  display.setCursor((SCREEN_W - iw) / 2, 16);
   display.print(msg);
 
-  // remaining
   unsigned long now = millis();
   unsigned long elapsed = (now >= maintStartMs) ? (now - maintStartMs) : 0;
-  unsigned long cap = MAINT_MAX_MS;
-  long rem = (long)((cap - elapsed) / 1000UL);
+  long rem = (long)((MAINT_MAX_MS - elapsed) / 1000UL);
   if (rem < 0) rem = 0;
   char rb[20];
   snprintf(rb, sizeof(rb), "%lds left", rem);
   int rw = strlen(rb) * 6;
-  display.setCursor((SCREEN_W - rw) / 2, 52);
+  display.setCursor((SCREEN_W - rw) / 2, 24);
   display.print(rb);
-
-  display.display();
 }
 
 static void drawFwUpdateScreen() {
   display.setTextColor(SSD1306_WHITE);
-
   display.setTextSize(1);
-  const char* title = "Firmware Update";
-  int tw = strlen(title) * 6;
-  display.setCursor((SCREEN_W - tw) / 2, 8);
-  display.print(title);
+  display.setCursor(16, 0);
+  display.print("Firmware Update");
 
   char verBuf[24];
-  if (otaVersion[0]) {
-    snprintf(verBuf, sizeof(verBuf), "Ver %s", otaVersion);
-  } else {
-    snprintf(verBuf, sizeof(verBuf), "Ver --");
-  }
+  if (otaVersion[0]) snprintf(verBuf, sizeof(verBuf), "Ver %s", otaVersion);
+  else snprintf(verBuf, sizeof(verBuf), "Ver --");
   display.setTextSize(2);
   int vw = strlen(verBuf) * 12;
-  display.setCursor((SCREEN_W - vw) / 2, 24);
+  display.setCursor((SCREEN_W - vw) / 2, 12);
   display.print(verBuf);
 
   display.setTextSize(1);
   char status[24];
-
-  if (otaStage == OTA_STAGE_DOWNLOAD) {
-    snprintf(status, sizeof(status), "Downloading...");
-  } else if (otaStage == OTA_STAGE_VERIFY) {
-    snprintf(status, sizeof(status), "Verifying...");
-  } else if (otaStage == OTA_STAGE_FLASH) {
-    snprintf(status, sizeof(status), "Flashing...");
-  } else if (otaStage == OTA_STAGE_REBOOT) {
-    snprintf(status, sizeof(status), "Rebooting in %ds", otaRebootCountdown);
-  } else {
-    snprintf(status, sizeof(status), "Starting...");
-  }
+  if (otaStage == OTA_STAGE_DOWNLOAD) snprintf(status, sizeof(status), "Downloading...");
+  else if (otaStage == OTA_STAGE_VERIFY) snprintf(status, sizeof(status), "Verifying...");
+  else if (otaStage == OTA_STAGE_FLASH) snprintf(status, sizeof(status), "Flashing...");
+  else if (otaStage == OTA_STAGE_REBOOT) snprintf(status, sizeof(status), "Reboot in %ds", otaRebootCountdown);
+  else snprintf(status, sizeof(status), "Starting...");
 
   int sw = strlen(status) * 6;
-  display.setCursor((SCREEN_W - sw) / 2, 52);
+  display.setCursor((SCREEN_W - sw) / 2, 24);
   display.print(status);
-
-  display.display();
 }
 
 static void drawPanicScreen() {
   display.fillRect(0, 0, SCREEN_W, SCREEN_H, SSD1306_WHITE);
   display.setTextColor(SSD1306_BLACK);
   display.setTextSize(1);
-  display.setCursor(28, 8); display.print("LOW BATTERY");
+  display.setCursor(24, 0); display.print("LOW BATTERY");
   display.setTextSize(3);
-  display.setCursor(16, 24);
+  display.setCursor(16, 12);
   display.print(latestBatteryVoltage, 1);
   display.print("V");
-  display.setTextSize(1);
-  display.setCursor(40, 52); display.print("PANIC");
-  display.display();
 }
 
 static void drawCountdownScreen() {
@@ -197,12 +150,8 @@ static void drawCountdownScreen() {
   display.setTextColor(SSD1306_WHITE);
   display.setTextSize(1);
   display.setCursor(0, 0);  display.print("ENGINE START");
-  display.setCursor(96, 0); display.print((int)latestTemperatureC); display.print("C");
   display.setTextSize(3);
-  display.setCursor(44, 20); display.print(rem); display.print("s");
-  display.setTextSize(1);
-  display.setCursor(0, 52); display.print(accState ? "ACC ON" : "ACC OFF");
-  display.display();
+  display.setCursor(44, 10); display.print(rem); display.print("s");
 }
 
 static void drawArmingScreen() {
@@ -211,32 +160,24 @@ static void drawArmingScreen() {
   display.setTextColor(SSD1306_WHITE);
   display.setTextSize(1);
   display.setCursor(0, 0);  display.print("ENGINE STOP");
-  display.setCursor(96, 0); display.print((int)latestTemperatureC); display.print("C");
   display.setTextSize(3);
-  display.setCursor(44, 20); display.print(rem); display.print("s");
-  display.setTextSize(1);
-  display.setCursor(0, 52); display.print(latestBatteryVoltage, 1); display.print("V");
-  display.display();
+  display.setCursor(44, 10); display.print(rem); display.print("s");
 }
 
 static void drawRunningScreen() {
-  extern float gpsSpeed_kmh();
   char tb[12];
   formatTime12h_buf(currentEpoch(), tb, sizeof(tb));
   display.setTextColor(SSD1306_WHITE);
 
-  // Top row: REC + GPS
   display.setTextSize(1);
   display.setCursor(8, 0);
   display.print("REC");
   drawRecDot(2, 4, isLogging);
-
   drawGpsBox(72, 1, gpsHasFix());
   display.setCursor(82, 0);
   display.print("GPS ");
   display.print(gpsSats());
 
-  // Middle: big speed, no units
   char spd[8];
   if (gpsHasFix()) {
     int kph = (int)(gpsSpeed_kmh() + 0.5f);
@@ -245,75 +186,57 @@ static void drawRunningScreen() {
   } else {
     snprintf(spd, sizeof(spd), "--");
   }
-  display.setTextSize(4);
+  display.setTextSize(3);
   int slen = strlen(spd);
-  int sx = (SCREEN_W - slen * 24) / 2;
+  int sx = (SCREEN_W - slen * 18) / 2;
   if (sx < 0) sx = 0;
-  display.setCursor(sx, 18);
+  display.setCursor(sx, 10);
   display.print(spd);
 
-  // Bottom row: volts, temp, time
   display.setTextSize(1);
-  display.setCursor(0, 56);
+  display.setCursor(0, 24);
   display.print(latestBatteryVoltage, 1);
   display.print("V");
-
-  display.setCursor(48, 56);
+  display.setCursor(48, 24);
   display.print((int)latestTemperatureC);
   display.print("C");
-
-  display.setCursor(88, 56);
+  display.setCursor(88, 24);
   display.print(tb);
-
-  display.display();
 }
 
-// V5.44: shown while riderReadyActive. Counts down from RIDER_READY_MS.
 static void drawRiderReadyScreen() {
   extern bool riderReadyActive;
   extern unsigned long riderReadyStart;
 
   display.setTextColor(SSD1306_WHITE);
-
-  display.setTextSize(2);
-  {
-    const char* l1 = "RIDER";
-    int w1 = strlen(l1) * 12;
-    display.setCursor((SCREEN_W - w1) / 2, 2);
-    display.print(l1);
-
-    const char* l2 = "READY";
-    int w2 = strlen(l2) * 12;
-    display.setCursor((SCREEN_W - w2) / 2, 18);
-    display.print(l2);
-  }
+  display.setTextSize(1);
+  const char* l1 = "RIDER";
+  int w1 = strlen(l1) * 6;
+  display.setCursor((SCREEN_W - w1) / 2, 0);
+  display.print(l1);
 
   long elapsed_ms = (long)(millis() - riderReadyStart);
   long remaining = ((long)RIDER_READY_MS - elapsed_ms) / 1000L;
   if (remaining < 0) remaining = 0;
-  if (remaining > (long)(RIDER_READY_MS / 1000UL)) {
-    remaining = (long)(RIDER_READY_MS / 1000UL);
-  }
+  if (remaining > (long)(RIDER_READY_MS / 1000UL)) remaining = (long)(RIDER_READY_MS / 1000UL);
   char cb[12];
   snprintf(cb, sizeof(cb), "%lds", remaining);
   int cw = strlen(cb) * 12;
-  display.setCursor((SCREEN_W - cw) / 2, 34);
+  display.setTextSize(2);
+  display.setCursor((SCREEN_W - cw) / 2, 8);
   display.print(cb);
 
   display.setTextSize(1);
-  display.setCursor(0, 56);
+  display.setCursor(0, 24);
   display.print(latestBatteryVoltage, 1);
   display.print("V");
-
   char tb[12];
   formatTime12h_buf(currentEpoch(), tb, sizeof(tb));
-  display.setCursor(88, 56);
+  display.setCursor(88, 24);
   display.print(tb);
-
-  display.display();
 }
 
-// ---- dispatch ----
+// ---- dispatch ----// ---- dispatch ----
 
 static void drawSecretMenuScreen() {
   display.setTextColor(SSD1306_WHITE);
@@ -341,6 +264,7 @@ void drawOLED() {
   if (riderReadyActive) {
     display.ssd1306_command(SSD1306_DISPLAYON);
     drawRiderReadyScreen();
+    display.display();
     return;
   }
 
@@ -348,12 +272,14 @@ void drawOLED() {
   if (bleUploadActive) {
     display.ssd1306_command(SSD1306_DISPLAYON);
     drawBleUploadScreen();
+    display.display();
     return;
   }
 
   if (otaRequest) {
     display.ssd1306_command(SSD1306_DISPLAYON);
     drawFwUpdateScreen();
+    display.display();
     return;
   }
 
@@ -379,6 +305,7 @@ void drawOLED() {
   else if (isCountingDown)    drawCountdownScreen();
   else if (isArmingCountdown) drawArmingScreen();
   else                        drawRunningScreen();
+  display.display();
 }
 
 void updateOLED_EdgeTriggered() {

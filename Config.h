@@ -13,7 +13,7 @@
 // V4.70: dead defines removed, section headers added.
 // Deploy-specific values (UPLOAD_URL, SMTP_*) still live here pending move to Deploy.h.
 
-#define BIKE_MATE_VERSION "5.93"
+#define BIKE_MATE_VERSION "5.99"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 0
@@ -21,7 +21,7 @@
 
 // ---- Display ----
 #define SCREEN_W 128
-#define SCREEN_H 64
+#define SCREEN_H 32
 #define OLED_ADDR 0x3C
 
 // ---- Pins ----

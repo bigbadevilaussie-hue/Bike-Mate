@@ -66,9 +66,10 @@ RTC_DATA_ATTR bool maintRequest = false;
 // V5.44: button-triggered 120s awake window (field mode only).
 RTC_DATA_ATTR bool riderReadyActive = false;
 RTC_DATA_ATTR unsigned long riderReadyStart = 0;
-RTC_DATA_ATTR bool secretMenuActive = false;
+bool secretMenuActive = false;   // V5.98: plain RAM, resets every boot (was RTC)
+static unsigned long secretMenuStartMs = 0;
+#define SECRET_WINDOW_MS 3000UL    // 2nd click must come within 3 s of waking
 static unsigned long lastBtnPressMs = 0;
-static int btnPressCount = 0;
 
 // V5.37.6: manual upload trigger from OSA. Set by the {"cmd":"upload"}
 // BLE write, consumed by doStateWork on the next pass.
@@ -284,6 +285,7 @@ static bool shouldSleep() {
   if (wifiActive) return false;
   if (serverIsRunning()) return false;
   if (maintRequest) return false;
+  if (secretMenuActive) return false;   // V5.98
 
   // V5.44: Rider for Rider hold window.
   if (riderReadyActive) {
@@ -1089,31 +1091,33 @@ void loop() {
     doStateWork(now, wasWake);
   }
 
-  // V5.93: Secret menu double-click handler
-  if (riderReadyActive) {
-    static bool btnWasHigh = true;
-    bool btnNow = digitalRead(WAKE_BTN_PIN);
-    if (!btnNow && btnWasHigh) { // Pressed
-      unsigned long nowMs = millis();
-      if (nowMs - lastBtnPressMs < 600) {
-        btnPressCount++;
-      } else {
-        btnPressCount = 1;
-      }
-      lastBtnPressMs = nowMs;
-      
-      if (btnPressCount == 2) {
+  // V5.98: secret menu = ONE more click soon after the wake click.
+  // The wake click is never counted: we wait to see the button released first.
+  if (riderReadyActive && !secretMenuActive) {
+    static bool inited = false, armed = false, stable = true, raw = true;
+    static unsigned long rawMs = 0;
+    unsigned long tNow = millis();
+    bool r = digitalRead(WAKE_BTN_PIN);
+    if (!inited) {                       // first look: is the wake click still held?
+      inited = true; raw = stable = r; armed = r; rawMs = tNow;
+    } else if (r != raw) {
+      raw = r; rawMs = tNow;
+    } else if (raw != stable && tNow - rawMs >= 40) {
+      stable = raw;
+      if (stable) {
+        armed = true;                    // released: the wake click is over
+      } else if (armed && (tNow - riderReadyStart) <= SECRET_WINDOW_MS) {
         secretMenuActive = true;
-        riderReadyActive = false; // Cancel rider ready
+        secretMenuStartMs = tNow;
+        riderReadyActive = false;
         tprint("[RIDER] Secret menu activated");
       }
     }
-    btnWasHigh = btnNow;
   }
 
   if (secretMenuActive) {
     digitalWrite(STATUS_LED_PIN, HIGH); // Red LED on
-    if (millis() - lastBtnPressMs > 10000UL) {
+    if (millis() - secretMenuStartMs > 10000UL) {
       secretMenuActive = false;
       digitalWrite(STATUS_LED_PIN, LOW);
       tprint("[RIDER] Secret menu ended");

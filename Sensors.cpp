@@ -39,20 +39,18 @@ static int medianRawVoltage() {
 }
 
 static float readNTC() {
-  // V4.43: throwaway read to settle the ADC mux after channel switch.
-  // The C3's ADC multiplexes channels - the first read after a switch
-  // is polluted by the previous channel's charge. Voltage reads 21x
-  // (median), temp only 5x, so the pollution dominates the temp value.
-  analogRead(THERMISTOR_PIN);
+  // throwaway read to settle the ADC mux
+  analogReadMilliVolts(THERMISTOR_PIN);
 
-  int raw = 0;
+  uint32_t mv_sum = 0;
+  int raw_sum = 0;
   for (int i = 0; i < ADC_SAMPLES; i++) {
-    raw += analogRead(THERMISTOR_PIN);
+    mv_sum += analogReadMilliVolts(THERMISTOR_PIN);
+    raw_sum += analogRead(THERMISTOR_PIN);
   }
-  raw /= ADC_SAMPLES;
-  latestNtcRaw = raw;
+  latestNtcRaw = raw_sum / ADC_SAMPLES;
 
-  float vOut = raw * (3.3f / 4095.0f);
+  float vOut = (mv_sum / (float)ADC_SAMPLES) / 1000.0f;
   if (vOut <= 0.01f || vOut >= 3.29f) return -99.0f;
 
   // R3 (10k) is the pull-up to 3.3V, the NTC is the bottom leg to GND.

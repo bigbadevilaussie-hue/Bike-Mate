@@ -1,4 +1,5 @@
 #include "DisplayManager.h"
+#include <LittleFS.h>
 #include "Config.h"
 #include "OtaManager.h"
 
@@ -245,8 +246,11 @@ static void drawSecretMenuScreen() {
   display.print("V: "); display.print(latestBatteryVoltage, 2); display.print("V");
   display.setCursor(0, 16);
   display.print("T: "); display.print((int)latestTemperatureC); display.print("C");
-  display.setCursor(0, 32);
-  display.print("Stor: 34%"); // TODO: real storage %
+  display.setCursor(0, 24);
+  uint32_t _fsTotal = LittleFS.totalBytes();
+  uint32_t _fsUsed  = LittleFS.usedBytes();
+  uint8_t  storPercent = (_fsTotal > 0) ? (uint8_t)((_fsUsed * 100) / _fsTotal) : 0;
+  display.print("Stor: "); display.print(storPercent); display.print("%");
   display.display();
 }
 
@@ -284,7 +288,13 @@ void drawOLED() {
   }
 
   if (wifiActive) {
-    display.ssd1306_command(SSD1306_DISPLAYOFF);
+    display.ssd1306_command(SSD1306_DISPLAYON);
+    if (serverIsRunning() && !otaRequest) {
+      drawMaintScreen();
+    } else {
+      drawUploadScreen();
+    }
+    display.display(); // V6.00: flush buffer
     return;
   }
 

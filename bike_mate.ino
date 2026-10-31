@@ -391,6 +391,13 @@ static void goToSleep() {
     }
   }
 
+  // V5.82: freeze LED pins low during deep sleep to kill leakage glow.
+  digitalWrite(ACC_LED_PIN, LOW);
+  digitalWrite(STATUS_LED_PIN, LOW);
+  gpio_hold_en((gpio_num_t)ACC_LED_PIN);
+  gpio_hold_en((gpio_num_t)STATUS_LED_PIN);
+  gpio_deep_sleep_hold_en();
+
   Serial.flush();
   esp_sleep_enable_timer_wakeup((uint64_t)wakeMs * 1000ULL);
   esp_deep_sleep_start();
@@ -864,6 +871,8 @@ void setup() {
     }
   }
 
+  gpio_hold_dis((gpio_num_t)ACC_LED_PIN);
+  gpio_hold_dis((gpio_num_t)STATUS_LED_PIN);
   pinMode(ACC_LED_PIN, OUTPUT); digitalWrite(ACC_LED_PIN, LOW);
   pinMode(MOSFET_PIN, OUTPUT); digitalWrite(MOSFET_PIN, LOW);
   pinMode(BUZZER_PIN, OUTPUT); digitalWrite(BUZZER_PIN, LOW);

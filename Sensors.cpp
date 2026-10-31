@@ -55,14 +55,13 @@ static float readNTC() {
   float vOut = raw * (3.3f / 4095.0f);
   if (vOut <= 0.01f || vOut >= 3.29f) return -99.0f;
 
-  // Correct formula for Thermistor to 3.3V, 10k resistor to GND
-  float rNtc = NTC_SERIES * (3.3f - vOut) / vOut;
+  // R3 (10k) is the pull-up to 3.3V, the NTC is the bottom leg to GND.
+  float rNtc = NTC_SERIES * vOut / (3.3f - vOut);
 
   float tK = 1.0f / (1.0f / (25.0f + 273.15f) +
                      log(rNtc / NTC_NOMINAL) / NTC_B);
   
-  float tempC = tK - 273.15f;
-  return tempC - 2.5f;
+  return tK - 273.15f;
 }
 
 void readSensors() {

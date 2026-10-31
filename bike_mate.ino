@@ -66,6 +66,9 @@ RTC_DATA_ATTR bool maintRequest = false;
 // V5.44: button-triggered 120s awake window (field mode only).
 RTC_DATA_ATTR bool riderReadyActive = false;
 RTC_DATA_ATTR unsigned long riderReadyStart = 0;
+RTC_DATA_ATTR bool secretMenuActive = false;
+static unsigned long lastBtnPressMs = 0;
+static int btnPressCount = 0;
 
 // V5.37.6: manual upload trigger from OSA. Set by the {"cmd":"upload"}
 // BLE write, consumed by doStateWork on the next pass.
@@ -1084,6 +1087,41 @@ void loop() {
     firstTick = false;
     lastTick = now;
     doStateWork(now, wasWake);
+  }
+
+  // V5.93: Secret menu double-click handler
+  if (riderReadyActive) {
+    static bool btnWasHigh = true;
+    bool btnNow = digitalRead(WAKE_BTN_PIN);
+    if (!btnNow && btnWasHigh) { // Pressed
+      unsigned long nowMs = millis();
+      if (nowMs - lastBtnPressMs < 600) {
+        btnPressCount++;
+      } else {
+        btnPressCount = 1;
+      }
+      lastBtnPressMs = nowMs;
+      
+      if (btnPressCount == 2) {
+        secretMenuActive = true;
+        riderReadyActive = false; // Cancel rider ready
+        tprint("[RIDER] Secret menu activated");
+      }
+    }
+    btnWasHigh = btnNow;
+  }
+
+  if (secretMenuActive) {
+    digitalWrite(STATUS_LED_PIN, HIGH); // Red LED on
+    if (millis() - lastBtnPressMs > 10000UL) {
+      secretMenuActive = false;
+      digitalWrite(STATUS_LED_PIN, LOW);
+      tprint("[RIDER] Secret menu ended");
+    }
+    drawOLED();
+    delay(100);
+  } else {
+    digitalWrite(STATUS_LED_PIN, LOW); // Red LED off normally
   }
 
   // V4.76: maintenance mode. Enter on next wake after BLE request.

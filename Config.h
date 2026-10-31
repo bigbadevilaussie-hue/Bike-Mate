@@ -13,7 +13,7 @@
 // V4.70: dead defines removed, section headers added.
 // Deploy-specific values (UPLOAD_URL, SMTP_*) still live here pending move to Deploy.h.
 
-#define BIKE_MATE_VERSION "5.88"
+#define BIKE_MATE_VERSION "5.93"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 0
@@ -34,7 +34,7 @@
 #define BUZZER_PIN 4
 #define STATUS_LED_PIN 10
 #define WAKE_BTN_PIN 5   // V5.43: wake button
-#define RIDER_READY_MS 120000UL   // V5.44: button hold window
+#define RIDER_READY_MS 45000UL    // V5.92: reduced to 45s
 #define RIDE_STALL_SEC 60
 #define COOLDOWN_MS          30000UL   // V5.56: cool-down window
 #define COOLDOWN_BLE_GRACE_MS  5000UL    // V5.56: BLE resume grace

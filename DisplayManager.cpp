@@ -315,8 +315,27 @@ static void drawRiderReadyScreen() {
 
 // ---- dispatch ----
 
+static void drawSecretMenuScreen() {
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+  display.print("V: "); display.print(latestBatteryVoltage, 2); display.print("V");
+  display.setCursor(0, 16);
+  display.print("T: "); display.print((int)latestTemperatureC); display.print("C");
+  display.setCursor(0, 32);
+  display.print("Stor: 34%"); // TODO: real storage %
+  display.display();
+}
+
 void drawOLED() {
   display.clearDisplay();
+
+  extern bool secretMenuActive;
+  if (secretMenuActive) {
+    display.ssd1306_command(SSD1306_DISPLAYON);
+    drawSecretMenuScreen();
+    return;
+  }
 
   extern bool riderReadyActive;
   if (riderReadyActive) {

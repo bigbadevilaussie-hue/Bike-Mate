@@ -38,6 +38,7 @@ The production veroboard board is built and on the bench:
 - Fix all OLED screens for the 128x32 display (some layouts are still clipping).
 - Remove the stall function (`FLAG_STALL`) from the ride logger.
 - Hook up GPS time to the system clock (currently `gpsEpochUTC()` is a stub returning 0).
+- **Hardware Note:** The 10k pull-down resistor on GPIO 2 (GPS RX) was removed. It was interfering with the UART strapping pin during boot.
 - Perform the 7-day field test.
 
 ---

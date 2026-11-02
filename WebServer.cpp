@@ -278,6 +278,7 @@ static void handleClockPost() {
 }
 
 volatile bool uploadNowRequested = false;
+volatile int accOverride = -1; // -1 = auto, 0 = force off, 1 = force on
 
 static void handleUploadNow() {
   uploadNowRequested = true;
@@ -317,6 +318,17 @@ void serverSetup() {
   server.on("/serial-raw", HTTP_GET,  handleSerialRaw);
   server.on("/maint/off",  HTTP_POST, handleMaintOff);
   server.on("/upload",     HTTP_POST, handleUploadNow);
+  server.on("/acc",        HTTP_POST, []() {
+    if (server.hasArg("plain")) {
+      String b = server.arg("plain");
+      if (b == "on" || b == "1") accOverride = 1;
+      else if (b == "off" || b == "0") accOverride = 0;
+      else accOverride = -1;
+      server.send(200, "text/plain", "OK");
+    } else {
+      server.send(400, "text/plain", "reject: no body");
+    }
+  });
   server.on("/seal",       HTTP_POST, handleSeal);
   server.on("/ota",        HTTP_POST, handleOtaDone, handleOtaUpload);
   server.on("/version",    HTTP_GET,  handleVersion);

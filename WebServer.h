@@ -10,3 +10,4 @@ bool serverIsRunning();
 extern volatile bool maintOffRequested;
 
 extern volatile bool uploadNowRequested;
+extern volatile int accOverride; // 0=off, 1=on, -1=auto

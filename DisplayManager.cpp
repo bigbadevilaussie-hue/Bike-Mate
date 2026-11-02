@@ -172,11 +172,14 @@ static void drawRunningScreen() {
 
   display.setTextSize(1);
   display.setCursor(8, 0);
+  drawRecDot(0, 4, isLogging);
+  display.setCursor(6, 0);
   display.print("REC");
-  drawRecDot(2, 4, isLogging);
-  drawGpsBox(72, 1, gpsHasFix());
-  display.setCursor(82, 0);
-  display.print("GPS ");
+
+  drawGpsBox(80, 1, gpsHasFix());
+  display.setCursor(86, 0);
+  display.print("GPS");
+  if (gpsSats() < 10) display.print(" ");
   display.print(gpsSats());
 
   char spd[8];
@@ -198,10 +201,15 @@ static void drawRunningScreen() {
   display.setCursor(0, 24);
   display.print(latestBatteryVoltage, 1);
   display.print("V");
-  display.setCursor(48, 24);
-  display.print((int)latestTemperatureC);
-  display.print("C");
-  display.setCursor(88, 24);
+  
+  char tempBuf[8];
+  snprintf(tempBuf, sizeof(tempBuf), "%dC", (int)latestTemperatureC);
+  int tw = strlen(tempBuf) * 6;
+  display.setCursor((SCREEN_W - tw) / 2, 24);
+  display.print(tempBuf);
+  
+  int timew = strlen(tb) * 6;
+  display.setCursor(SCREEN_W - timew, 24);
   display.print(tb);
 }
 
@@ -240,17 +248,41 @@ static void drawRiderReadyScreen() {
 // ---- dispatch ----// ---- dispatch ----
 
 static void drawSecretMenuScreen() {
-  display.setTextColor(SSD1306_WHITE);
-  display.setTextSize(1);
-  display.setCursor(0, 0);
-  display.print("V: "); display.print(latestBatteryVoltage, 2); display.print("V");
-  display.setCursor(0, 16);
-  display.print("T: "); display.print((int)latestTemperatureC); display.print("C");
-  display.setCursor(0, 24);
+  extern uint32_t currentEpoch();
+  char timeBuf[16] = "--:--";
+  char dateBuf[16] = "--- --";
+  
+  uint32_t now = currentEpoch();
+  if (now > 0) {
+    time_t t = now;
+    struct tm* ti = localtime(&t);
+    strftime(timeBuf, sizeof(timeBuf), "%H:%M", ti);
+    strftime(dateBuf, sizeof(dateBuf), "%d %b", ti);
+  }
+
   uint32_t _fsTotal = LittleFS.totalBytes();
   uint32_t _fsUsed  = LittleFS.usedBytes();
   uint8_t  storPercent = (_fsTotal > 0) ? (uint8_t)((_fsUsed * 100) / _fsTotal) : 0;
+
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+  
+  // Line 1: Voltage and Temp
+  display.setCursor(0, 2);
+  display.print("V: "); display.print(latestBatteryVoltage, 2); display.print("V");
+  display.setCursor(68, 2);
+  display.print("T: "); display.print((int)latestTemperatureC); display.print("C");
+
+  // Line 2: Storage and Time
+  display.setCursor(0, 14);
   display.print("Stor: "); display.print(storPercent); display.print("%");
+  display.setCursor(68, 14);
+  display.print(timeBuf);
+
+  // Line 3: Date (centered)
+  display.setCursor(32, 26);
+  display.print(dateBuf);
+  
   display.display();
 }
 

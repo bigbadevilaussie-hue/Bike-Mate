@@ -11,11 +11,16 @@ unsigned long lowBattBeepTimer = 0;
 
 // V5.49: locked circuit — bit-bang ~2.8 kHz, 90 ms chirps, 110 ms gap.
 #define HALF_PERIOD_US 178   // ~2.8 kHz
+#define BUZZER_ACTIVE 1      // 1 = active buzzer: hold the pin high. 0 = passive: bit-bang tone
 #define CHIRP_MS        90
 #define CHIRP_GAP_MS   110
 
 static void chirpOnce(unsigned int ms) {
   digitalWrite(STATUS_LED_PIN, HIGH);
+#if BUZZER_ACTIVE
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(ms);
+#else
   unsigned long start = millis();
   while (millis() - start < ms) {
     digitalWrite(BUZZER_PIN, HIGH);
@@ -23,6 +28,7 @@ static void chirpOnce(unsigned int ms) {
     digitalWrite(BUZZER_PIN, LOW);
     delayMicroseconds(HALF_PERIOD_US);
   }
+#endif
   digitalWrite(BUZZER_PIN, LOW);
   digitalWrite(STATUS_LED_PIN, LOW);
 }

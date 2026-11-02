@@ -170,6 +170,8 @@ void gpsModuleTick() {
     if (c == '\n') {
       _line[_lineLen] = 0;
       if (_lineLen > 6 && _line[0] == '$') {
+        // V6.03: echo NMEA to serial page
+        tprint("[NMEA] %s", _line);
         _parseLine(_line, _lineLen);
       }
       _lineLen = 0;

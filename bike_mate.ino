@@ -893,10 +893,10 @@ void setup() {
   display.clearDisplay(); display.display();
   if (coldBoot) {
     display.setTextColor(SSD1306_WHITE);
-    display.setTextSize(2);
-    display.setCursor(16, 12); display.print("Bike-Mate");
     display.setTextSize(1);
-    display.setCursor(48, 40); display.print("V");
+    display.setCursor(0, 8); display.print("Bike-Mate");
+    display.setTextSize(1);
+    display.setCursor(0, 20); display.print("V");
     display.print(BIKE_MATE_VERSION);
     display.display();
     delay(SPLASH_MS);
@@ -963,8 +963,12 @@ void loop() {
   updateStateTransitions(now);
   if (millis() - lastStage > 100UL) tprint("[LOOP] updateStateTransitions took %lums", millis() - lastStage);
 
-  digitalWrite(ACC_LED_PIN, accState ? HIGH : LOW);
-  digitalWrite(MOSFET_PIN, accState ? HIGH : LOW);
+  extern volatile int accOverride;
+  bool physAcc = accState || (accOverride == 1);
+  if (accOverride == 0) physAcc = false;
+  
+  digitalWrite(ACC_LED_PIN, physAcc ? HIGH : LOW);
+  digitalWrite(MOSFET_PIN, physAcc ? HIGH : LOW);
 
   lastStage = millis();
   updateBeeps(now);
@@ -1117,15 +1121,13 @@ void loop() {
 
   if (secretMenuActive) {
     digitalWrite(STATUS_LED_PIN, HIGH); // Red LED on
-    if (millis() - secretMenuStartMs > 10000UL) {
+    if (millis() - secretMenuStartMs > 30000UL) {
       secretMenuActive = false;
-      digitalWrite(STATUS_LED_PIN, LOW);
+      digitalWrite(STATUS_LED_PIN, LOW); // Only turn off when exiting menu
       tprint("[RIDER] Secret menu ended");
     }
     drawOLED();
     delay(100);
-  } else {
-    digitalWrite(STATUS_LED_PIN, LOW); // Red LED off normally
   }
 
   // V4.76: maintenance mode. Enter on next wake after BLE request.
@@ -1147,6 +1149,12 @@ void loop() {
       static unsigned long lastMaintHb = 0;
       while (serverIsRunning()) {
         tickSeconds();   // V5.55: keep the clock running in maint
+        gpsModuleTick();
+        static unsigned long lastGpsHeartbeat = 0;
+        if (millis() - lastGpsHeartbeat > 5000) {
+          lastGpsHeartbeat = millis();
+          tprint("[MAINT] gps tick alive, avail=%d", Serial1.available());
+        }
         unsigned long _t0 = millis();
         serverLoop();
         unsigned long _dt = millis() - _t0;
@@ -1198,6 +1206,13 @@ void loop() {
           lastMaintSense = millis();
           unsigned long _st = millis();
           readSensors();
+          
+          // V6.02: apply accOverride even in maint mode
+          extern volatile int accOverride;
+          bool physAcc = accState || (accOverride == 1);
+          if (accOverride == 0) physAcc = false;
+          digitalWrite(ACC_LED_PIN, physAcc ? HIGH : LOW);
+          digitalWrite(MOSFET_PIN, physAcc ? HIGH : LOW);
           if (millis() - _st > 200UL) tprint("[MAINT] readSensors took %lums", millis() - _st);
           float mv = latestBatteryVoltage;
           if (mv >= (config.runningEnter_mv / 1000.0f)) {

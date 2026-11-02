@@ -1134,6 +1134,7 @@ void loop() {
   //   Exit: /maint/off hit, or MAINT_MAX_MS elapsed.
   if (maintRequest && !serverIsRunning()) {
     wifiActive = true;
+    riderReadyActive = false; // V6.21: clear rider screen so maint can draw
     wakeLoggerPause();
     if (wifiBringUp()) {
       serverSetup();

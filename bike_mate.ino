@@ -1156,11 +1156,6 @@ void loop() {
       while (serverIsRunning()) {
         tickSeconds();   // V5.55: keep the clock running in maint
         gpsModuleTick();
-        static unsigned long lastGpsHeartbeat = 0;
-        if (millis() - lastGpsHeartbeat > 5000) {
-          lastGpsHeartbeat = millis();
-          tprint("[MAINT] gps tick alive, avail=%d", Serial1.available());
-        }
         unsigned long _t0 = millis();
         serverLoop();
         unsigned long _dt = millis() - _t0;

@@ -3,34 +3,29 @@
 Live task list. Ordered by priority within each section.
 
 **Current:**
-- Firmware on bike: **V5.30**
-- Firmware on disk: **V5.30** (committed, pushed, tagged)
-- GUI on disk: **V4.38**
-- Storage on bike: **~15%** (self-cleaning after every upload run)
+- Firmware on bike: **V6.36**
+- Firmware on disk: **V6.36** (committed, pushed, tagged)
+- GUI on disk: **4.52**
+- Storage on bike: **9%** (self-cleaning after every upload run)
 
 ---
 
 ## Immediate
 
-- [ ] **Verify V5.30 upload run on the bike.** Full sequence:
-  1. Enter maint
-  2. `curl -X POST http://192.168.8.196/upload`
-  3. Watch for: `manual seal` → `# closed=` → `gzip` → `removed raw` →
-     `new file` → (no reconcile for current open file) → uploads with
-     no 422 → paired raw deletes → `OK`
-  4. Check LittleFS after: only `wakes_YYYY-MM-DD.csv` + newest ride
-     `.csv` + newest ride `.csv.gz`
+- [ ] **7-day field test on the Sprint ST 1050.**
+  1. Install board and power.
+  2. Check sleep current (1 mA).
+  3. Ensure OSW/BLE upload works.
+  4. Validate temp/volt calibration.
+  5. Check GPS fix on the move.
 
-- [ ] **Verify scheduled 4am path seals the wake file.** V5.29 moved the
-  seal into `driveUploadPerform()`, so both paths should seal. The test
-  at 17:00 earlier was before the move. Needs re-test.
+- [x] **GPS parser swap.** TinyGPSPlus integrated. Hardware confirmed sending data. Diagnostics added to serial output.
 
-- [ ] **GUI `/upload` timeout is a false negative.** Firmware returns 200
-  from `handleUploadNow()` immediately, but the 200 sits in the TCP
-  buffer while `driveUploadPerform()` runs (no `serverLoop()` during the
-  upload). GUI's 60s `urllib` timeout fires. Upload completes anyway.
-  Cosmetic. Options: bump GUI timeout, add `serverLoop()` calls inside
-  the upload, or accept and document.
+- [x] **Remove stall function.** Removed from RideLogger.cpp.
+
+- [ ] **Update README/TODO** — this patch does that.
+
+- [ ] **GPS clock source.** `gpsEpochUTC()` is still a stub. Implement the parse to sync the system clock from GPS on ride close.
 
 ---
 

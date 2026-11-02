@@ -2,6 +2,9 @@
 #include "Config.h"
 
 #include <time.h>
+#include <TinyGPSPlus.h>
+
+static TinyGPSPlus gps;
 
 extern void tprint(const char* fmt, ...);
 
@@ -155,6 +158,12 @@ static void _parseLine(char* line, uint8_t len) {
   }
 }
 
+void gpsModuleTick() {
+  while (Serial1.available()) {
+    gps.encode(Serial1.read());
+  }
+}
+
 void gpsModuleInit() {
   Serial1.setRxBufferSize(256);
   Serial1.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
@@ -164,93 +173,41 @@ void gpsModuleInit() {
          GPS_RX_PIN, GPS_TX_PIN, GPS_BAUD, avail);
 }
 
-void gpsModuleTick() {
-  while (Serial1.available()) {
-    char c = (char)Serial1.read();
-    if (c == '\n') {
-      _line[_lineLen] = 0;
-      if (_lineLen > 6 && _line[0] == '$') {
-        // V6.03: echo NMEA to serial page
-        tprint("[NMEA] %s", _line);
-        _parseLine(_line, _lineLen);
-      }
-      _lineLen = 0;
-    } else if (c != '\r' && _lineLen < sizeof(_line) - 1) {
-      _line[_lineLen++] = c;
-    } else if (_lineLen >= sizeof(_line) - 1) {
-      _lineLen = 0;   // overflow, discard
-    }
-  }
-}
 
-bool gpsHasFix() {
-#if GPS_STUB_ENABLED
-  return true;
-#else
-  return _hasFix;
-#endif
-}
-
-int32_t gpsLat_x1e7() {
-#if GPS_STUB_ENABLED
-  return (int32_t)(GPS_STUB_LAT * 1e7);
-#else
-  return _lat_x1e7;
-#endif
-}
-
-int32_t gpsLon_x1e7() {
-#if GPS_STUB_ENABLED
-  return (int32_t)(GPS_STUB_LON * 1e7);
-#else
-  return _lon_x1e7;
-#endif
-}
-
-uint8_t gpsSats() {
-#if GPS_STUB_ENABLED
-  return GPS_STUB_SATS;
-#else
-  return _sats;
-#endif
-}
-
-float gpsSpeed_kmh() {
-#if GPS_STUB_ENABLED
-  return 0.0f;
-#else
-  return _speed_kmh;
-#endif
-}
-
-float gpsAltitude_m() {
-#if GPS_STUB_ENABLED
-  return 0.0f;
-#else
-  return _altitude_m;
-#endif
-}
-
-float gpsCourseDeg() {
-#if GPS_STUB_ENABLED
-  return 0.0f;
-#else
-  return _courseDeg;
-#endif
-}
-
+bool gpsHasFix() { return gps.location.isValid(); }
+int32_t gpsLat_x1e7() { return gps.location.isValid() ? (int32_t)(gps.location.lat() * 1e7) : 0; }
+int32_t gpsLon_x1e7() { return gps.location.isValid() ? (int32_t)(gps.location.lng() * 1e7) : 0; }
+uint8_t gpsSats() { return gps.satellites.isValid() ? gps.satellites.value() : 0; }
+float gpsSpeed_kmh() { return gps.speed.isValid() ? gps.speed.kmph() : 0.0f; }
+float gpsAltitude_m() { return gps.altitude.isValid() ? gps.altitude.meters() : 0.0f; }
+float gpsCourseDeg() { return gps.course.isValid() ? gps.course.deg() : 0.0f; }
 const char* gpsTimeUTC() {
-#if GPS_STUB_ENABLED
+  static char buf[8];
+  if (gps.time.isValid()) {
+    snprintf(buf, sizeof(buf), "%02d%02d%02d", gps.time.hour(), gps.time.minute(), gps.time.second());
+    return buf;
+  }
   return "--";
-#else
-  return _timeUTC;
-#endif
 }
+uint32_t gpsEpochUTC() { return 0; }
+uint32_t gpsCharsProcessed() { return gps.charsProcessed(); }
+uint32_t gpsFailedChecksum() { return gps.failedChecksum(); }
 
-uint32_t gpsEpochUTC() {
-#if GPS_STUB_ENABLED
-  return 0;
-#else
-  return _epochUTC;
-#endif
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

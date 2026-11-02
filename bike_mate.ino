@@ -893,11 +893,16 @@ void setup() {
   display.clearDisplay(); display.display();
   if (coldBoot) {
     display.setTextColor(SSD1306_WHITE);
+    display.setTextSize(2);
+    int w = strlen("Bike-Mate") * 12;
+    display.setCursor((SCREEN_W - w) / 2, 2);
+    display.print("Bike-Mate");
     display.setTextSize(1);
-    display.setCursor(0, 8); display.print("Bike-Mate");
-    display.setTextSize(1);
-    display.setCursor(0, 20); display.print("V");
-    display.print(BIKE_MATE_VERSION);
+    char vbuf[16];
+    snprintf(vbuf, sizeof(vbuf), "V%s", BIKE_MATE_VERSION);
+    int vw = strlen(vbuf) * 6;
+    display.setCursor((SCREEN_W - vw) / 2, 20);
+    display.print(vbuf);
     display.display();
     delay(SPLASH_MS);
     display.clearDisplay(); display.display();
@@ -1134,7 +1139,7 @@ void loop() {
   //   Exit: /maint/off hit, or MAINT_MAX_MS elapsed.
   if (maintRequest && !serverIsRunning()) {
     wifiActive = true;
-    riderReadyActive = false; // V6.21: clear rider screen so maint can draw
+    riderReadyActive = false;
     wakeLoggerPause();
     if (wifiBringUp()) {
       serverSetup();

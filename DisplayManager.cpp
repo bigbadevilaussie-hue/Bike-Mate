@@ -172,7 +172,7 @@ static void drawRunningScreen() {
 
   display.setTextSize(1);
   display.setCursor(8, 0);
-  drawRecDot(0, 4, isLogging);
+  drawRecDot(2, 6, isLogging);
   display.setCursor(6, 0);
   display.print("REC");
 
@@ -219,7 +219,7 @@ static void drawRiderReadyScreen() {
 
   display.setTextColor(SSD1306_WHITE);
   display.setTextSize(1);
-  const char* l1 = "RIDER";
+  const char* l1 = "RIDER READY";
   int w1 = strlen(l1) * 6;
   display.setCursor((SCREEN_W - w1) / 2, 0);
   display.print(l1);

@@ -271,8 +271,8 @@ static void handleClockPost() {
     server.send(400, "text/plain", "reject: epoch out of range");
     return;
   }
-  macTimeEpoch = e;
-  secondsAtSync = totalSeconds;
+  struct timeval tv = { .tv_sec = (time_t)e, .tv_usec = 0 };
+  settimeofday(&tv, NULL);
   tprint("[CLOCK] set via HTTP epoch=%lu", (unsigned long)e);
   server.send(200, "text/plain", "OK");
 }

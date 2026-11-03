@@ -206,8 +206,8 @@ static bool opalClockSync() {
             tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday,
             tmv.tm_hour, tmv.tm_min, tmv.tm_sec);
         if (t > 1700000000) {
-          macTimeEpoch = (uint32_t)t;
-          secondsAtSync = totalSeconds;
+          struct timeval tv = { .tv_sec = t, .tv_usec = 0 };
+          settimeofday(&tv, NULL);
           tprint("[CLOCK] Opal Date=%s -> %lu",
                  d.c_str(), (unsigned long)t);
           setMsg("Clock OK");
@@ -260,8 +260,8 @@ static bool ntpSync() {
           return false;
         }
       }
-      macTimeEpoch = now32;
-      secondsAtSync = totalSeconds;
+      struct timeval tv = { .tv_sec = now32, .tv_usec = 0 };
+      settimeofday(&tv, NULL);
       tprint("[WIFI] NTP OK %lu", (unsigned long)now32);
       setMsg("NTP OK");
       return true;

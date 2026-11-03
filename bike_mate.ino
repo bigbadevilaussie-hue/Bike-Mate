@@ -161,11 +161,11 @@ void tprint_verbose(const char* fmt, ...) {
 RTC_DATA_ATTR uint32_t _epochFloor = 0;
 
 uint32_t currentEpoch() {
-  if (macTimeEpoch == 0) return 0;
-  uint32_t e = macTimeEpoch + (totalSeconds - secondsAtSync);
-  if (e < _epochFloor) e = _epochFloor;
-  _epochFloor = e;
-  return e;
+  time_t now = time(NULL);
+  if (now < 1577836800UL) { // 2020-01-01
+    return 0;
+  }
+  return (uint32_t)now;
 }
 
 // V5.18: persist the clock to NVS so a cold boot doesn't lose
@@ -175,11 +175,7 @@ uint32_t currentEpoch() {
 // pass, so blocking sections (maint, wifi bring-up, sleep prep) lost
 // their whole duration.
 static void tickSeconds() {
-  unsigned long n = millis();
-  while (n - lastSecondMark >= 1000UL) {
-    lastSecondMark += 1000UL;
-    totalSeconds++;
-  }
+  // V6.46: disabled. System clock is maintained by settimeofday().
 }
 
 void clockSave() {
@@ -204,8 +200,8 @@ static bool clockRestore() {
            (unsigned long)e);
     return false;
   }
-  macTimeEpoch = e;
-  secondsAtSync = totalSeconds;     // V5.54: anchor to now, not old counter
+  struct timeval tv = { .tv_sec = (time_t)e, .tv_usec = 0 };
+  settimeofday(&tv, NULL);
   tprint("[CLOCK] restored from NVS epoch=%lu", (unsigned long)e);
   return true;
 }
@@ -777,7 +773,7 @@ void setup() {
     lowBattMailLatched = false;
     panicLatchCount = 0;
   } else {
-    totalSeconds += currentWakeMs() / 1000;
+    // V6.46: no manual time crediting. System RTC handles sleep duration.
 
     // V5.44: GPIO wake from the button. Field only.
     if (cause == ESP_SLEEP_WAKEUP_GPIO &&

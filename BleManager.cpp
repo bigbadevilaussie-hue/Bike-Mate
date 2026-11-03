@@ -335,12 +335,8 @@ class TimeCallbacks : public BLECharacteristicCallbacks {
       return;
     }
 
-    extern uint32_t macTimeEpoch;
-    extern uint32_t secondsAtSync;
-    extern uint32_t totalSeconds;
-
-    macTimeEpoch = t;
-    secondsAtSync = totalSeconds;
+    struct timeval tv = { .tv_sec = (time_t)t, .tv_usec = 0 };
+    settimeofday(&tv, NULL);
   }
 };
 
@@ -840,7 +836,7 @@ void publishBLE() {
   snprintf(
       buf,
       sizeof(buf),
-      "{\"v\":%.2f,\"t\":%.1f,\"a\":%d,\"e\":%d,\"w\":%d,\"s\":\"%s\",\"p\":%d,\"ll\":\"%ld.%04ld,%ld.%04ld\",\"lg\":%d,\"gs\":%d,\"fv\":\"%s\",\"st\":%u,\"n\":%d,\"wm\":\"%s\"}",
+      "{\"v\":%.2f,\"t\":%.1f,\"a\":%d,\"e\":%d,\"w\":%d,\"s\":\"%s\",\"p\":%d,\"ll\":\"%ld.%04ld,%ld.%04ld\",\"lg\":%d,\"gs\":%d,\"fv\":\"%s\",\"st\":%u,\"n\":%d,\"wm\":\"%s\",\"ts\":%lu}",
       latestBatteryVoltage,
       latestTemperatureC,
       accState ? 1 : 0,
@@ -857,7 +853,8 @@ void publishBLE() {
       BIKE_MATE_VERSION,
       (unsigned)storagePercent,
       fileCount,
-      currentWakeMode());
+      currentWakeMode(),
+      (unsigned long)currentEpoch());
 
   pDataChar->setValue(
       (uint8_t*)buf,

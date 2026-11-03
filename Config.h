@@ -13,7 +13,7 @@
 // V4.70: dead defines removed, section headers added.
 // Deploy-specific values (UPLOAD_URL, SMTP_*) still live here pending move to Deploy.h.
 
-#define BIKE_MATE_VERSION "6.44"
+#define BIKE_MATE_VERSION "6.45"
 
 // ---- Debug verbosity ----
 #define DEBUG_VERBOSE 0
@@ -73,15 +73,11 @@
 // BENCH_MODE is now a runtime setting (config.benchMode).
 // WAKE_BENCH_MS stays compile-time for the bench cadence.
 #define WAKE_BENCH_MS    30000UL
-#define BB_HEARTBEAT_MS  60000UL   // V5.34: black-box HB throttle
+#define BB_HEARTBEAT_MS  60000UL
 #define MAX_AWAKE_MS    180000UL
 #define BLE_MAX_CONN_MS  600000UL
 #define BLE_IDLE_GRACE_MS   5000UL
 #define MAINT_MAX_MS     300000UL
-#define MAX_AWAKE_MS    180000UL   // V4.72: 180 s hard max-awake, OTA exempt
-#define BLE_MAX_CONN_MS  600000UL   // V4.73: force disconnect after 10 min
-#define BLE_IDLE_GRACE_MS   5000UL   // V4.84: idle BLE conn does not block sleep
-#define MAINT_MAX_MS     300000UL   // V4.75: 5 min maintenance cap (was 15)
 
 // ---- Structs ----
 struct RideRow {

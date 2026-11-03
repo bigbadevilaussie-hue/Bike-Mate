@@ -20,15 +20,9 @@ static void set_defaults() {
   config.monitorWarning_mv = 12400;
   config.monitorPanic_mv   = 12200;
 
-  // V5.31 SLEEP SCHEDULE
+  // V6.44 SLEEP SCHEDULE
   config.benchMode      = true;
-  config.offPeakStart   = 22;
-  config.offPeakEnd     = 5;
-  config.offPeakWakeMin = 5;   // V5.47: uniform 5 min
-  config.peakStart      = 10;
-  config.peakEnd        = 13;
-  config.peakWakeMin    = 5;   // V5.47: uniform 5 min
-  config.dayWakeMin     = 5;
+  config.sleepMin       = 1;
 
   // V5.31 UPLOAD SCHEDULE
   config.uploadHour = 4;
@@ -60,30 +54,17 @@ void settingsLoad() {
 
   // V5.31 SLEEP + UPLOAD
   config.benchMode      = p.getBool("bench",         config.benchMode);
-  config.offPeakStart   = getU8(p, "op.start",  config.offPeakStart);
-  config.offPeakEnd     = getU8(p, "op.end",    config.offPeakEnd);
-  config.offPeakWakeMin = getU8(p, "op.wake",   config.offPeakWakeMin);
-  config.peakStart      = getU8(p, "pk.start",  config.peakStart);
-  config.peakEnd        = getU8(p, "pk.end",    config.peakEnd);
-  config.peakWakeMin    = getU8(p, "pk.wake",   config.peakWakeMin);
-  config.dayWakeMin     = getU8(p, "day.wake",  config.dayWakeMin);
+  config.sleepMin       = getU8(p, "sleep.min", config.sleepMin);
   config.uploadHour     = getU8(p, "up.hour",   config.uploadHour);
-
-  // V5.47: force uniform 5 min. Overrides any stale NVS value.
-  config.offPeakWakeMin = 5;
-  config.peakWakeMin    = 5;
-  config.dayWakeMin     = 5;
 
   p.end();
   tprint_verbose("[SETTINGS] run: on=%u off=%u un=%u ov=%u | mon: nrm=%u warn=%u pan=%u",
          config.runningEnter_mv, config.runningExit_mv,
          config.runUnder_mv, config.runOver_mv,
          config.monitorNormal_mv, config.monitorWarning_mv, config.monitorPanic_mv);
-  tprint_verbose("[SETTINGS] sleep: bench=%d op=%u-%u/%um pk=%u-%u/%um day=%um up=%u",
+  tprint_verbose("[SETTINGS] sleep: bench=%d sl=%um up=%u",
          config.benchMode ? 1 : 0,
-         config.offPeakStart, config.offPeakEnd, config.offPeakWakeMin,
-         config.peakStart, config.peakEnd, config.peakWakeMin,
-         config.dayWakeMin, config.uploadHour);
+         config.sleepMin, config.uploadHour);
 }
 
 void settingsSave() {
@@ -99,13 +80,7 @@ void settingsSave() {
 
   // V5.31 SLEEP + UPLOAD
   p.putBool("bench",    config.benchMode);
-  p.putUChar("op.start", config.offPeakStart);
-  p.putUChar("op.end",   config.offPeakEnd);
-  p.putUChar("op.wake",  config.offPeakWakeMin);
-  p.putUChar("pk.start", config.peakStart);
-  p.putUChar("pk.end",   config.peakEnd);
-  p.putUChar("pk.wake",  config.peakWakeMin);
-  p.putUChar("day.wake", config.dayWakeMin);
+  p.putUChar("sleep.min", config.sleepMin);
   p.putUChar("up.hour",  config.uploadHour);
 
   p.end();
@@ -134,8 +109,7 @@ size_t settingsToJson(char* buf, size_t n) {
       "\"nrm\":%.1f,\"wrn\":%.1f,\"pan\":%.1f"
     "},"
     "\"s\":{"
-      "\"b\":%d,\"ops\":%d,\"ope\":%d,\"opw\":%d,"
-      "\"pks\":%d,\"pke\":%d,\"pkw\":%d,\"dw\":%d,"
+      "\"b\":%d,\"sl\":%d,"
       "\"uh\":%d"
     "}}",
     config.runningEnter_mv   / 1000.0f,
@@ -146,13 +120,7 @@ size_t settingsToJson(char* buf, size_t n) {
     config.monitorWarning_mv / 1000.0f,
     config.monitorPanic_mv   / 1000.0f,
     config.benchMode ? 1 : 0,
-    config.offPeakStart,
-    config.offPeakEnd,
-    config.offPeakWakeMin,
-    config.peakStart,
-    config.peakEnd,
-    config.peakWakeMin,
-    config.dayWakeMin,
+    config.sleepMin,
     config.uploadHour);
 }
 
@@ -221,45 +189,15 @@ bool settingsApplyJson(const char* json) {
   // V5.31 extract sleep + upload
   int iv;
   bool bv = config.benchMode;
-  uint8_t opS = config.offPeakStart;
-  uint8_t opE = config.offPeakEnd;
-  uint8_t opW = config.offPeakWakeMin;
-  uint8_t pkS = config.peakStart;
-  uint8_t pkE = config.peakEnd;
-  uint8_t pkW = config.peakWakeMin;
-  uint8_t dW  = config.dayWakeMin;
-  uint8_t uH  = config.uploadHour;
+  uint8_t sM = config.sleepMin;
+  uint8_t uH = config.uploadHour;
   if (extractInt(json, "\"b\"", &iv)) {
     if (iv < 0 || iv > 1) { tprint("[SETTINGS] range: bench"); return false; }
     bv = (iv != 0);
   }
-  if (extractInt(json, "\"ops\"", &iv)) {
-    if (iv < 0 || iv > 23) { tprint("[SETTINGS] range: ops"); return false; }
-    opS = (uint8_t)iv;
-  }
-  if (extractInt(json, "\"ope\"", &iv)) {
-    if (iv < 0 || iv > 23) { tprint("[SETTINGS] range: ope"); return false; }
-    opE = (uint8_t)iv;
-  }
-  if (extractInt(json, "\"opw\"", &iv)) {
-    if (iv < 1 || iv > 30) { tprint("[SETTINGS] range: opw"); return false; }
-    opW = (uint8_t)iv;
-  }
-  if (extractInt(json, "\"pks\"", &iv)) {
-    if (iv < 0 || iv > 23) { tprint("[SETTINGS] range: pks"); return false; }
-    pkS = (uint8_t)iv;
-  }
-  if (extractInt(json, "\"pke\"", &iv)) {
-    if (iv < 0 || iv > 23) { tprint("[SETTINGS] range: pke"); return false; }
-    pkE = (uint8_t)iv;
-  }
-  if (extractInt(json, "\"pkw\"", &iv)) {
-    if (iv < 1 || iv > 30) { tprint("[SETTINGS] range: pkw"); return false; }
-    pkW = (uint8_t)iv;
-  }
-  if (extractInt(json, "\"dw\"", &iv)) {
-    if (iv < 1 || iv > 30) { tprint("[SETTINGS] range: dw"); return false; }
-    dW = (uint8_t)iv;
+  if (extractInt(json, "\"sl\"", &iv)) {
+    if (iv < 1 || iv > 30) { tprint("[SETTINGS] range: sl"); return false; }
+    sM = (uint8_t)iv;
   }
   if (extractInt(json, "\"uh\"", &iv)) {
     if (iv < 0 || iv > 23) { tprint("[SETTINGS] range: uh"); return false; }
@@ -292,13 +230,7 @@ bool settingsApplyJson(const char* json) {
   config.monitorPanic_mv  = nPanic;
 
   config.benchMode      = bv;
-  config.offPeakStart   = opS;
-  config.offPeakEnd     = opE;
-  config.offPeakWakeMin = opW;
-  config.peakStart      = pkS;
-  config.peakEnd        = pkE;
-  config.peakWakeMin    = pkW;
-  config.dayWakeMin     = dW;
+  config.sleepMin       = sM;
   config.uploadHour     = uH;
 
   settingsSave();

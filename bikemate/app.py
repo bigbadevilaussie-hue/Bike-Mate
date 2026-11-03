@@ -901,13 +901,7 @@ class App:
         s = current.get("s", {})
         s = {
             "bench":    int(s.get("b",   1)),
-            "ops":      int(s.get("ops", 22)),
-            "ope":      int(s.get("ope", 5)),
-            "opw":      int(s.get("opw", 15)),
-            "pks":      int(s.get("pks", 10)),
-            "pke":      int(s.get("pke", 13)),
-            "pkw":      int(s.get("pkw", 2)),
-            "dw":       int(s.get("dw",  5)),
+            "sl":       int(s.get("sl",  1)),
             "uh":       int(s.get("uh",  4)),
         }
 
@@ -922,9 +916,9 @@ class App:
         add_row("Warning",       "warning", m.get("warning", 12.4), "V")
         add_row("Panic",         "panic",   m.get("panic",   12.2), "V")
 
-        # V4.48: SLEEP SCHEDULE block hidden. Firmware default is
-        # 5 min everywhere. NVS keys and JSON still carry values
-        # for backward compatibility, not editable from here.
+        section("🛌 SLEEP SCHEDULE")
+        add_int_row("Bench Mode (1=on)", "b", s["bench"], "bool")
+        add_int_row("Sleep (min)", "sl", s["sl"], "min")
 
         section("📤 UPLOAD SCHEDULE")
         add_int_row("Upload hour",    "uh",    s["uh"],       "hr")
@@ -945,16 +939,8 @@ class App:
                         "pan": float(fields["panic"].get()),
                     },
                     "s": {
-                        # V4.49: only editable field is 'uh'.
-                        # Resend everything else from the snapshot.
-                        "b":   int(s["bench"]),
-                        "ops": int(s["ops"]),
-                        "ope": int(s["ope"]),
-                        "opw": int(s["opw"]),
-                        "pks": int(s["pks"]),
-                        "pke": int(s["pke"]),
-                        "pkw": int(s["pkw"]),
-                        "dw":  int(s["dw"]),
+                        "b":   int(fields["b"].get()),
+                        "sl":  int(fields["sl"].get()),
                         "uh":  int(fields["uh"].get()),
                     },
                 }

@@ -13,8 +13,8 @@ a VTX12-BS AGM, the practical cranking floor is ~12.2 V rested.
 
 ## Current state
 
-- **Firmware source:** `Config.h` -> `BIKE_MATE_VERSION` = **6.36**
-- **Firmware on bike:** **V6.36** (bench testing, 2026-11-03)
+- **Firmware source:** `Config.h` -> `BIKE_MATE_VERSION` = **6.00**
+- **Firmware on bike:** **V6.00** (bench testing, 2026-11-01)
 - **GUI:** `bikemate/config.py` -> `GUI_VERSION` = **4.58**
 - **OSA:** `osa_server.py` -> `__version__` = **1.33** (separate repo,
   runs 24/7 on the Mac)
@@ -31,11 +31,12 @@ The production veroboard board is built and on the bench:
 - Voltage and temperature calibrated.
 - Sleep current: 1 mA. Awake (running): 77 mA.
 - MOSFET switch verified (turns GPS/USB off in sleep).
-- GPS hardware confirmed working (TinyGPSPlus parser integrated).
 - Ready for 7-day field test on the bike.
 
 ### Upcoming Tasks (Pre-Field Test)
 
+- Fix all OLED screens for the 128x32 display (some layouts are still clipping).
+- Remove the stall function (`FLAG_STALL`) from the ride logger.
 - Hook up GPS time to the system clock (currently `gpsEpochUTC()` is a stub returning 0).
 - **Hardware Note:** The 10k pull-down resistor on GPIO 2 (GPS RX) was removed. It was interfering with the UART strapping pin during boot.
 - Perform the 7-day field test.
